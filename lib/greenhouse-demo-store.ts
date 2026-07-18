@@ -5,6 +5,8 @@ export type DemoPlant = { id: string; name: string; zone: string; age: string; m
 export type DemoAlert = { id: string; type: "critical" | "warning" | "info"; title: string; detail: string; time: string; resolved: boolean };
 export type DemoSettings = { minTemperature: string; maxTemperature: string; minHumidity: string; minSoilMoisture: string; automation: Record<string, boolean> };
 export type DemoState = { version: 1; devices: DemoDevice[]; plants: DemoPlant[]; alerts: DemoAlert[]; settings: DemoSettings; aiReviewedPlantId?: string };
+export type DemoLoadResult = { state: DemoState; recovered: boolean; storageAvailable: boolean };
+export type DemoSaveResult = { persisted: boolean };
 
 const STORAGE_KEY = "smart-greenhouse-dashboard-demo:v1";
 
@@ -91,17 +93,32 @@ function isState(value: unknown): value is DemoState {
 function cloneInitial(): DemoState { return structuredClone(demoInitialState); }
 
 export const greenhouseDemoStore = {
-  async load(): Promise<DemoState> {
+  async load(): Promise<DemoLoadResult> {
     try {
-      if (typeof window === "undefined") return cloneInitial();
+      if (typeof window === "undefined") return { state: cloneInitial(), recovered: false, storageAvailable: false };
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return cloneInitial();
-      const parsed: unknown = JSON.parse(raw);
-      return isState(parsed) ? parsed : cloneInitial();
-    } catch { return cloneInitial(); }
+      if (!raw) return { state: cloneInitial(), recovered: false, storageAvailable: true };
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return { state: cloneInitial(), recovered: true, storageAvailable: true };
+      }
+      return isState(parsed)
+        ? { state: parsed, recovered: false, storageAvailable: true }
+        : { state: cloneInitial(), recovered: true, storageAvailable: true };
+    } catch {
+      return { state: cloneInitial(), recovered: true, storageAvailable: false };
+    }
   },
-  async save(state: DemoState): Promise<void> {
-    try { if (typeof window !== "undefined") window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* Demo remains usable when storage is unavailable. */ }
+  async save(state: DemoState): Promise<DemoSaveResult> {
+    try {
+      if (typeof window === "undefined") return { persisted: false };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      return { persisted: true };
+    } catch {
+      return { persisted: false };
+    }
   },
   async requestDeviceCommand(deviceId: string, command: Extract<DeviceCommandAction, "turn_on" | "turn_off">): Promise<DeviceCommandResult> {
     await new Promise((resolve) => window.setTimeout(resolve, 450));
