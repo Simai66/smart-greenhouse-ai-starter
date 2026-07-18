@@ -31,33 +31,33 @@ colors:
 typography:
   fontFamily: "Noto Sans Thai, Leelawadee UI, Tahoma, Arial, sans-serif"
   display:
-    fontSize: "32px"
+    fontSize: "48px"
     fontWeight: 700
     lineHeight: 1.15
     letterSpacing: "-0.03em"
   h1:
-    fontSize: "32px"
+    fontSize: "40px"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "-0.02em"
   h2:
-    fontSize: "14px"
+    fontSize: "20px"
     fontWeight: 700
     lineHeight: 1.35
   h3:
-    fontSize: "13px"
+    fontSize: "16px"
     fontWeight: 700
     lineHeight: 1.4
   body:
-    fontSize: "13px"
+    fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.55
   small:
-    fontSize: "11px"
+    fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.5
   caption:
-    fontSize: "10px"
+    fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.4
 layout:
