@@ -96,6 +96,38 @@ GET /api/sensors
 
 ข้อมูลในหน้าเว็บเป็นข้อมูลจำลองเพื่อแสดง flow และสถานะต่าง ๆ ก่อนเชื่อมฮาร์ดแวร์จริง
 
+## Real-operation foundation (Pi → Cloud only)
+
+The P0/P1 edge protocol, D1 migration, and reference Pi agent are included in
+this repository. Read [the API contract](docs/api/edge-agent-v1.md) before
+provisioning a device. The current rendered dashboard intentionally remains a
+clearly labelled demo until a provisioned Pi is integrated; it must not be
+used as evidence that a relay changed state.
+
+1. Apply `drizzle/0000_p0_foundation.sql` then
+   `drizzle/0001_edge_agent_and_policies.sql` to the production D1 database.
+2. Insert one `edge_agents` row per Pi and assign each device its `agent_id`,
+   capability document, and an initial versioned `device_policies` row. Do not
+   queue commands before these records exist.
+3. Set a distinct Worker secret for each agent, named
+   `GREENHOUSE_AGENT_SECRET_<AGENT_ID>` (at least 32 characters). Set browser
+   roles with `GREENHOUSE_ADMIN_EMAILS` and `GREENHOUSE_OPERATOR_EMAILS`.
+4. Configure Cloudflare Access in the Cloudflare dashboard: protect the public
+   hostname, use Google as an identity provider, and let only approved email
+   addresses/groups reach the application. This cannot be safely represented
+   by a source-controlled application secret.
+5. On the Pi, copy `edge-agent/docker-compose.example.yml`, set its four
+   required values, and start it with Docker Compose. Its persistent volume is
+   the recoverable outbound queue and local-policy state.
+
+The supplied edge relay and sensor adapters are simulators. Before substituting
+GPIO code, have an electrician/hardware owner review the pin map, relay logic
+level, fused power path, maximum load runtime, and physical emergency stop.
+The Docker image exposes no inbound port, defaults every relay to off, and the
+cloud cannot initiate a connection to the Pi. To roll back an application
+release, deploy the previous Worker/image; do not drop the additive D1 tables
+because they contain audit history and queued command evidence.
+
 ## P0 safety configuration
 
 Device commands now use `POST /api/device-commands` and require the hosted

@@ -1,4 +1,4 @@
-import { index, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * P0 domain storage. Times are ISO-8601 UTC strings so gateway sample time and
@@ -14,11 +14,23 @@ export const greenhouses = sqliteTable("greenhouses", {
 export const devices = sqliteTable("devices", {
   id: text("id").primaryKey(),
   greenhouseId: text("greenhouse_id").notNull(),
+  agentId: text("agent_id"),
   name: text("name").notNull(),
   category: text("category").notNull(),
+  capabilitiesJson: text("capabilities_json").notNull().default("{}"),
   reportedStatus: text("reported_status").notNull().default("offline"),
+  lastSeenAt: text("last_seen_at"),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [index("devices_greenhouse_idx").on(table.greenhouseId)]);
+
+export const edgeAgents = sqliteTable("edge_agents", {
+  id: text("id").primaryKey(),
+  greenhouseId: text("greenhouse_id").notNull(),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("offline"),
+  lastSeenAt: text("last_seen_at"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("edge_agents_greenhouse_idx").on(table.greenhouseId)]);
 
 export const sensorReadings = sqliteTable("sensor_readings", {
   id: text("id").primaryKey(),
@@ -44,6 +56,10 @@ export const deviceCommands = sqliteTable("device_commands", {
   idempotencyKey: text("idempotency_key").notNull().unique(),
   requestedBy: text("requested_by").notNull(),
   requestedAt: text("requested_at").notNull(),
+  correlationId: text("correlation_id"),
+  expiresAt: text("expires_at"),
+  maxRuntimeSeconds: integer("max_runtime_seconds"),
+  dispatchedAt: text("dispatched_at"),
   acknowledgedAt: text("acknowledged_at"),
   failureReason: text("failure_reason"),
 }, (table) => [
@@ -58,6 +74,26 @@ export const deviceCommandEvents = sqliteTable("device_command_events", {
   occurredAt: text("occurred_at").notNull(),
   metadataJson: text("metadata_json"),
 }, (table) => [index("device_command_events_command_idx").on(table.commandId, table.occurredAt)]);
+
+export const devicePolicies = sqliteTable("device_policies", {
+  deviceId: text("device_id").primaryKey(),
+  greenhouseId: text("greenhouse_id").notNull(),
+  version: integer("version").notNull(),
+  policyJson: text("policy_json").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [index("device_policies_greenhouse_idx").on(table.greenhouseId)]);
+
+export const devicePolicyRevisions = sqliteTable("device_policy_revisions", {
+  id: text("id").primaryKey(),
+  deviceId: text("device_id").notNull(),
+  version: integer("version").notNull(),
+  policyJson: text("policy_json").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("device_policy_revisions_device_idx").on(table.deviceId, table.version),
+]);
 
 export const detections = sqliteTable("detections", {
   id: text("id").primaryKey(),

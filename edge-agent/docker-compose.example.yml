@@ -1,0 +1,14 @@
+services:
+  greenhouse-agent:
+    build: .
+    restart: unless-stopped
+    environment:
+      GREENHOUSE_API_URL: https://dashboard.example.com
+      GREENHOUSE_ID: GH-01
+      GREENHOUSE_AGENT_ID: PI-GH-01
+      GREENHOUSE_AGENT_SECRET: replace-with-the-per-agent-secret
+      GREENHOUSE_STATE_DIR: /var/lib/greenhouse-agent
+    volumes:
+      - greenhouse_agent_state:/var/lib/greenhouse-agent
+volumes:
+  greenhouse_agent_state:

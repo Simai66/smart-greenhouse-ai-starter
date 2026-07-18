@@ -57,6 +57,7 @@ export type DeviceCommandRequest = {
   deviceId: string;
   command: DeviceCommandAction;
   idempotencyKey: string;
+  maxRuntimeSeconds?: number;
 };
 
 export type DeviceCommandResult = {
@@ -65,6 +66,9 @@ export type DeviceCommandResult = {
   command: DeviceCommandAction;
   state: DeviceCommandState;
   requestedAt: string;
+  correlationId?: string;
+  expiresAt?: string;
+  maxRuntimeSeconds?: number | null;
   message: string;
 };
 
