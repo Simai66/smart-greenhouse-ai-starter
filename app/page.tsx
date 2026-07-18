@@ -1,5 +1,5 @@
-import { SmartGreenhouseApp } from "@/components/smart-greenhouse-app";
+import { GreenhouseDashboard } from "@/components/greenhouse-dashboard";
 
 export default function Home() {
-  return <SmartGreenhouseApp />;
+  return <GreenhouseDashboard />;
 }

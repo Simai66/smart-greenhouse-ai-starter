@@ -1,87 +1,100 @@
 ---
 name: SmartGreenhouse
-description: Premium dark-mode AI and IoT greenhouse monitoring dashboard
-version: "1.0"
+description: Calm light-mode AI and IoT greenhouse monitoring dashboard
+version: "1.1"
 platforms:
   - Web Desktop
   - Web Tablet
   - Mobile Web
   - Progressive Web App
 theme:
-  default: dark
-  future:
-    - light
+  default: light
+  future: []
 colors:
-  primary: "#22C55E"
-  primary-hover: "#16A34A"
-  primary-soft: "rgba(34,197,94,0.12)"
-  accent: "#84CC16"
-  background: "#08120E"
-  surface: "#101A16"
-  card: "#14211B"
-  card-hover: "#1A2A22"
-  border: "rgba(255,255,255,0.08)"
-  text-primary: "#FFFFFF"
-  text-secondary: "#B7C5BD"
-  text-muted: "#6F7C74"
-  healthy: "#22C55E"
-  warning: "#F59E0B"
-  danger: "#EF4444"
-  information: "#3B82F6"
-  offline: "#6B7280"
+  primary: "#25734F"
+  primary-hover: "#174B36"
+  primary-soft: "#EFF8F2"
+  accent: "#2F8A5E"
+  background: "#F3F5F3"
+  surface: "#FFFFFF"
+  card: "#FFFFFF"
+  card-hover: "#F5FAF6"
+  border: "#DFE5E1"
+  text-primary: "#1D2923"
+  text-secondary: "#4F5C55"
+  text-muted: "#59675F"
+  healthy: "#25734F"
+  warning: "#8A5108"
+  danger: "#B9413A"
+  information: "#31779D"
+  offline: "#59675F"
 typography:
-  fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+  fontFamily: "Noto Sans Thai, Leelawadee UI, Tahoma, Arial, sans-serif"
   display:
-    fontSize: "48px"
+    fontSize: "32px"
     fontWeight: 700
     lineHeight: 1.15
     letterSpacing: "-0.03em"
   h1:
-    fontSize: "36px"
+    fontSize: "32px"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "-0.02em"
   h2:
-    fontSize: "28px"
-    fontWeight: 600
-    lineHeight: 1.25
+    fontSize: "14px"
+    fontWeight: 700
+    lineHeight: 1.35
   h3:
-    fontSize: "22px"
-    fontWeight: 600
-    lineHeight: 1.3
+    fontSize: "13px"
+    fontWeight: 700
+    lineHeight: 1.4
   body:
-    fontSize: "16px"
+    fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.55
   small:
-    fontSize: "14px"
+    fontSize: "11px"
     fontWeight: 400
     lineHeight: 1.5
   caption:
-    fontSize: "12px"
+    fontSize: "10px"
     fontWeight: 400
     lineHeight: 1.4
 layout:
   desktopFrame: "1440px"
   desktopContentMaxWidth: "1280px"
-  sidebarWidth: "240px"
-  topbarHeight: "72px"
-  mobileBreakpoint: "768px"
+  sidebarWidth: "248px"
+  topbarHeight: "68px"
+  mobileBreakpoint: "760px"
   tabletBreakpoint: "1024px"
   grid: "12 columns"
   spacingSystem: "8pt"
 rounded:
   small: "8px"
   medium: "12px"
-  large: "20px"
-  modal: "24px"
+  large: "11px"
+  modal: "16px"
 motion:
-  fast: "120ms"
+  fast: "150ms"
   normal: "200ms"
-  slow: "320ms"
+  slow: "200ms"
 ---
 
 # Smart Greenhouse — UI/UX Design Specification
+
+## Approved implementation baseline
+
+The approved light redesign is the design-system source of truth for the
+implemented dashboard. It uses a soft neutral canvas, white information
+surfaces, deep botanical-green navigation, and a restrained green accent for
+actions and healthy states. The legacy dark-mode passages below are retained as
+historical product research only and must not be used to implement the current
+dashboard unless a new design decision explicitly replaces this baseline.
+
+Operators review the dashboard in greenhouse and field conditions where a
+light surface improves scanability. Secondary text must meet WCAG 2.1 AA
+contrast (4.5:1 minimum), every primary control has a 44 by 44 pixel hit area,
+and motion must respect `prefers-reduced-motion`.
 
 ## 1. Document Purpose
 
@@ -151,7 +164,7 @@ Smart Greenhouse เป็นระบบจัดการโรงเรือ
 ## 3.3 Visual Inspiration
 
 - Apple — ความสะอาดและลำดับชั้นของข้อมูล
-- Linear — Dark SaaS UI และการจัดองค์ประกอบที่แม่นยำ
+- Linear — ความแม่นยำของการจัดองค์ประกอบ โดยใช้ light operational surface ที่อ่านง่าย
 - Vercel — พื้นที่ว่างและความคมของ Typography
 - Notion — ความเรียบง่ายในการใช้งาน
 - Stripe — การนำเสนอข้อมูลอย่างเป็นระบบ
@@ -211,7 +224,7 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 
 ### Primary Green
 
-`#22C55E`
+`#25734F`
 
 ใช้สำหรับ
 
@@ -224,13 +237,13 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 
 ### Primary Hover
 
-`#16A34A`
+`#174B36`
 
 ใช้เมื่อ Hover หรือ Pressed
 
 ### Primary Soft
 
-`rgba(34,197,94,0.12)`
+`#EFF8F2`
 
 ใช้เป็นพื้นหลังของ
 
@@ -241,7 +254,7 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 
 ### Accent Lime
 
-`#84CC16`
+`#2F8A5E`
 
 ใช้เพียงเล็กน้อยกับ
 
@@ -252,24 +265,23 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 
 ### Background
 
-`#08120E`
+`#F3F5F3`
 
-พื้นหลังหลักของระบบ
+พื้นหลังหลักของระบบ ใช้ neutral ที่ติดสีเขียวเล็กน้อยเพื่อให้อ่านข้อมูลในโรงเรือนหรือภาคสนามได้ชัด
 
 ### Surface
 
-`#101A16`
+`#FFFFFF`
 
 ใช้กับ
 
-- Sidebar
 - Topbar
 - Secondary panel
-- Modal backdrop container
+- Modal container
 
 ### Card
 
-`#14211B`
+`#FFFFFF`
 
 ใช้กับ
 
@@ -281,45 +293,45 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 
 ### Card Hover
 
-`#1A2A22`
+`#F5FAF6`
 
 ### Border
 
-`rgba(255,255,255,0.08)`
+`#DFE5E1`
 
 ### Text Primary
 
-`#FFFFFF`
+`#1D2923`
 
 ### Text Secondary
 
-`#B7C5BD`
+`#4F5C55`
 
 ### Text Muted
 
-`#6F7C74`
+`#59675F`
 
 ## 5.2 Semantic Colors
 
 ### Healthy
 
-`#22C55E`
+`#25734F`
 
 ### Warning
 
-`#F59E0B`
+`#8A5108`
 
 ### Danger
 
-`#EF4444`
+`#B9413A`
 
 ### Information
 
-`#3B82F6`
+`#31779D`
 
 ### Offline
 
-`#6B7280`
+`#59675F`
 
 ## 5.3 Color Usage Rules
 
@@ -328,7 +340,7 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 - สีสถานะต้องมีข้อความหรือไอคอนประกอบ
 - กราฟหลายเส้นต้องใช้สีที่แยกกันได้ชัดเจน
 - ค่า Disabled ต้องไม่เหมือน Offline status
-- Background และ Card ต้องแตกต่างกันพอให้เห็นโครงสร้าง
+- Canvas และ Card ต้องแตกต่างกันพอให้เห็นโครงสร้าง โดยไม่เพิ่ม shadow หรือ decoration ที่ไม่จำเป็น
 
 ---
 
