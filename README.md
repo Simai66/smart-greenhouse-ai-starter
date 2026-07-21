@@ -27,29 +27,19 @@ npm run dev
 npm run build
 ```
 
-## โครงสร้างสำคัญ
+## Active UI structure
 
-```text
-app/
-  api/sensors/route.ts       # ตัวอย่าง sensor API response
-  globals.css                # Design tokens + responsive UI ทั้งระบบ
-  layout.tsx                 # Metadata และ Inter font
-  page.tsx                   # Application entry
-components/
-  dashboard/                 # Dashboard และ sensor overview
-  plants/                    # Plant Monitoring
-  ai/                        # AI Detection workflow
-  devices/                   # Device control + safety feedback
-  analytics/                 # Historical trends
-  alerts/                    # Alert review / resolve flow
-  settings/                  # Configuration starter
-  ui/                        # Shared small components
-lib/
-  mock-data.ts               # ข้อมูลจำลองสำหรับ UI
-  greenhouse-api.ts          # Adapter สำหรับเชื่อม backend จริง
-types/
-  greenhouse.ts              # Shared domain types
-```
+- `app/page.tsx` renders the Smart Greenhouse client.
+- `components/greenhouse/greenhouse-app.tsx` owns navigation, demo-store
+  lifecycle, search, dialogs, export, and feedback.
+- `components/greenhouse/app-sidebar.tsx` and `site-header.tsx` provide the
+  responsive shadcn application shell.
+- `components/greenhouse/views/` contains the seven task-specific page views.
+- `components/greenhouse/charts/` contains accessible Recharts views.
+- `components/ui/` contains CLI-managed shadcn primitives.
+- `lib/greenhouse-demo-store.ts` remains the browser demo source of truth.
+- `lib/mock-data.ts` remains because the protected sensors API consumes it.
+
 
 ## จุดเชื่อมระบบจริง
 

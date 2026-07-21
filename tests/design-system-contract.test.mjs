@@ -38,3 +38,18 @@ test("configures shadcn with the approved greenhouse token contract", async () =
 
   assert.deepEqual(unresolvedCustomProperties, []);
 });
+
+test("keeps only the shadcn design system in the active application", async () => {
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  const [layout, entry] = await Promise.all([
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse-dashboard.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.equal(packageJson.dependencies["@astryxdesign/core"], undefined);
+  assert.equal(packageJson.dependencies["@astryxdesign/theme-neutral"], undefined);
+  assert.equal(packageJson.dependencies["@astryxdesign/cli"], undefined);
+  assert.doesNotMatch(layout + entry, /@astryxdesign/);
+});
