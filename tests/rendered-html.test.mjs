@@ -44,3 +44,16 @@ test("protects telemetry and device-command APIs without an authenticated user",
   });
   assert.equal(command.status, 401);
 });
+
+test("renders the shadcn greenhouse application shell", async () => {
+  const response = await request("/", {
+    headers: { accept: "text/html" },
+  });
+  const html = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(html, /ศูนย์ปฏิบัติการ/);
+  assert.match(html, /ย่อหรือเปิดเมนูหลัก/);
+  assert.match(html, /โรงเรือนมะเขือเทศ/);
+  assert.match(html, /กำลังโหลดข้อมูลโรงเรือน/);
+  assert.doesNotMatch(html, /astryx-/i);
+});

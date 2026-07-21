@@ -12,4 +12,9 @@ test("keeps the enlarged rem typography baseline for the active dashboard", asyn
   assert.match(css, /--type-page:\s*2\.5rem;/);
   assert.match(css, /--type-display:\s*3rem;/);
   assert.doesNotMatch(css, /font-size:\s*\d+(?:\.\d+)?px/);
+  assert.match(
+    css,
+    /font-family:\s*"Noto Sans Thai",\s*"Leelawadee UI",\s*Tahoma,\s*Arial,\s*sans-serif;/,
+  );
+  assert.match(css, /outline:\s*0\.125rem solid var\(--ring\);/);
 });
