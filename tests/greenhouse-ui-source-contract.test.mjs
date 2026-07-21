@@ -51,3 +51,19 @@ test("keeps safe controls and persisted operational page contracts", async () =>
   assert.match(settings, /validateDemoSettings/);
   assert.match(settings, /ยกเลิกการแก้ไข/);
 });
+
+test("keeps live status and decisions ahead of dashboard detail", async () => {
+  const source = await readFile(
+    new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url),
+    "utf8",
+  );
+
+  const liveIndex = source.indexOf("ระบบทำงานปกติ");
+  const workIndex = source.indexOf("งานที่ต้องจัดการ");
+  const chartIndex = source.lastIndexOf("SoilMoistureChart");
+  assert.ok(liveIndex >= 0);
+  assert.ok(workIndex > liveIndex);
+  assert.ok(chartIndex > liveIndex);
+  assert.match(source, /สถานะทรัพยากรสำคัญ/);
+  assert.match(source, /ภาพสดจากกล้องจำลอง 01/);
+});
