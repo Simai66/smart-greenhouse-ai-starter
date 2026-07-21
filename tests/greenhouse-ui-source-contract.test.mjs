@@ -67,3 +67,22 @@ test("keeps live status and decisions ahead of dashboard detail", async () => {
   assert.match(source, /สถานะทรัพยากรสำคัญ/);
   assert.match(source, /ภาพสดจากกล้องจำลอง 01/);
 });
+
+test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", async () => {
+  const [sidebar, header, search, viewState] = await Promise.all([
+    readFile(new URL("../components/greenhouse/app-sidebar.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/site-header.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/global-search.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/view-state.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(sidebar, /collapsible="icon"/);
+  assert.match(sidebar, /setOpenMobile\(false\)/);
+  assert.match(header, /SidebarTrigger/);
+  assert.match(header, /เปิดการค้นหา/);
+  assert.match(search, /role="combobox"/);
+  assert.match(search, /ArrowDown/);
+  assert.match(search, /aria-activedescendant/);
+  assert.match(viewState, /ระบบออฟไลน์/);
+  assert.match(viewState, /ข้อมูลอาจเก่า/);
+  assert.match(viewState, /onRefresh/);
+});
