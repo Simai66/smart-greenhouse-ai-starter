@@ -44,3 +44,6 @@ next-env.d.ts
 # Python edge agent bytecode
 __pycache__/
 *.py[cod]
+/.superpowers/
+/.vinext/
+*.tsbuildinfo
