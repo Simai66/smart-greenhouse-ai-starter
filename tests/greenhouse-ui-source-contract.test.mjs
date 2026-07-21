@@ -35,3 +35,19 @@ test("keeps evidence, detail, and analytics contracts in the page views", async 
   assert.match(analytics, /SoilMoistureChart/);
   assert.match(analytics, /เลือกช่วงเวลาของกราฟ/);
 });
+
+test("keeps safe controls and persisted operational page contracts", async () => {
+  const [devices, alerts, settings] = await Promise.all([
+    readFile(new URL("../components/greenhouse/views/devices-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/alerts-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/settings-view.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(devices, /aria-describedby="device-demo-note"/);
+  assert.match(devices, /pendingDeviceId/);
+  assert.match(devices, /disabled=\{!online \|\| Boolean\(pendingDeviceId\)\}/);
+  assert.match(alerts, /filterAlerts/);
+  assert.match(alerts, /รับทราบ|ดำเนินการแล้ว/);
+  assert.match(settings, /validateDemoSettings/);
+  assert.match(settings, /ยกเลิกการแก้ไข/);
+});

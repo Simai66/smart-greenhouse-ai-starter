@@ -136,3 +136,35 @@ export function getSimulatedDeviceCount(devices: DemoDevice[]): string {
 export function getAlertById(alerts: DemoAlert[], alertId: string) {
   return alerts.find((alert) => alert.id === alertId) ?? null;
 }
+
+import type {
+  DeviceCommandAction,
+  DeviceCommandResult,
+} from "@/types/greenhouse";
+
+export type DemoCommandRequester = (
+  deviceId: string,
+  command: Extract<DeviceCommandAction, "turn_on" | "turn_off">,
+) => Promise<DeviceCommandResult>;
+
+export type DemoDeviceCommandOutcome = {
+  state: DemoState;
+  result: DeviceCommandResult;
+};
+
+export async function executeConfirmedDemoDeviceCommand(
+  state: DemoState,
+  deviceId: string,
+  nextActive: boolean,
+  requester: DemoCommandRequester,
+): Promise<DemoDeviceCommandOutcome> {
+  const command = nextActive ? "turn_on" : "turn_off";
+  const result = await requester(deviceId, command);
+  if (result.state !== "acknowledged") {
+    throw new Error(result.message || "อุปกรณ์ไม่ตอบรับคำสั่ง");
+  }
+  return {
+    state: transitionDemoDevice(state, deviceId, nextActive),
+    result,
+  };
+}

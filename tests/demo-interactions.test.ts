@@ -4,6 +4,7 @@ import { demoInitialState, greenhouseDemoStore } from "../lib/greenhouse-demo-st
 import {
   buildDashboardSearchResults,
   createDemoCsv,
+  executeConfirmedDemoDeviceCommand,
   setDemoAlertResolution,
   transitionDemoDevice,
   validateDemoSettings,
@@ -41,4 +42,61 @@ test("creates an escaped, labeled demo CSV payload", () => {
   const csv = createDemoCsv(demoInitialState, [["อุณหภูมิ", "28.5", "°C"]], "2026-07-18 07:42");
   assert.match(csv, /โหมดสาธิต/);
   assert.match(csv, /ปั๊มน้ำ/);
+});
+
+test("keeps device state unchanged until acknowledgement arrives", async () => {
+  let resolveRequest:
+    | ((result: {
+        commandId: string;
+        deviceId: string;
+        command: "turn_on";
+        state: "acknowledged";
+        requestedAt: string;
+        message: string;
+      }) => void)
+    | undefined;
+
+  const pending = executeConfirmedDemoDeviceCommand(
+    demoInitialState,
+    "pump",
+    true,
+    async () =>
+      new Promise((resolve) => {
+        resolveRequest = resolve;
+      }),
+  );
+
+  assert.equal(demoInitialState.devices[0]?.active, false);
+  resolveRequest?.({
+    commandId: "test-command",
+    deviceId: "pump",
+    command: "turn_on",
+    state: "acknowledged",
+    requestedAt: "2026-07-21T09:42:00+07:00",
+    message: "acknowledged",
+  });
+
+  const outcome = await pending;
+  assert.equal(outcome.state.devices[0]?.active, true);
+  assert.equal(outcome.result.state, "acknowledged");
+});
+
+test("does not mutate device state when acknowledgement fails", async () => {
+  await assert.rejects(
+    executeConfirmedDemoDeviceCommand(
+      demoInitialState,
+      "pump",
+      true,
+      async () => ({
+        commandId: "failed-command",
+        deviceId: "pump",
+        command: "turn_on",
+        state: "failed",
+        requestedAt: "2026-07-21T09:42:00+07:00",
+        message: "gateway unavailable",
+      }),
+    ),
+    /gateway unavailable/,
+  );
+  assert.equal(demoInitialState.devices[0]?.active, false);
 });
