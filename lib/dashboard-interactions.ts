@@ -32,11 +32,15 @@ export function buildDashboardSearchResults(
         plantId: plant.id,
       })),
     ...state.devices
-      .filter((device) => device.name.toLocaleLowerCase().includes(query))
+      .filter((device) =>
+        `${device.name} ${device.id} ${device.detail}`
+          .toLocaleLowerCase()
+          .includes(query),
+      )
       .map((device) => ({
         key: `device-${device.id}`,
         label: device.name,
-        detail: "อุปกรณ์สาธิต",
+        detail: `อุปกรณ์ · ${device.detail || "ไม่มีรายละเอียดที่บันทึก"}`,
         page: "devices" as const,
       })),
     ...state.alerts
@@ -46,7 +50,7 @@ export function buildDashboardSearchResults(
       .map((alert) => ({
         key: `alert-${alert.id}`,
         label: alert.title,
-        detail: "การแจ้งเตือนสาธิต",
+        detail: `การแจ้งเตือน · ${alert.resolved ? "ดำเนินการแล้ว" : "รอตรวจสอบ"}`,
         page: "alerts" as const,
         alertId: alert.id,
       })),
@@ -121,26 +125,40 @@ export function createDemoCsv(
   sensorRows: ReadonlyArray<readonly [string, string, string]>,
   createdAt: string,
 ): string {
+  const zoneNames = new Map(
+    state.greenhouses.flatMap((greenhouse) =>
+      greenhouse.zones.map((zone) => [zone.id, zone.name] as const),
+    ),
+  );
+  const normalizedSensorRows = sensorRows.length
+    ? sensorRows
+    : [["ไม่มีเซ็นเซอร์ที่กำหนดค่า", "—", "—"]] as const;
+  const deviceRows = state.devices.length
+    ? state.devices.map((device) => [
+        device.name,
+        device.zoneId ? (zoneNames.get(device.zoneId) ?? "ไม่พบโซนที่ผูกไว้") : "ยังไม่ได้ผูกโซน",
+        device.detail || "ไม่มีรายละเอียดที่บันทึก",
+      ])
+    : [["ไม่มีอุปกรณ์ที่กำหนดค่า", "—", "—"]];
+  const alertRows = state.alerts.length
+    ? state.alerts.map((alert) => [
+        alert.title,
+        alert.resolved ? "ดำเนินการแล้ว" : "รอตรวจสอบ",
+        alert.detail || "ไม่มีรายละเอียดที่บันทึก",
+      ])
+    : [["ไม่มีรายการแจ้งเตือน", "—", "—"]];
   const rows = [
-    ["รายงาน Smart Greenhouse (โหมดสาธิต)"],
+    ["รายงาน Smart Greenhouse"],
     ["สร้างเมื่อ", createdAt],
     [],
     ["เซ็นเซอร์", "ค่า", "หน่วย"],
-    ...sensorRows,
+    ...normalizedSensorRows,
     [],
-    ["อุปกรณ์", "สถานะ", "รายละเอียด"],
-    ...state.devices.map((device) => [
-      device.name,
-      device.active ? "กำลังทำงาน (สาธิต)" : "ปิด (สาธิต)",
-      device.detail,
-    ]),
+    ["อุปกรณ์", "โซน", "รายละเอียด"],
+    ...deviceRows,
     [],
     ["การแจ้งเตือน", "สถานะ", "รายละเอียด"],
-    ...state.alerts.map((alert) => [
-      alert.title,
-      alert.resolved ? "ดำเนินการแล้ว" : "ต้องตรวจสอบ",
-      alert.detail,
-    ]),
+    ...alertRows,
   ];
 
   return rows

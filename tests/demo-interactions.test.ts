@@ -194,10 +194,41 @@ test("validates settings and selects search results", () => {
   assert.equal(buildDashboardSearchResults(demoInitialState, "TOM-003")[0]?.plantId, "TOM-003");
 });
 
-test("creates an escaped, labeled demo CSV payload", () => {
+test("creates an escaped CSV payload with configured resource labels", () => {
   const csv = createDemoCsv(demoInitialState, [["อุณหภูมิ", "28.5", "°C"]], "2026-07-18 07:42");
-  assert.match(csv, /โหมดสาธิต/);
+  assert.match(csv, /รายงาน Smart Greenhouse/);
   assert.match(csv, /ปั๊มน้ำ/);
+  assert.match(csv, /โซน A/);
+  assert.doesNotMatch(csv, /สาธิต|จำลอง|กำลังทำงาน|ปิด/);
+});
+
+test("labels search results from their saved resource details", () => {
+  const results = buildDashboardSearchResults(demoInitialState, "โหมดอัตโนมัติ");
+  assert.deepEqual(results[0] && {
+    label: results[0].label,
+    detail: results[0].detail,
+    page: results[0].page,
+  }, {
+    label: "พัดลมระบายอากาศ",
+    detail: "อุปกรณ์ · โหมดอัตโนมัติ · มากกว่า 30°C",
+    page: "devices",
+  });
+  assert.doesNotMatch(results[0]?.detail ?? "", /สาธิต|จำลอง/);
+});
+
+test("exports honest placeholders for missing configured resources", () => {
+  const emptyState = { ...demoInitialState, devices: [], alerts: [] };
+  const csv = createDemoCsv(emptyState, [], "2026-07-18 07:42");
+  assert.match(csv, /ไม่มีเซ็นเซอร์ที่กำหนดค่า/);
+  assert.match(csv, /ไม่มีอุปกรณ์ที่กำหนดค่า/);
+  assert.match(csv, /ไม่มีรายการแจ้งเตือน/);
+});
+
+test("escapes saved resource details in CSV output", () => {
+  const state = structuredClone(demoInitialState);
+  state.devices[0]!.detail = 'ตั้งค่า "กำหนดเอง"';
+  const csv = createDemoCsv(state, [], "2026-07-18 07:42");
+  assert.match(csv, /"ตั้งค่า ""กำหนดเอง"""/);
 });
 
 test("keeps device state unchanged until acknowledgement arrives", async () => {
