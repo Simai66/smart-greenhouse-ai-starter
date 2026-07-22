@@ -31,6 +31,67 @@ test("upgrades a state created before sensor and zone bindings", async () => {
   assert.equal(result.state.devices.every((device) => typeof device.zoneId === "string"), true);
 });
 
+test("binds legacy resources to the migrated custom greenhouse and its zone", async () => {
+  const legacy = structuredClone(demoInitialState);
+  legacy.greenhouses = [{
+    id: "GH-CUSTOM",
+    name: "โรงเรือนทดลอง",
+    code: "TRIAL-01",
+    status: "active",
+    zones: [{ id: "ZONE-CUSTOM", name: "แปลงทดลอง", status: "active" }],
+  }];
+  delete (legacy as Partial<typeof legacy>).sensors;
+  for (const device of legacy.devices) {
+    delete device.greenhouseId;
+    delete device.zoneId;
+  }
+  delete legacy.settings.cameras[0]!.greenhouseId;
+  delete legacy.settings.cameras[0]!.zoneId;
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+  const expectedBinding = { greenhouseId: "GH-CUSTOM", zoneId: "ZONE-CUSTOM" };
+  assert.deepEqual(result.state.devices[0] && {
+    greenhouseId: result.state.devices[0].greenhouseId,
+    zoneId: result.state.devices[0].zoneId,
+  }, expectedBinding);
+  assert.deepEqual(result.state.settings.cameras[0] && {
+    greenhouseId: result.state.settings.cameras[0].greenhouseId,
+    zoneId: result.state.settings.cameras[0].zoneId,
+  }, expectedBinding);
+  assert.equal(result.state.sensors.every((sensor) => sensor.greenhouseId === "GH-CUSTOM" && sensor.zoneId === "ZONE-CUSTOM"), true);
+});
+
+test("normalizes malformed resource bindings without changing valid saved bindings", async () => {
+  const legacy = structuredClone(demoInitialState);
+  legacy.devices[0]!.greenhouseId = 42 as never;
+  legacy.devices[0]!.zoneId = { stale: true } as never;
+  legacy.settings.cameras[0]!.greenhouseId = "GH-01";
+  legacy.settings.cameras[0]!.zoneId = "ZONE-B";
+  legacy.settings.cameras[1]!.greenhouseId = "missing";
+  legacy.settings.cameras[1]!.zoneId = "ZONE-A";
+  legacy.settings.cameras[2]!.greenhouseId = [] as never;
+  legacy.settings.cameras[2]!.zoneId = 7 as never;
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+  assert.deepEqual(result.state.devices[0] && {
+    greenhouseId: result.state.devices[0].greenhouseId,
+    zoneId: result.state.devices[0].zoneId,
+  }, { greenhouseId: "GH-01", zoneId: "ZONE-A" });
+  assert.deepEqual(result.state.settings.cameras[0] && {
+    greenhouseId: result.state.settings.cameras[0].greenhouseId,
+    zoneId: result.state.settings.cameras[0].zoneId,
+  }, { greenhouseId: "GH-01", zoneId: "ZONE-B" });
+  assert.deepEqual(result.state.settings.cameras.slice(1).map((camera) => ({
+    greenhouseId: camera.greenhouseId,
+    zoneId: camera.zoneId,
+  })), [
+    { greenhouseId: "GH-01", zoneId: "ZONE-A" },
+    { greenhouseId: "GH-01", zoneId: "ZONE-A" },
+  ]);
+});
+
 test("upgrades a legacy saved settings payload with multi-camera defaults", async () => {
   const legacy = structuredClone(demoInitialState);
   delete (legacy as Partial<typeof legacy>).greenhouses;
