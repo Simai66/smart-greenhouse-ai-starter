@@ -316,6 +316,15 @@ export function GreenhouseApp() {
           }));
           notify("เก็บโรงเรือนถาวรแล้ว", "info");
         }}
+        onRestoreGreenhouse={(id) => {
+          setState((current) => ({
+            ...current,
+            greenhouses: current.greenhouses.map((greenhouse) =>
+              greenhouse.id === id ? { ...greenhouse, status: "active" } : greenhouse,
+            ),
+          }));
+          notify("เรียกคืนโรงเรือนแล้ว");
+        }}
         onAddZone={(greenhouseId, name) => {
           setState((current) => ({
             ...current,
@@ -349,6 +358,22 @@ export function GreenhouseApp() {
             ),
           }));
           notify("เก็บโซนถาวรแล้ว", "info");
+        }}
+        onRestoreZone={(greenhouseId, zoneId) => {
+          setState((current) => ({
+            ...current,
+            greenhouses: current.greenhouses.map((greenhouse) =>
+              greenhouse.id === greenhouseId
+                ? {
+                    ...greenhouse,
+                    zones: greenhouse.zones.map((zone) =>
+                      zone.id === zoneId ? { ...zone, status: "active" } : zone,
+                    ),
+                  }
+                : greenhouse,
+            ),
+          }));
+          notify("เรียกคืนโซนแล้ว");
         }}
       />
     )
