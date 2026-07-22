@@ -1,8 +1,12 @@
 import type {
+  DemoAlert,
   DemoCamera,
   DemoDevice,
+  DemoGreenhouse,
+  DemoPlant,
   DemoSensor,
   DemoState,
+  DemoCropBatch,
 } from "./greenhouse-demo-store.ts";
 
 export type ResourceKind = "device" | "camera" | "sensor";
@@ -27,6 +31,25 @@ export type DeleteResourceInput = { kind: ResourceKind; id: string };
 
 export type DeleteZoneInput = { greenhouseId: string; zoneId: string };
 
+export type GreenhouseContext = {
+  greenhouse: DemoGreenhouse | undefined;
+  devices: DemoDevice[];
+  cameras: DemoCamera[];
+  sensors: DemoSensor[];
+  plants: DemoPlant[];
+  alerts: DemoAlert[];
+  cropBatches: DemoCropBatch[];
+};
+
+export type DevicePresentation = {
+  zoneId: string | undefined;
+  zoneName: string;
+  lastActive: string;
+  rule: string;
+  power: string;
+  health: string;
+};
+
 function nextResourceId(kind: ResourceKind, existingIds: string[]): string {
   const prefix = kind.toUpperCase();
   const matches = existingIds
@@ -46,6 +69,70 @@ export function selectResourcesForGreenhouse(state: DemoState, greenhouseId: str
     devices: state.devices.filter((item) => item.greenhouseId === greenhouseId),
     cameras: state.settings.cameras.filter((item) => item.greenhouseId === greenhouseId),
     sensors: state.sensors.filter((item) => item.greenhouseId === greenhouseId),
+  };
+}
+
+/**
+ * Creates a read-only operational slice for one greenhouse. It deliberately
+ * does not infer a default greenhouse: an invalid selection should look empty,
+ * never leak the data of the first greenhouse into another workspace.
+ */
+export function selectGreenhouseContext(state: DemoState, greenhouseId: string): GreenhouseContext {
+  const greenhouse = state.greenhouses.find((item) => item.id === greenhouseId);
+  if (!greenhouse) {
+    return {
+      greenhouse: undefined,
+      devices: [],
+      cameras: [],
+      sensors: [],
+      plants: [],
+      alerts: [],
+      cropBatches: [],
+    };
+  }
+
+  return {
+    greenhouse,
+    devices: state.devices.filter((item) => item.greenhouseId === greenhouseId),
+    cameras: state.settings.cameras.filter((item) => item.greenhouseId === greenhouseId),
+    sensors: state.sensors.filter((item) => item.greenhouseId === greenhouseId),
+    plants: state.plants.filter((item) => item.greenhouseId === greenhouseId),
+    alerts: state.alerts.filter((item) => item.greenhouseId === greenhouseId),
+    cropBatches: state.cropBatches.filter((item) => item.greenhouseId === greenhouseId),
+  };
+}
+
+export function selectDevicePresentation(
+  device: DemoDevice,
+  context?: Pick<GreenhouseContext, "greenhouse">,
+): DevicePresentation {
+  const zone = context?.greenhouse?.zones.find((item) => item.id === device.zoneId);
+  const defaults = {
+    pump: {
+      rule: "รดน้ำตามเกณฑ์ความชื้นดินที่ตั้งไว้",
+      power: "0.18 kWh/รอบ โดยประมาณ",
+    },
+    fan: {
+      rule: "ระบายอากาศตามเกณฑ์อุณหภูมิที่ตั้งไว้",
+      power: "0.12 kWh/ชม. โดยประมาณ",
+    },
+    light: {
+      rule: "เปิดตามตารางแสงที่ตั้งไว้",
+      power: "0.40 kWh/ชม. โดยประมาณ",
+    },
+    mist: {
+      rule: "พ่นหมอกตามเกณฑ์ความชื้นอากาศที่ตั้งไว้",
+      power: "0.08 kWh/ชม. โดยประมาณ",
+    },
+  } as const;
+
+  return {
+    zoneId: device.zoneId,
+    zoneName: zone?.name ?? device.zoneId ?? "ไม่ระบุโซน",
+    lastActive: device.active ? "กำลังทำงานตามสถานะเดโม" : "ยังไม่มีประวัติการทำงาน",
+    rule: defaults[device.icon].rule,
+    power: defaults[device.icon].power,
+    health: "พร้อมใช้งาน",
   };
 }
 

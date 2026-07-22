@@ -34,7 +34,7 @@ import {
   type DemoGreenhouse,
   type DemoState,
 } from "@/lib/greenhouse-demo-store";
-import { createResource, deleteZone } from "@/lib/greenhouse-domain";
+import { createResource, deleteZone, selectGreenhouseContext } from "@/lib/greenhouse-domain";
 import {
   buildDashboardViewModel,
   pageMetadata,
@@ -116,16 +116,19 @@ export function GreenhouseApp() {
     () => state.greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId && greenhouse.status === "active") ?? state.greenhouses.find((greenhouse) => greenhouse.status === "active") ?? demoInitialState.greenhouses[0]!,
     [activeGreenhouseId, state.greenhouses],
   );
+  const greenhouseContext = useMemo(
+    () => selectGreenhouseContext(state, activeGreenhouse.id),
+    [activeGreenhouse.id, state],
+  );
   const greenhouseState = useMemo(() => ({
     ...state,
-    devices: state.devices.filter((device) => (device.greenhouseId ?? "GH-01") === activeGreenhouse.id),
-    plants: state.plants.filter((plant) => (plant.greenhouseId ?? "GH-01") === activeGreenhouse.id),
-    alerts: state.alerts.filter((alert) => (alert.greenhouseId ?? "GH-01") === activeGreenhouse.id),
-    settings: {
-      ...state.settings,
-      cameras: state.settings.cameras.filter((camera) => (camera.greenhouseId ?? "GH-01") === activeGreenhouse.id),
-    },
-  }), [activeGreenhouse.id, state]);
+    devices: greenhouseContext.devices,
+    plants: greenhouseContext.plants,
+    alerts: greenhouseContext.alerts,
+    sensors: greenhouseContext.sensors,
+    cropBatches: greenhouseContext.cropBatches,
+    settings: { ...state.settings, cameras: greenhouseContext.cameras },
+  }), [greenhouseContext, state]);
   const dashboard = useMemo(() => buildDashboardViewModel(greenhouseState), [greenhouseState]);
   const openAlerts = dashboard.openAlerts;
   const searchResults = useMemo(
@@ -269,7 +272,7 @@ export function GreenhouseApp() {
     ) : activePage === "plants" ? (
       <PlantsView
         plants={greenhouseState.plants}
-        cropBatches={state.cropBatches.filter((batch) => batch.greenhouseId === activeGreenhouse.id)}
+        cropBatches={greenhouseContext.cropBatches}
         selectedPlantId={selectedPlantId}
         onSelectPlant={setSelectedPlantId}
         onInspectPlant={(plantId) => { setSelectedPlantId(plantId); navigate("ai"); }}
@@ -299,6 +302,7 @@ export function GreenhouseApp() {
     ) : activePage === "devices" ? (
       <DevicesView
         devices={greenhouseState.devices}
+        context={greenhouseContext}
         pendingDeviceId={pendingDevice?.device.id ?? null}
         online={online}
         onRequest={(device) => setPendingDevice({ device, nextActive: !device.active })}
