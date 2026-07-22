@@ -28,6 +28,7 @@ import {
   navigationItems,
   type GreenhousePageId,
 } from "@/lib/greenhouse-presentation";
+import type { DemoGreenhouse } from "@/lib/greenhouse-demo-store";
 
 const iconMap = {
   dashboard: LayoutDashboard,
@@ -45,12 +46,14 @@ export function AppSidebar({
   deviceCount,
   online,
   onNavigate,
+  greenhouse,
 }: {
   activePage: GreenhousePageId;
   openAlerts: number;
   deviceCount: number;
   online: boolean;
   onNavigate: (page: GreenhousePageId) => void;
+  greenhouse: DemoGreenhouse;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const navigate = (page: GreenhousePageId) => {
@@ -60,8 +63,8 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="border-b border-sidebar-border">
-        <SidebarMenu><SidebarMenuItem><SidebarMenuButton size="lg" tooltip="Smart Greenhouse" onClick={() => navigate("dashboard")}><span className="grid size-8 place-items-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"><Leaf aria-hidden="true" /></span><span><strong className="block">Smart Greenhouse</strong><small className="text-sidebar-foreground/70">GREENHOUSE 01</small></span></SidebarMenuButton></SidebarMenuItem></SidebarMenu>
-        <div className="rounded-lg border border-sidebar-border bg-sidebar-accent p-3 group-data-[collapsible=icon]:hidden"><strong className="block text-sm">โรงเรือนมะเขือเทศ</strong><small className="text-sidebar-foreground/70">หลังที่ 1 · {online ? "ออนไลน์" : "ออฟไลน์"}</small></div>
+        <SidebarMenu><SidebarMenuItem><SidebarMenuButton size="lg" tooltip="Smart Greenhouse" onClick={() => navigate("dashboard")}><span className="grid size-8 place-items-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"><Leaf aria-hidden="true" /></span><span><strong className="block">Smart Greenhouse</strong><small className="text-sidebar-foreground/70">{greenhouse.code}</small></span></SidebarMenuButton></SidebarMenuItem></SidebarMenu>
+        <div className="rounded-lg border border-sidebar-border bg-sidebar-accent p-3 group-data-[collapsible=icon]:hidden"><strong className="block text-sm">{greenhouse.name}</strong><small className="text-sidebar-foreground/70">{greenhouse.zones.filter((zone) => zone.status === "active").length} โซน · {online ? "ออนไลน์" : "ออฟไลน์"}</small></div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

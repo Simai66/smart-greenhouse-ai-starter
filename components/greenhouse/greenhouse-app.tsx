@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/greenhouse/app-sidebar";
 import { AlertDialog } from "@/components/greenhouse/alert-dialog";
@@ -44,6 +46,7 @@ export function GreenhouseApp() {
   const [ready, setReady] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [activePage, setActivePage] = useState<GreenhousePageId>("dashboard");
+  const [activeGreenhouseId, setActiveGreenhouseId] = useState("GH-01");
   const [period, setPeriod] = useState<ChartPeriod>("วันนี้");
   const [search, setSearch] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
@@ -108,15 +111,36 @@ export function GreenhouseApp() {
     });
   }, [ready, state]);
 
-  const dashboard = useMemo(() => buildDashboardViewModel(state), [state]);
+  const activeGreenhouse = useMemo(
+    () => state.greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId && greenhouse.status === "active") ?? state.greenhouses.find((greenhouse) => greenhouse.status === "active") ?? demoInitialState.greenhouses[0]!,
+    [activeGreenhouseId, state.greenhouses],
+  );
+  const greenhouseState = useMemo(() => ({
+    ...state,
+    devices: state.devices.filter((device) => (device.greenhouseId ?? "GH-01") === activeGreenhouse.id),
+    plants: state.plants.filter((plant) => (plant.greenhouseId ?? "GH-01") === activeGreenhouse.id),
+    alerts: state.alerts.filter((alert) => (alert.greenhouseId ?? "GH-01") === activeGreenhouse.id),
+    settings: {
+      ...state.settings,
+      cameras: state.settings.cameras.filter((camera) => (camera.greenhouseId ?? "GH-01") === activeGreenhouse.id),
+    },
+  }), [activeGreenhouse.id, state]);
+  const dashboard = useMemo(() => buildDashboardViewModel(greenhouseState), [greenhouseState]);
   const openAlerts = dashboard.openAlerts;
   const searchResults = useMemo(
-    () => buildDashboardSearchResults(state, search),
-    [search, state],
+    () => buildDashboardSearchResults(greenhouseState, search),
+    [greenhouseState, search],
   );
   const selectedPlant =
-    state.plants.find((plant) => plant.id === selectedPlantId) ??
-    state.plants[0];
+    greenhouseState.plants.find((plant) => plant.id === selectedPlantId) ??
+    greenhouseState.plants[0];
+
+  const changeGreenhouse = (greenhouseId: string) => {
+    setActiveGreenhouseId(greenhouseId);
+    setSearch("");
+    setSelectedPlantId("");
+    setSelectedAlert(null);
+  };
 
   const navigate = (page: GreenhousePageId) => {
     setActivePage(page);
@@ -133,7 +157,7 @@ export function GreenhouseApp() {
     if (result.plantId) setSelectedPlantId(result.plantId);
     if (result.alertId) {
       setSelectedAlert(
-        state.alerts.find((alert) => alert.id === result.alertId) ?? null,
+      greenhouseState.alerts.find((alert) => alert.id === result.alertId) ?? null,
       );
     }
     navigate(result.page);
@@ -167,7 +191,7 @@ export function GreenhouseApp() {
       ["ความชื้นดินโซน A", "46", "%"],
     ] as const;
     const csv = createDemoCsv(
-      state,
+      greenhouseState,
       sensorRows,
       new Date().toLocaleString("th-TH"),
     );
@@ -230,8 +254,8 @@ export function GreenhouseApp() {
     activePage === "dashboard" ? (
       <CommandDeckView
         viewModel={dashboard}
-        devices={state.devices}
-        plants={state.plants}
+        devices={greenhouseState.devices}
+        plants={greenhouseState.plants}
         period={period}
         lastUpdated={lastUpdated}
         pendingDeviceId={pendingDevice?.device.id ?? null}
@@ -243,15 +267,16 @@ export function GreenhouseApp() {
       />
     ) : activePage === "plants" ? (
       <PlantsView
-        plants={state.plants}
+        plants={greenhouseState.plants}
         selectedPlantId={selectedPlantId}
         onSelectPlant={setSelectedPlantId}
         onInspectPlant={(plantId) => { setSelectedPlantId(plantId); navigate("ai"); }}
       />
-    ) : activePage === "ai" && selectedPlant ? (
+    ) : activePage === "ai" ? (
+      selectedPlant ? (
       <AiDetectionView
         plant={selectedPlant}
-        cameras={state.settings.cameras}
+        cameras={greenhouseState.settings.cameras}
         reviewedCameraIds={state.aiReviewedEvidence?.[selectedPlant.id] ?? []}
         onSave={(cameraId) => {
           setState((current) => ({
@@ -268,9 +293,10 @@ export function GreenhouseApp() {
           notify("บันทึกผลตรวจเดโมแล้ว การแจ้งเตือนยังคงเปิดอยู่");
         }}
       />
+      ) : <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center"><p className="font-semibold">ยังไม่มีพืชสำหรับตรวจด้วย AI</p><p className="max-w-md text-sm text-muted-foreground">เพิ่มรอบปลูกและข้อมูลพืชของ {activeGreenhouse.name} ก่อน แล้วจึงเริ่มตรวจหลักฐานจากกล้องได้</p><Button variant="outline" onClick={() => navigate("settings")}>ไปที่ตั้งค่า</Button></CardContent></Card>
     ) : activePage === "devices" ? (
       <DevicesView
-        devices={state.devices}
+        devices={greenhouseState.devices}
         pendingDeviceId={pendingDevice?.device.id ?? null}
         online={online}
         onRequest={(device) => setPendingDevice({ device, nextActive: !device.active })}
@@ -278,7 +304,7 @@ export function GreenhouseApp() {
     ) : activePage === "analytics" ? (
       <AnalyticsView period={period} onPeriodChange={setPeriod} />
     ) : activePage === "alerts" ? (
-      <AlertsView alerts={state.alerts} onOpen={setSelectedAlert} />
+      <AlertsView alerts={greenhouseState.alerts} onOpen={setSelectedAlert} />
     ) : (
       <SettingsView
         settings={state.settings}
@@ -386,7 +412,7 @@ export function GreenhouseApp() {
       <a className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-3 focus:text-primary-foreground" href="#main-content">
         ข้ามไปยังเนื้อหาหลัก
       </a>
-      <AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={state.devices.length} online={online} onNavigate={navigate} />
+      <AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={greenhouseState.devices.length} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
       <SidebarInset>
         <SiteHeader
           pageTitle={pageMetadata[activePage].title}
@@ -400,9 +426,12 @@ export function GreenhouseApp() {
           onOpenMobileSearch={() => setMobileSearchOpen(true)}
           onOpenAlerts={() => navigate("alerts")}
           onNotify={(text) => notify(text, "info")}
+          greenhouses={state.greenhouses}
+          activeGreenhouseId={activeGreenhouse.id}
+          onGreenhouseChange={changeGreenhouse}
         />
         <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[86rem] space-y-7 p-4 pb-12 sm:p-6 lg:px-8 lg:py-7">
-          <PageHeader metadata={pageMetadata[activePage]} refreshing={refreshing} onExport={exportCsv} onRefresh={refresh} />
+          <PageHeader metadata={pageMetadata[activePage]} greenhouse={activeGreenhouse} refreshing={refreshing} onExport={exportCsv} onRefresh={refresh} />
           {!storageAvailable ? <MemoryOnlyNotice /> : null}
           {!online ? <OfflineNotice lastUpdated={lastUpdated} /> : dataStale ? <StaleDataNotice lastUpdated={lastUpdated} onRefresh={refresh} /> : null}
           {page}

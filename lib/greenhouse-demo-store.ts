@@ -1,8 +1,8 @@
 import type { DeviceCommandAction, DeviceCommandResult } from "@/types/greenhouse";
 
-export type DemoDevice = { id: string; name: string; detail: string; icon: "pump" | "fan" | "light" | "mist"; active: boolean };
-export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number; health: "ปกติ" | "ควรตรวจสอบ"; confidence: number };
-export type DemoAlert = { id: string; type: "critical" | "warning" | "info"; title: string; detail: string; time: string; resolved: boolean };
+export type DemoDevice = { id: string; name: string; detail: string; icon: "pump" | "fan" | "light" | "mist"; active: boolean; greenhouseId?: string };
+export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number; health: "ปกติ" | "ควรตรวจสอบ"; confidence: number; greenhouseId?: string };
+export type DemoAlert = { id: string; type: "critical" | "warning" | "info"; title: string; detail: string; time: string; resolved: boolean; greenhouseId?: string };
 export type DemoCamera = {
   id: string;
   name: string;
@@ -11,6 +11,7 @@ export type DemoCamera = {
   status: "online" | "offline";
   captureInterval: string;
   enabled: boolean;
+  greenhouseId?: string;
 };
 export type DemoZone = {
   id: string;
@@ -56,21 +57,21 @@ export const demoInitialState: DemoState = {
     },
   ],
   devices: [
-    { id: "pump", name: "ปั๊มน้ำ", detail: "รอบถัดไป 10:30 น.", icon: "pump", active: false },
-    { id: "fan", name: "พัดลมระบายอากาศ", detail: "โหมดอัตโนมัติ · มากกว่า 30°C", icon: "fan", active: true },
-    { id: "light", name: "ไฟปลูกพืช", detail: "รอบถัดไป 18:00 น.", icon: "light", active: false },
-    { id: "mist", name: "เครื่องพ่นหมอก", detail: "โหมดอัตโนมัติ · ต่ำกว่า 60% RH", icon: "mist", active: true },
+    { id: "pump", name: "ปั๊มน้ำ", detail: "รอบถัดไป 10:30 น.", icon: "pump", active: false, greenhouseId: "GH-01" },
+    { id: "fan", name: "พัดลมระบายอากาศ", detail: "โหมดอัตโนมัติ · มากกว่า 30°C", icon: "fan", active: true, greenhouseId: "GH-01" },
+    { id: "light", name: "ไฟปลูกพืช", detail: "รอบถัดไป 18:00 น.", icon: "light", active: false, greenhouseId: "GH-01" },
+    { id: "mist", name: "เครื่องพ่นหมอก", detail: "โหมดอัตโนมัติ · ต่ำกว่า 60% RH", icon: "mist", active: true, greenhouseId: "GH-01" },
   ],
   plants: [
-    { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: 46, health: "ปกติ", confidence: 98 },
-    { id: "TOM-002", name: "มะเขือเทศ 02", zone: "โซน A", age: "42 วัน", moisture: 44, health: "ปกติ", confidence: 96 },
-    { id: "TOM-003", name: "มะเขือเทศ 03", zone: "โซน B", age: "38 วัน", moisture: 39, health: "ควรตรวจสอบ", confidence: 78 },
-    { id: "TOM-004", name: "มะเขือเทศ 04", zone: "โซน B", age: "38 วัน", moisture: 36, health: "ปกติ", confidence: 94 },
+    { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: 46, health: "ปกติ", confidence: 98, greenhouseId: "GH-01" },
+    { id: "TOM-002", name: "มะเขือเทศ 02", zone: "โซน A", age: "42 วัน", moisture: 44, health: "ปกติ", confidence: 96, greenhouseId: "GH-01" },
+    { id: "TOM-003", name: "มะเขือเทศ 03", zone: "โซน B", age: "38 วัน", moisture: 39, health: "ควรตรวจสอบ", confidence: 78, greenhouseId: "GH-01" },
+    { id: "TOM-004", name: "มะเขือเทศ 04", zone: "โซน B", age: "38 วัน", moisture: 36, health: "ปกติ", confidence: 94, greenhouseId: "GH-01" },
   ],
   alerts: [
-    { id: "leaf-spot", type: "critical", title: "ควรตรวจใบของมะเขือเทศ 03", detail: "ผลวิเคราะห์ภาพพบลักษณะที่อาจเป็นใบจุด ความมั่นใจ 78%", time: "18 นาทีที่แล้ว", resolved: false },
-    { id: "soil-moisture", type: "warning", title: "ความชื้นในดินของมะเขือเทศ 04 ลดลง", detail: "ค่าปัจจุบัน 36% ใกล้ค่าเริ่มรดน้ำอัตโนมัติที่ 35%", time: "5 นาทีที่แล้ว", resolved: false },
-    { id: "ventilation", type: "info", title: "รอบระบายอากาศเสร็จสิ้น", detail: "อุณหภูมิในโซน A กลับสู่ช่วงเป้าหมายแล้ว", time: "42 นาทีที่แล้ว", resolved: true },
+    { id: "leaf-spot", type: "critical", title: "ควรตรวจใบของมะเขือเทศ 03", detail: "ผลวิเคราะห์ภาพพบลักษณะที่อาจเป็นใบจุด ความมั่นใจ 78%", time: "18 นาทีที่แล้ว", resolved: false, greenhouseId: "GH-01" },
+    { id: "soil-moisture", type: "warning", title: "ความชื้นในดินของมะเขือเทศ 04 ลดลง", detail: "ค่าปัจจุบัน 36% ใกล้ค่าเริ่มรดน้ำอัตโนมัติที่ 35%", time: "5 นาทีที่แล้ว", resolved: false, greenhouseId: "GH-01" },
+    { id: "ventilation", type: "info", title: "รอบระบายอากาศเสร็จสิ้น", detail: "อุณหภูมิในโซน A กลับสู่ช่วงเป้าหมายแล้ว", time: "42 นาทีที่แล้ว", resolved: true, greenhouseId: "GH-01" },
   ],
   settings: {
     minTemperature: "22", maxTemperature: "30", minHumidity: "60", minSoilMoisture: "35",
@@ -79,9 +80,9 @@ export const demoInitialState: DemoState = {
     notifications: { critical: true, dailySummary: true, quietStart: "21:00", quietEnd: "06:00" },
     ai: { minConfidence: "75", scanInterval: "30", retainDays: "14", detectLeafSpot: true, detectPests: true },
     cameras: [
-      { id: "CAM-A-01", name: "กล้องโซน A · แปลงเหนือ", zone: "โซน A", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true },
-      { id: "CAM-B-01", name: "กล้องโซน B · แปลงใต้", zone: "โซน B", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true },
-      { id: "CAM-ENTRY-01", name: "กล้องทางเข้าโรงเรือน", zone: "ทางเข้า", source: "USB gateway", status: "offline", captureInterval: "30 นาที", enabled: false },
+      { id: "CAM-A-01", name: "กล้องโซน A · แปลงเหนือ", zone: "โซน A", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01" },
+      { id: "CAM-B-01", name: "กล้องโซน B · แปลงใต้", zone: "โซน B", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01" },
+      { id: "CAM-ENTRY-01", name: "กล้องทางเข้าโรงเรือน", zone: "ทางเข้า", source: "USB gateway", status: "offline", captureInterval: "30 นาที", enabled: false, greenhouseId: "GH-01" },
     ],
   },
 };
@@ -176,6 +177,9 @@ function upgradeState(state: DemoState): DemoState {
     : defaultGreenhouses;
   return {
     ...state,
+    devices: state.devices.map((device) => ({ ...device, greenhouseId: device.greenhouseId ?? "GH-01" })),
+    plants: state.plants.map((plant) => ({ ...plant, greenhouseId: plant.greenhouseId ?? "GH-01" })),
+    alerts: state.alerts.map((alert) => ({ ...alert, greenhouseId: alert.greenhouseId ?? "GH-01" })),
     greenhouses: greenhouses.length > 0 ? greenhouses : defaultGreenhouses,
     aiReviewedEvidence: state.aiReviewedEvidence ?? {},
     settings: {
@@ -191,7 +195,7 @@ function upgradeState(state: DemoState): DemoState {
           typeof camera.zone === "string" && ["IP camera", "USB gateway"].includes(String(camera.source)) &&
           ["online", "offline"].includes(String(camera.status)) && typeof camera.captureInterval === "string" &&
           typeof camera.enabled === "boolean",
-        )
+        ).map((camera) => ({ ...camera, greenhouseId: camera.greenhouseId ?? "GH-01" }))
         : defaults.cameras,
     },
   };

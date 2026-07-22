@@ -146,10 +146,10 @@ export const soilMoistureSeries: Record<
 export function buildDashboardViewModel(
   state: DemoState,
 ): DashboardViewModel {
-  const healthScore = Math.round(
-    state.plants.reduce((total, plant) => total + plant.confidence, 0) /
-      state.plants.length,
-  );
+  const hasPlantData = state.plants.length > 0;
+  const healthScore = hasPlantData
+    ? Math.round(state.plants.reduce((total, plant) => total + plant.confidence, 0) / state.plants.length)
+    : 0;
   const activeDevices = state.devices.filter((device) => device.active).length;
   const openAlerts = state.alerts.filter((alert) => !alert.resolved);
   const warningPlant = state.plants.find(
@@ -165,9 +165,9 @@ export function buildDashboardViewModel(
       {
         id: "health",
         label: "สุขภาพพืช",
-        value: String(healthScore) + "%",
-        note: "ค่าเฉลี่ยความมั่นใจล่าสุด",
-        tone: healthScore >= 85 ? "healthy" : "warning",
+        value: hasPlantData ? String(healthScore) + "%" : "—",
+        note: hasPlantData ? "ค่าเฉลี่ยความมั่นใจล่าสุด" : "ยังไม่มีข้อมูลพืช",
+        tone: hasPlantData ? (healthScore >= 85 ? "healthy" : "warning") : "neutral",
       },
       {
         id: "temperature",
@@ -210,7 +210,7 @@ export function buildDashboardViewModel(
             updated: "8 นาทีที่แล้ว",
           }]
         : []),
-      {
+      ...(state.devices.length ? [{
         id: "pump",
         label: "ปั๊มน้ำ · โซน A",
         kind: "อุปกรณ์",
@@ -219,15 +219,15 @@ export function buildDashboardViewModel(
           : "ออนไลน์",
         tone: "healthy",
         updated: "เมื่อครู่",
-      },
-      {
+      }] : []),
+      ...(hasPlantData ? [{
         id: "soil-a-02",
         label: "เซ็นเซอร์ดิน A-02",
         kind: "เซ็นเซอร์",
         status: "46% · ต่ำกว่าเป้าหมาย",
         tone: "warning",
         updated: "เมื่อครู่",
-      },
+      }] : []),
     ],
   };
 }
