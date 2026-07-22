@@ -48,12 +48,6 @@ const typeLabels: Record<DemoDevice["icon"], string> = {
   mist: "พ่นหมอก",
 };
 
-const recentActivity = [
-  { time: "07:42", title: "พัดลมระบายอากาศทำงาน", detail: "ระบบอัตโนมัติตามอุณหภูมิ 30.4°C", icon: Fan },
-  { time: "07:30", title: "ตรวจรอบปั๊มน้ำแล้ว", detail: "ความชื้นดินโซน A อยู่ที่ 46% · ยังไม่ต้องรดน้ำ", icon: Droplets },
-  { time: "07:00", title: "ไฟปลูกพืชเริ่มตามตาราง", detail: "ตารางแสงโซน B · ข้อมูลตัวอย่าง", icon: Lightbulb },
-] as const;
-
 export function DevicesView({
   devices,
   context,
@@ -91,6 +85,20 @@ export function DevicesView({
     });
     return [...names.entries()].map(([id, name]) => ({ id, name }));
   }, [context.greenhouse?.zones, devices]);
+  const recentActivity = useMemo(
+    () => devices.slice(0, 3).map((device, index) => {
+      const presentation = selectDevicePresentation(device, context);
+      const verb = device.active ? "กำลังทำงาน" : "อยู่ในโหมด Auto";
+
+      return {
+        time: ["07:42", "07:30", "07:00"][index] ?? "ล่าสุด",
+        title: `${device.name}${verb}`,
+        detail: `${presentation.zoneName} · ${presentation.lastActive}`,
+        icon: icons[device.icon],
+      };
+    }),
+    [context, devices],
+  );
   const activeDevices = devices.filter((device) => device.active).length;
   const manualDevice = override ? devices.find((device) => device.id === override.deviceId) : null;
 
@@ -224,7 +232,7 @@ export function DevicesView({
           <Card className="shadow-none">
             <CardHeader><CardTitle className="text-base">กิจกรรมล่าสุด</CardTitle><CardDescription>บันทึกตัวอย่าง ไม่ใช่ประวัติคำสั่งจริง</CardDescription></CardHeader>
             <CardContent className="space-y-3">
-              {recentActivity.map(({ time, title, detail, icon: Icon }) => <div key={title} className="flex gap-2.5"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="size-3.5" aria-hidden="true" /></span><span className="min-w-0"><span className="flex items-baseline justify-between gap-2"><strong className="text-sm">{title}</strong><time className="shrink-0 text-xs text-muted-foreground">{time}</time></span><span className="block text-xs text-muted-foreground">{detail}</span></span></div>)}
+              {recentActivity.length > 0 ? recentActivity.map(({ time, title, detail, icon: Icon }) => <div key={title} className="flex gap-2.5"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="size-3.5" aria-hidden="true" /></span><span className="min-w-0"><span className="flex items-baseline justify-between gap-2"><strong className="text-sm">{title}</strong><time className="shrink-0 text-xs text-muted-foreground">{time}</time></span><span className="block text-xs text-muted-foreground">{detail}</span></span></div>) : <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">ยังไม่มีอุปกรณ์ในโรงเรือนนี้สำหรับแสดงกิจกรรมตัวอย่าง</p>}
             </CardContent>
           </Card>
         </aside>
