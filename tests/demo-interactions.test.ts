@@ -19,6 +19,21 @@ test("recovers from corrupt local demo storage", async () => {
   assert.equal(result.state.devices.length, demoInitialState.devices.length);
 });
 
+test("upgrades a legacy saved settings payload with multi-camera defaults", async () => {
+  const legacy = structuredClone(demoInitialState);
+  delete (legacy.settings as Partial<typeof legacy.settings>).schedules;
+  delete (legacy.settings as Partial<typeof legacy.settings>).notifications;
+  delete (legacy.settings as Partial<typeof legacy.settings>).ai;
+  delete (legacy.settings as Partial<typeof legacy.settings>).cameras;
+  globalThis.window = {
+    localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} },
+  } as unknown as Window & typeof globalThis;
+  const result = await greenhouseDemoStore.load();
+  assert.equal(result.recovered, false);
+  assert.equal(result.state.settings.cameras.length, 3);
+  assert.equal(result.state.settings.ai.minConfidence, "75");
+});
+
 test("transitions device only after a confirmed result", () => {
   const next = transitionDemoDevice(demoInitialState, "pump", true);
   assert.equal(demoInitialState.devices[0].active, false);

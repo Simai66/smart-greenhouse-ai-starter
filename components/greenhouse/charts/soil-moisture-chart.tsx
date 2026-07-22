@@ -1,7 +1,8 @@
 "use client";
 
 import { Droplets, TrendingDown, TrendingUp } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceArea, XAxis } from "recharts";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import {
   ChartContainer,
@@ -28,7 +29,106 @@ export type SoilMoistureChartProps = {
   targetMin: number;
   targetMax: number;
   recommendation?: string;
+  title?: string;
+  sensorLabel?: string;
 };
+
+export type SoilMoistureZone = "all" | "zoneA" | "zoneB";
+
+export type DashboardSoilMoistureChartProps = {
+  pointsByZone: { zoneA: SoilMoisturePoint[]; zoneB: SoilMoisturePoint[] };
+  rangeLabel: string;
+  targetMin: number;
+  targetMax: number;
+  selectedZone: SoilMoistureZone;
+  onSelectedZoneChange: (zone: SoilMoistureZone) => void;
+};
+
+const dashboardZoneMeta = {
+  zoneA: { label: "โซน A", sensor: "A-02", color: "var(--chart-1)" },
+  zoneB: { label: "โซน B", sensor: "B-02", color: "var(--chart-2)" },
+} as const;
+
+function getZoneStatus(value: number, targetMin: number, targetMax: number) {
+  if (value < targetMin) return { label: `ต่ำกว่าเป้าหมาย ${targetMin - value}%`, className: "text-amber-700" };
+  if (value > targetMax) return { label: `สูงกว่าเป้าหมาย ${value - targetMax}%`, className: "text-amber-700" };
+  return { label: "อยู่ในช่วงเป้าหมาย", className: "text-primary" };
+}
+
+export function DashboardSoilMoistureChart({
+  pointsByZone,
+  rangeLabel,
+  targetMin,
+  targetMax,
+  selectedZone,
+  onSelectedZoneChange,
+}: DashboardSoilMoistureChartProps) {
+  const rows = pointsByZone.zoneA.map((point, index) => ({
+    label: point.label,
+    zoneA: point.value,
+    zoneB: pointsByZone.zoneB[index]?.value,
+  }));
+  const summaries = (["zoneA", "zoneB"] as const).map((zone) => {
+    const value = pointsByZone[zone].at(-1)?.value ?? 0;
+    return { zone, value, ...getZoneStatus(value, targetMin, targetMax) };
+  });
+  const focused = selectedZone === "all" ? null : summaries.find((summary) => summary.zone === selectedZone) ?? null;
+  const recommendation = focused
+    ? focused.value < targetMin
+      ? `ตรวจรอบรดน้ำ${dashboardZoneMeta[focused.zone].label} แล้ววัดซ้ำใน 15 นาที`
+      : `${dashboardZoneMeta[focused.zone].label}อยู่ในเกณฑ์ ติดตามรอบถัดไปตามปกติ`
+    : summaries.some((summary) => summary.value < targetMin)
+      ? "โซน A ต่ำกว่าเป้าหมาย ควรตรวจรอบรดน้ำและวัดซ้ำใน 15 นาที"
+      : "ทุกโซนอยู่ในเกณฑ์ ติดตามตามรอบปกติ";
+  const visibleZones = selectedZone === "all" ? (["zoneA", "zoneB"] as const) : [selectedZone];
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold leading-snug">ความชื้นดินทุกโซน</h2>
+            <p className="text-base text-muted-foreground">เปรียบเทียบค่าเซ็นเซอร์ A-02 และ B-02 · อัปเดตตามช่วงที่เลือก</p>
+          </div>
+          <div className="flex w-full gap-1 rounded-xl border bg-muted/40 p-1 sm:w-auto" role="group" aria-label="เลือกโซนสำหรับกราฟความชื้นดิน">
+            {(["all", "zoneA", "zoneB"] as const).map((zone) => (
+              <Button key={zone} type="button" size="sm" variant={selectedZone === zone ? "default" : "ghost"} className="flex-1 rounded-lg sm:flex-none" onClick={() => onSelectedZoneChange(zone)}>
+                {zone === "all" ? "ทุกโซน" : dashboardZoneMeta[zone].label}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {summaries.map((summary) => {
+            const meta = dashboardZoneMeta[summary.zone];
+            const isFocused = selectedZone === "all" || selectedZone === summary.zone;
+            return <div key={summary.zone} className={`rounded-xl border p-3 transition-opacity ${isFocused ? "border-border bg-card" : "opacity-55"}`}>
+              <div className="flex items-start justify-between gap-3"><span><span className="flex items-center gap-2 text-sm font-medium"><i className="size-2 rounded-full" style={{ backgroundColor: meta.color }} aria-hidden="true" />{meta.label}</span><span className="mt-1 block text-xs text-muted-foreground">เซ็นเซอร์ {meta.sensor}</span></span><strong className="text-2xl tabular-nums">{summary.value}%</strong></div>
+              <p className={`mt-2 text-xs font-medium ${summary.className}`}>{summary.label}</p>
+            </div>;
+          })}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="sr-only" role="status">กราฟความชื้นดิน {selectedZone === "all" ? "ทุกโซน" : dashboardZoneMeta[selectedZone].label} ในช่วง {rangeLabel}. ช่วงเป้าหมาย {targetMin}–{targetMax} เปอร์เซ็นต์. {recommendation}</p>
+        <ChartContainer config={{ zoneA: { label: "โซน A", color: "var(--chart-1)" }, zoneB: { label: "โซน B", color: "var(--chart-2)" } }} className="min-h-[18rem] w-full">
+          <LineChart accessibilityLayer data={rows} margin={{ left: 12, right: 12 }}>
+            <CartesianGrid stroke="var(--border)" strokeDasharray="0" strokeOpacity={0.7} />
+            <ReferenceArea y1={targetMin} y2={targetMax} fill="var(--color-zoneA)" fillOpacity={0.08} ifOverflow="extendDomain" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+            <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => [`${value}%`, name === "zoneA" ? "โซน A" : "โซน B"]} />} />
+            {visibleZones.map((zone) => <Line key={zone} dataKey={zone} type="stepAfter" stroke={`var(--color-${zone})`} strokeWidth={2.5} strokeLinecap="butt" strokeLinejoin="miter" dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />)}
+          </LineChart>
+        </ChartContainer>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"><span className="flex items-center gap-1.5"><i className="size-2 rounded-full bg-primary" aria-hidden="true" />ช่วงเป้าหมาย {targetMin}–{targetMax}%</span>{visibleZones.map((zone) => <span key={zone} className="flex items-center gap-1.5"><i className="size-2 rounded-full" style={{ backgroundColor: dashboardZoneMeta[zone].color }} aria-hidden="true" />{dashboardZoneMeta[zone].label}</span>)}</div>
+      </CardContent>
+      <CardFooter className="flex-col items-start gap-2 border-t">
+        <div className="flex w-full items-center justify-between gap-4 text-sm"><span className="text-muted-foreground">ช่วงเวลา {rangeLabel}</span><span className="text-muted-foreground">แถบสีคือช่วงเป้าหมาย</span></div>
+        <div className="w-full rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><strong>คำแนะนำ</strong><span className="ml-2">{recommendation}</span></div>
+      </CardFooter>
+    </Card>
+  );
+}
 
 export function SoilMoistureChart({
   points,
@@ -36,6 +136,8 @@ export function SoilMoistureChart({
   targetMin,
   targetMax,
   recommendation,
+  title = "ความชื้นดิน · โซน A",
+  sensorLabel = "A-02",
 }: SoilMoistureChartProps) {
   const current = points.at(-1)?.value ?? 0;
   const first = points.at(0)?.value ?? current;
@@ -52,9 +154,9 @@ export function SoilMoistureChart({
     <Card className="overflow-hidden">
       <CardHeader className="flex-row items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold leading-snug">ความชื้นดิน · โซน A</h2>
+          <h2 className="text-xl font-semibold leading-snug">{title}</h2>
           <p className="text-base text-muted-foreground">
-            ค่าจากเซ็นเซอร์ A-02 · อัปเดตตามช่วงที่เลือก
+            ค่าจากเซ็นเซอร์ {sensorLabel} · อัปเดตตามช่วงที่เลือก
           </p>
         </div>
         <div className="text-right">
@@ -82,7 +184,11 @@ export function SoilMoistureChart({
             }))}
             margin={{ left: 12, right: 12 }}
           >
-            <CartesianGrid vertical={false} />
+            <CartesianGrid
+              stroke="var(--border)"
+              strokeDasharray="0"
+              strokeOpacity={0.7}
+            />
             <XAxis
               dataKey="label"
               tickLine={false}
@@ -105,6 +211,8 @@ export function SoilMoistureChart({
               fillOpacity={0.18}
               stroke="var(--color-soilMoisture)"
               strokeWidth={2}
+              strokeLinejoin="miter"
+              strokeLinecap="butt"
               isAnimationActive={false}
             />
           </AreaChart>

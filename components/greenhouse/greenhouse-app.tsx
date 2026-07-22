@@ -250,9 +250,20 @@ export function GreenhouseApp() {
     ) : activePage === "ai" && selectedPlant ? (
       <AiDetectionView
         plant={selectedPlant}
-        reviewed={state.aiReviewedPlantId === selectedPlant.id}
-        onSave={() => {
-          setState((current) => ({ ...current, aiReviewedPlantId: selectedPlant.id }));
+        cameras={state.settings.cameras}
+        reviewedCameraIds={state.aiReviewedEvidence?.[selectedPlant.id] ?? []}
+        onSave={(cameraId) => {
+          setState((current) => ({
+            ...current,
+            aiReviewedPlantId: selectedPlant.id,
+            aiReviewedEvidence: {
+              ...current.aiReviewedEvidence,
+              [selectedPlant.id]: Array.from(new Set([
+                ...(current.aiReviewedEvidence?.[selectedPlant.id] ?? []),
+                cameraId,
+              ])),
+            },
+          }));
           notify("บันทึกผลตรวจเดโมแล้ว การแจ้งเตือนยังคงเปิดอยู่");
         }}
       />

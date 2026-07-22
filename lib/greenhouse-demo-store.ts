@@ -3,8 +3,27 @@ import type { DeviceCommandAction, DeviceCommandResult } from "@/types/greenhous
 export type DemoDevice = { id: string; name: string; detail: string; icon: "pump" | "fan" | "light" | "mist"; active: boolean };
 export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number; health: "ปกติ" | "ควรตรวจสอบ"; confidence: number };
 export type DemoAlert = { id: string; type: "critical" | "warning" | "info"; title: string; detail: string; time: string; resolved: boolean };
-export type DemoSettings = { minTemperature: string; maxTemperature: string; minHumidity: string; minSoilMoisture: string; automation: Record<string, boolean> };
-export type DemoState = { version: 1; devices: DemoDevice[]; plants: DemoPlant[]; alerts: DemoAlert[]; settings: DemoSettings; aiReviewedPlantId?: string };
+export type DemoCamera = {
+  id: string;
+  name: string;
+  zone: string;
+  source: "IP camera" | "USB gateway";
+  status: "online" | "offline";
+  captureInterval: string;
+  enabled: boolean;
+};
+export type DemoSettings = {
+  minTemperature: string;
+  maxTemperature: string;
+  minHumidity: string;
+  minSoilMoisture: string;
+  automation: Record<string, boolean>;
+  schedules: { wateringMinutes: string; lightStart: string; lightEnd: string; fanDelayMinutes: string };
+  notifications: { critical: boolean; dailySummary: boolean; quietStart: string; quietEnd: string };
+  ai: { minConfidence: string; scanInterval: string; retainDays: string; detectLeafSpot: boolean; detectPests: boolean };
+  cameras: DemoCamera[];
+};
+export type DemoState = { version: 1; devices: DemoDevice[]; plants: DemoPlant[]; alerts: DemoAlert[]; settings: DemoSettings; aiReviewedPlantId?: string; aiReviewedEvidence?: Record<string, string[]> };
 export type DemoLoadResult = { state: DemoState; recovered: boolean; storageAvailable: boolean };
 export type DemoSaveResult = { persisted: boolean };
 
@@ -29,7 +48,18 @@ export const demoInitialState: DemoState = {
     { id: "soil-moisture", type: "warning", title: "ความชื้นในดินของมะเขือเทศ 04 ลดลง", detail: "ค่าปัจจุบัน 36% ใกล้ค่าเริ่มรดน้ำอัตโนมัติที่ 35%", time: "5 นาทีที่แล้ว", resolved: false },
     { id: "ventilation", type: "info", title: "รอบระบายอากาศเสร็จสิ้น", detail: "อุณหภูมิในโซน A กลับสู่ช่วงเป้าหมายแล้ว", time: "42 นาทีที่แล้ว", resolved: true },
   ],
-  settings: { minTemperature: "22", maxTemperature: "30", minHumidity: "60", minSoilMoisture: "35", automation: { water: true, fan: true, light: true, alert: true } },
+  settings: {
+    minTemperature: "22", maxTemperature: "30", minHumidity: "60", minSoilMoisture: "35",
+    automation: { water: true, fan: true, light: true, alert: true },
+    schedules: { wateringMinutes: "8", lightStart: "06:00", lightEnd: "18:00", fanDelayMinutes: "3" },
+    notifications: { critical: true, dailySummary: true, quietStart: "21:00", quietEnd: "06:00" },
+    ai: { minConfidence: "75", scanInterval: "30", retainDays: "14", detectLeafSpot: true, detectPests: true },
+    cameras: [
+      { id: "CAM-A-01", name: "กล้องโซน A · แปลงเหนือ", zone: "โซน A", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true },
+      { id: "CAM-B-01", name: "กล้องโซน B · แปลงใต้", zone: "โซน B", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true },
+      { id: "CAM-ENTRY-01", name: "กล้องทางเข้าโรงเรือน", zone: "ทางเข้า", source: "USB gateway", status: "offline", captureInterval: "30 นาที", enabled: false },
+    ],
+  },
 };
 
 function isState(value: unknown): value is DemoState {
@@ -86,11 +116,43 @@ function isState(value: unknown): value is DemoState {
     state.alerts.every(validAlert) &&
     validSettings &&
     (state.aiReviewedPlantId === undefined ||
-      typeof state.aiReviewedPlantId === "string")
+      typeof state.aiReviewedPlantId === "string") &&
+    (state.aiReviewedEvidence === undefined ||
+      (isRecord(state.aiReviewedEvidence) &&
+        Object.values(state.aiReviewedEvidence).every(
+          (cameraIds) => Array.isArray(cameraIds) && cameraIds.every((cameraId) => typeof cameraId === "string"),
+        )))
   );
 }
 
 function cloneInitial(): DemoState { return structuredClone(demoInitialState); }
+
+function upgradeState(state: DemoState): DemoState {
+  const defaults = cloneInitial().settings;
+  const saved = state.settings as Partial<DemoSettings>;
+  const isRecord = (item: unknown): item is Record<string, unknown> =>
+    !!item && typeof item === "object";
+  return {
+    ...state,
+    aiReviewedEvidence: state.aiReviewedEvidence ?? {},
+    settings: {
+      ...defaults,
+      ...saved,
+      automation: { ...defaults.automation, ...saved.automation },
+      schedules: { ...defaults.schedules, ...saved.schedules },
+      notifications: { ...defaults.notifications, ...saved.notifications },
+      ai: { ...defaults.ai, ...saved.ai },
+      cameras: Array.isArray(saved.cameras) && saved.cameras.length > 0
+        ? saved.cameras.filter((camera): camera is DemoCamera =>
+          isRecord(camera) && typeof camera.id === "string" && typeof camera.name === "string" &&
+          typeof camera.zone === "string" && ["IP camera", "USB gateway"].includes(String(camera.source)) &&
+          ["online", "offline"].includes(String(camera.status)) && typeof camera.captureInterval === "string" &&
+          typeof camera.enabled === "boolean",
+        )
+        : defaults.cameras,
+    },
+  };
+}
 
 export const greenhouseDemoStore = {
   async load(): Promise<DemoLoadResult> {
@@ -105,7 +167,7 @@ export const greenhouseDemoStore = {
         return { state: cloneInitial(), recovered: true, storageAvailable: true };
       }
       return isState(parsed)
-        ? { state: parsed, recovered: false, storageAvailable: true }
+        ? { state: upgradeState(parsed), recovered: false, storageAvailable: true }
         : { state: cloneInitial(), recovered: true, storageAvailable: true };
     } catch {
       return { state: cloneInitial(), recovered: true, storageAvailable: false };

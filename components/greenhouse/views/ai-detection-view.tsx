@@ -1,60 +1,35 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Image from "next/image";
-import { CheckCircle2, CircleAlert } from "lucide-react";
+import { Camera, CheckCircle2, CircleAlert, MonitorOff, Radio } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import type { DemoPlant } from "@/lib/greenhouse-demo-store";
+import type { DemoCamera, DemoPlant } from "@/lib/greenhouse-demo-store";
 
-export type AiDetectionViewProps = {
-  plant: DemoPlant;
-  reviewed: boolean;
-  onSave: () => void;
+export type AiDetectionViewProps = { plant: DemoPlant; cameras: DemoCamera[]; reviewedCameraIds: string[]; onSave: (cameraId: string) => void };
+
+const evidenceByCamera: Record<string, { capturedAt: string; confidence: number; title: string; detail: string; severity: "ควรตรวจสอบ" | "ปกติ" }> = {
+  "CAM-A-01": { capturedAt: "07:00 น.", confidence: 91, title: "ใบพืชในโซน A · สภาพโดยรวมปกติ", detail: "ไม่พบรอยผิดปกติที่เกินเกณฑ์การแจ้งเตือน", severity: "ปกติ" },
+  "CAM-B-01": { capturedAt: "07:00 น.", confidence: 78, title: "มะเขือเทศ 03 · อาจมีอาการใบจุดระยะแรก", detail: "พบรอยสีน้ำตาลวงเล็กและขอบสีเหลืองจาง ระดับความรุนแรงปานกลาง", severity: "ควรตรวจสอบ" },
+  "CAM-ENTRY-01": { capturedAt: "ไม่มีภาพล่าสุด", confidence: 0, title: "กล้องออฟไลน์", detail: "ไม่มีภาพสำหรับการวิเคราะห์จนกว่าจะเปิดใช้งานกล้อง", severity: "ปกติ" },
 };
 
-export function AiDetectionView({
-  plant,
-  reviewed,
-  onSave,
-}: AiDetectionViewProps) {
-  return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,.75fr)]">
-      <Card className="overflow-hidden">
-        <CardHeader><h2 className="font-semibold">ภาพหลักฐานล่าสุด · {plant.id}</h2></CardHeader>
-        <CardContent className="p-0">
-          <div className="relative aspect-[16/10] bg-muted">
-            <Image
-              src="/images/tomato-leaf-spot-detail.webp"
-              alt="ใบมะเขือเทศที่พบรอยจุดสีน้ำตาลขนาดเล็ก"
-              fill
-              unoptimized
-              className="object-cover"
-            />
-            <span className="absolute left-[42%] top-[38%] size-12 rounded-md border-2 border-amber-400" aria-hidden="true" />
-          </div>
-          <div className="grid gap-1 border-t p-4 text-sm sm:grid-cols-2">
-            <span><strong>กล้องจำลอง 01</strong><small className="block text-muted-foreground">{plant.zone}</small></span>
-            <span><strong>ตรวจเมื่อ 07:00 น.</strong><small className="block text-muted-foreground">ภาพ WebP สำหรับการแสดงผล</small></span>
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex-row items-start justify-between gap-3">
-          <div><h2 className="font-semibold">สรุปผลการวิเคราะห์</h2><p className="text-sm text-muted-foreground">โมเดลตรวจสุขภาพใบมะเขือเทศ</p></div>
-          <Badge variant="destructive">ควรตรวจสอบ</Badge>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div><div className="flex items-center justify-between text-sm"><span>ความมั่นใจของโมเดล</span><strong className="tabular-nums">{plant.confidence}%</strong></div><Progress value={plant.confidence} className="mt-2" /></div>
-          <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950"><CircleAlert className="mt-0.5 size-5 shrink-0" aria-hidden="true" /><div><strong>{plant.name} · อาจมีอาการใบจุดระยะแรก</strong><p className="mt-1 text-sm">พบรอยสีน้ำตาลวงเล็กและขอบสีเหลืองจาง ระดับความรุนแรงปานกลาง</p></div></div>
-          <div className="rounded-lg bg-secondary p-4"><strong>ขั้นตอนถัดไป</strong><p className="mt-1 text-sm text-muted-foreground">แยกตรวจใบจริง ลดความเปียกชื้นบนใบ และถ่ายภาพซ้ำในอีก 24 ชั่วโมง</p></div>
-          <Button className="min-h-11 w-full" onClick={onSave} disabled={reviewed}>
-            <CheckCircle2 aria-hidden="true" />
-            {reviewed ? "บันทึกผลตรวจแล้ว" : "บันทึกผลการตรวจสอบ"}
-          </Button>
-        </CardContent>
-      </Card>
+export function AiDetectionView({ plant, cameras, reviewedCameraIds, onSave }: AiDetectionViewProps) {
+  const initialCameraId = useMemo(() => cameras.find((camera) => camera.zone === plant.zone && camera.enabled)?.id ?? cameras.find((camera) => camera.enabled)?.id ?? cameras[0]?.id ?? "", [cameras, plant.zone]);
+  const [selectedCameraId, setSelectedCameraId] = useState(initialCameraId);
+  const selectedCamera = cameras.find((camera) => camera.id === selectedCameraId) ?? cameras.find((camera) => camera.id === initialCameraId) ?? cameras[0];
+  if (!selectedCamera) return <Card><CardContent className="py-10 text-center text-muted-foreground">ยังไม่มีกล้องในระบบเดโม กรุณาเปิดใช้งานกล้องจากหน้าการตั้งค่า</CardContent></Card>;
+  const evidence = evidenceByCamera[selectedCamera.id] ?? evidenceByCamera["CAM-A-01"];
+  const unavailable = !selectedCamera.enabled || selectedCamera.status === "offline";
+  const reviewed = reviewedCameraIds.includes(selectedCamera.id);
+
+  return <div className="space-y-4">
+    <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">แหล่งภาพสำหรับ AI</h2><p className="text-sm text-muted-foreground">เลือกดูหลักฐานและผลวิเคราะห์แยกตามกล้อง</p></div><Badge variant="outline">โหมดข้อมูลตัวอย่าง</Badge></div></CardHeader><CardContent><div className="grid gap-3 md:grid-cols-3" role="radiogroup" aria-label="เลือกกล้อง"><span className="sr-only">เลือกกล้อง</span>{cameras.map((camera) => { const selected = camera.id === selectedCamera.id; const usable = camera.enabled && camera.status === "online"; return <button type="button" key={camera.id} role="radio" aria-checked={selected} onClick={() => setSelectedCameraId(camera.id)} className={`min-h-24 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/5" : "hover:bg-muted/60"}`}><span className="flex items-center justify-between gap-2"><span className="grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground"><Camera className="size-5" aria-hidden="true" /></span><Badge variant={usable ? "secondary" : "outline"} className={usable ? "text-primary" : "text-muted-foreground"}>{usable ? "ออนไลน์" : camera.enabled ? "ออฟไลน์" : "ปิดใช้งาน"}</Badge></span><strong className="mt-3 block text-sm">{camera.name}</strong><span className="mt-1 block text-xs text-muted-foreground">{camera.id} · {camera.zone}</span></button>; })}</div><p className="mt-4 flex gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground"><Radio className="mt-0.5 size-4 shrink-0" aria-hidden="true" />รองรับการจัดการหลายกล้องในเดโมแล้ว แต่ยังไม่มีการเชื่อมต่อ webcam, RTSP หรือกล้องจริง</p></CardContent></Card>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,.75fr)]"><Card className="overflow-hidden"><CardHeader className="flex-row items-start justify-between gap-3"><div><h2 className="font-semibold">ภาพหลักฐานล่าสุด</h2><p className="text-sm text-muted-foreground">{selectedCamera.name} · {selectedCamera.zone}</p></div><Badge variant="outline">{selectedCamera.source}</Badge></CardHeader><CardContent className="p-0">{unavailable ? <div className="grid aspect-[16/10] place-items-center bg-muted p-6 text-center"><div><MonitorOff className="mx-auto size-9 text-muted-foreground" aria-hidden="true" /><strong className="mt-3 block">กล้องยังไม่พร้อมใช้งาน</strong><p className="mt-1 text-sm text-muted-foreground">เปิดใช้งานกล้องและตรวจสอบ gateway ก่อนเริ่มวิเคราะห์</p></div></div> : <div className="relative aspect-[16/10] bg-muted"><Image src="/images/tomato-leaf-spot-detail.webp" alt={`ภาพตัวอย่างจาก ${selectedCamera.name}: ใบมะเขือเทศที่ใช้เป็นหลักฐานการตรวจ`} fill unoptimized className="object-cover" />{evidence.severity === "ควรตรวจสอบ" ? <span className="absolute left-[42%] top-[38%] size-12 rounded-md border-2 border-amber-400" aria-label="ตำแหน่งที่ AI ตรวจพบความผิดปกติ" /> : null}</div>}<div className="grid gap-1 border-t p-4 text-sm sm:grid-cols-2"><span><strong>{selectedCamera.id}</strong><small className="block text-muted-foreground">{selectedCamera.captureInterval} · {selectedCamera.status === "online" ? "พร้อมวิเคราะห์" : "ไม่พร้อมวิเคราะห์"}</small></span><span><strong>ตรวจเมื่อ {evidence.capturedAt}</strong><small className="block text-muted-foreground">หลักฐานภาพเดโมสำหรับการแสดงผล</small></span></div></CardContent></Card>
+      <Card><CardHeader className="flex-row items-start justify-between gap-3"><div><h2 className="font-semibold">สรุปผลการวิเคราะห์</h2><p className="text-sm text-muted-foreground">เชื่อมกับภาพจาก {selectedCamera.id}</p></div><Badge variant={evidence.severity === "ควรตรวจสอบ" ? "destructive" : "secondary"} className={evidence.severity === "ปกติ" ? "text-primary" : undefined}>{unavailable ? "รอภาพ" : evidence.severity}</Badge></CardHeader><CardContent className="space-y-5">{unavailable ? <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">เมื่อกล้องออนไลน์และมีภาพใหม่ ระบบจะแสดงค่าความมั่นใจและหลักฐานในพื้นที่นี้</div> : <><div><div className="flex items-center justify-between text-sm"><span>ความมั่นใจของโมเดล</span><strong className="tabular-nums">{evidence.confidence}%</strong></div><Progress value={evidence.confidence} className="mt-2" /></div><div className={`flex gap-3 rounded-lg border p-4 ${evidence.severity === "ควรตรวจสอบ" ? "border-amber-200 bg-amber-50 text-amber-950" : "border-primary/20 bg-primary/5"}`}><CircleAlert className="mt-0.5 size-5 shrink-0" aria-hidden="true" /><div><strong>{evidence.title}</strong><p className="mt-1 text-sm">{evidence.detail}</p></div></div><div className="rounded-lg bg-secondary p-4"><strong>ขั้นตอนถัดไป</strong><p className="mt-1 text-sm text-muted-foreground">ตรวจใบจริงใน {selectedCamera.zone} ลดความเปียกชื้นบนใบ และถ่ายภาพซ้ำในอีก 24 ชั่วโมง</p></div></>}<Button className="min-h-11 w-full" onClick={() => onSave(selectedCamera.id)} disabled={reviewed || unavailable}><CheckCircle2 aria-hidden="true" />{reviewed ? "บันทึกผลตรวจของกล้องนี้แล้ว" : unavailable ? "รอภาพจากกล้อง" : `บันทึกผลตรวจของ ${plant.name}`}</Button></CardContent></Card>
     </div>
-  );
+  </div>;
 }

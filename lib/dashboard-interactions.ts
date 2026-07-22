@@ -92,6 +92,27 @@ export function validateDemoSettings(settings: DemoSettings): string | null {
   if (Number(settings.minTemperature) >= Number(settings.maxTemperature)) {
     return "อุณหภูมิต่ำสุดต้องน้อยกว่าอุณหภูมิสูงสุด";
   }
+  const positiveValues = [
+    [settings.schedules.wateringMinutes, "ระยะเวลารดน้ำต้องมากกว่า 0 นาที"],
+    [settings.ai.scanInterval, "รอบการวิเคราะห์ AI ต้องมากกว่า 0 นาที"],
+    [settings.ai.retainDays, "ระยะเวลาเก็บหลักฐานต้องมากกว่า 0 วัน"],
+  ] as const;
+  for (const [value, message] of positiveValues) {
+    if (!Number.isFinite(Number(value)) || Number(value) <= 0) return message;
+  }
+  if (!Number.isFinite(Number(settings.schedules.fanDelayMinutes)) || Number(settings.schedules.fanDelayMinutes) < 0) {
+    return "เวลาหน่วงพัดลมต้องเป็น 0 นาทีหรือมากกว่า";
+  }
+  if (!Number.isFinite(Number(settings.ai.minConfidence)) || Number(settings.ai.minConfidence) < 0 || Number(settings.ai.minConfidence) > 100) {
+    return "ความมั่นใจขั้นต่ำของ AI ต้องอยู่ระหว่าง 0–100%";
+  }
+  const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+  if (![settings.schedules.lightStart, settings.schedules.lightEnd, settings.notifications.quietStart, settings.notifications.quietEnd].every((value) => timePattern.test(value))) {
+    return "กรุณาระบุเวลาให้ถูกต้อง";
+  }
+  if (!settings.cameras.some((camera) => camera.enabled && camera.status === "online")) {
+    return "กรุณาเปิดใช้งานกล้องออนไลน์อย่างน้อยหนึ่งตัว";
+  }
   return null;
 }
 
