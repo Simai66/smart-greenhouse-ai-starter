@@ -227,16 +227,19 @@ function upgradeState(state: DemoState): DemoState {
     return { ...sensor, greenhouseId: binding.greenhouseId, zoneId: binding.zoneId };
   };
   const cropBatches = Array.isArray(savedCropBatches)
-    ? savedCropBatches.filter((batch): batch is DemoCropBatch =>
-      isRecord(batch) && typeof batch.id === "string" && typeof batch.greenhouseId === "string" &&
-      typeof batch.zoneId === "string" && typeof batch.cropName === "string" && typeof batch.cultivar === "string" &&
-      typeof batch.plantCount === "number" && typeof batch.plantedAt === "string" &&
-      ["active", "harvested", "archived"].includes(String(batch.status)),
-    )
+    ? savedCropBatches.filter((batch): batch is DemoCropBatch => {
+      if (
+        !isRecord(batch) || typeof batch.id !== "string" || typeof batch.greenhouseId !== "string" ||
+        typeof batch.zoneId !== "string" || typeof batch.cropName !== "string" || typeof batch.cultivar !== "string" ||
+        typeof batch.plantCount !== "number" || typeof batch.plantedAt !== "string" ||
+        !["active", "harvested", "archived"].includes(String(batch.status))
+      ) return false;
+      const greenhouse = greenhouses.find((candidate) => candidate.id === batch.greenhouseId);
+      return greenhouse?.zones.some((zone) => zone.id === batch.zoneId) ?? false;
+    })
     : defaultState.cropBatches;
   const validSensors = (items: unknown): items is DemoSensor[] =>
     Array.isArray(items) &&
-    items.length > 0 &&
     items.every((sensor) =>
       isRecord(sensor) &&
       typeof sensor.id === "string" &&
@@ -245,6 +248,14 @@ function upgradeState(state: DemoState): DemoState {
       typeof sensor.zoneId === "string" &&
       ["soilMoisture", "temperature", "humidity"].includes(String(sensor.metric)) &&
       ["online", "offline"].includes(String(sensor.status)),
+    );
+  const isValidCameras = (items: unknown): items is DemoCamera[] =>
+    Array.isArray(items) &&
+    items.every((camera) =>
+      isRecord(camera) && typeof camera.id === "string" && typeof camera.name === "string" &&
+      typeof camera.zone === "string" && ["IP camera", "USB gateway"].includes(String(camera.source)) &&
+      ["online", "offline"].includes(String(camera.status)) && typeof camera.captureInterval === "string" &&
+      typeof camera.enabled === "boolean",
     );
   return {
     ...state,
@@ -272,13 +283,8 @@ function upgradeState(state: DemoState): DemoState {
       schedules: { ...defaults.schedules, ...saved.schedules },
       notifications: { ...defaults.notifications, ...saved.notifications },
       ai: { ...defaults.ai, ...saved.ai },
-      cameras: Array.isArray(saved.cameras) && saved.cameras.length > 0
-        ? saved.cameras.filter((camera): camera is DemoCamera =>
-          isRecord(camera) && typeof camera.id === "string" && typeof camera.name === "string" &&
-          typeof camera.zone === "string" && ["IP camera", "USB gateway"].includes(String(camera.source)) &&
-          ["online", "offline"].includes(String(camera.status)) && typeof camera.captureInterval === "string" &&
-          typeof camera.enabled === "boolean",
-        ).map(normalizeCamera)
+      cameras: isValidCameras(saved.cameras)
+        ? saved.cameras.map(normalizeCamera)
         : defaults.cameras.map(normalizeCamera),
     },
   };

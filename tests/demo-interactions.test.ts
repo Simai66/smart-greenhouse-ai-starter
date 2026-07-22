@@ -113,6 +113,38 @@ test("upgrades a legacy saved settings payload with multi-camera defaults", asyn
   assert.equal(result.state.sensors.length, 3);
 });
 
+test("removes crop batches with stale greenhouse or cross-greenhouse zone bindings", async () => {
+  const legacy = structuredClone(demoInitialState);
+  legacy.greenhouses.push({
+    id: "GH-02",
+    name: "โรงเรือนที่สอง",
+    code: "GREENHOUSE 02",
+    status: "active",
+    zones: [{ id: "ZONE-C", name: "โซน C", status: "active" }],
+  });
+  legacy.cropBatches.push(
+    { id: "BATCH-VALID", greenhouseId: "GH-02", zoneId: "ZONE-C", cropName: "ผักสลัด", cultivar: "Green Oak", plantCount: 4, plantedAt: "2026-07-01", status: "active" },
+    { id: "BATCH-STALE-GH", greenhouseId: "GH-MISSING", zoneId: "ZONE-C", cropName: "ผักสลัด", cultivar: "Green Oak", plantCount: 4, plantedAt: "2026-07-01", status: "active" },
+    { id: "BATCH-CROSS-ZONE", greenhouseId: "GH-02", zoneId: "ZONE-A", cropName: "ผักสลัด", cultivar: "Green Oak", plantCount: 4, plantedAt: "2026-07-01", status: "active" },
+  );
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+  assert.deepEqual(result.state.cropBatches.map((batch) => batch.id), ["BATCH-TOM-A", "BATCH-TOM-B", "BATCH-VALID"]);
+  assert.deepEqual(result.state.cropBatches.at(-1), legacy.cropBatches.at(-3));
+});
+
+test("preserves intentionally empty camera and sensor collections", async () => {
+  const legacy = structuredClone(demoInitialState);
+  legacy.settings.cameras = [];
+  legacy.sensors = [];
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+  assert.deepEqual(result.state.settings.cameras, []);
+  assert.deepEqual(result.state.sensors, []);
+});
+
 test("ships an editable greenhouse structure with active zones", () => {
   const greenhouse = demoInitialState.greenhouses[0];
   assert.equal(greenhouse?.id, "GH-01");
