@@ -90,6 +90,7 @@ test("normalizes malformed resource bindings without changing valid saved bindin
     { greenhouseId: "GH-01", zoneId: "ZONE-A" },
     { greenhouseId: "GH-01", zoneId: "ZONE-A" },
   ]);
+  assert.equal(result.state.settings.cameras[1]?.zone, "โซน A");
 });
 
 test("upgrades a legacy saved settings payload with multi-camera defaults", async () => {
@@ -143,6 +144,28 @@ test("preserves intentionally empty camera and sensor collections", async () => 
   const result = await greenhouseDemoStore.load();
   assert.deepEqual(result.state.settings.cameras, []);
   assert.deepEqual(result.state.sensors, []);
+});
+
+test("preserves an intentionally empty device collection", async () => {
+  const legacy = structuredClone(demoInitialState);
+  legacy.devices = [];
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+  assert.equal(result.recovered, false);
+  assert.deepEqual(result.state.devices, []);
+});
+
+test("preserves a custom camera display label when its saved binding is valid", async () => {
+  const legacy = structuredClone(demoInitialState);
+  legacy.settings.cameras[0]!.zone = "แปลงมะเขือเทศฝั่งเหนือ";
+  legacy.settings.cameras[0]!.greenhouseId = "GH-01";
+  legacy.settings.cameras[0]!.zoneId = "ZONE-A";
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+  assert.equal(result.recovered, false);
+  assert.equal(result.state.settings.cameras[0]?.zone, "แปลงมะเขือเทศฝั่งเหนือ");
 });
 
 test("ships an editable greenhouse structure with active zones", () => {

@@ -152,7 +152,6 @@ function isState(value: unknown): value is DemoState {
   return (
     state.version === 1 &&
     Array.isArray(state.devices) &&
-    state.devices.length > 0 &&
     state.devices.every(validDevice) &&
     Array.isArray(state.plants) &&
     state.plants.length > 0 &&
@@ -206,13 +205,20 @@ function upgradeState(state: DemoState): DemoState {
     ?? defaultGreenhouses[0]!;
   const primaryZone = primaryGreenhouse.zones[0] ?? defaultGreenhouses[0]!.zones[0]!;
   const resolveBinding = (resource: { greenhouseId?: unknown; zoneId?: unknown }) => {
-    const greenhouse = typeof resource.greenhouseId === "string"
-      ? greenhouses.find((candidate) => candidate.id === resource.greenhouseId) ?? primaryGreenhouse
-      : primaryGreenhouse;
-    const zone = typeof resource.zoneId === "string"
-      ? greenhouse.zones.find((candidate) => candidate.id === resource.zoneId) ?? greenhouse.zones[0] ?? primaryZone
-      : greenhouse.zones[0] ?? primaryZone;
-    return { greenhouseId: greenhouse.id, zoneId: zone.id, zoneName: zone.name };
+    const savedGreenhouse = typeof resource.greenhouseId === "string"
+      ? greenhouses.find((candidate) => candidate.id === resource.greenhouseId)
+      : undefined;
+    const greenhouse = savedGreenhouse ?? primaryGreenhouse;
+    const savedZone = typeof resource.zoneId === "string"
+      ? greenhouse.zones.find((candidate) => candidate.id === resource.zoneId)
+      : undefined;
+    const zone = savedZone ?? greenhouse.zones[0] ?? primaryZone;
+    return {
+      greenhouseId: greenhouse.id,
+      zoneId: zone.id,
+      zoneName: zone.name,
+      preserved: Boolean(savedGreenhouse && savedZone),
+    };
   };
   const normalizeDevice = (device: DemoDevice): DemoDevice => {
     const binding = resolveBinding(device);
@@ -220,7 +226,12 @@ function upgradeState(state: DemoState): DemoState {
   };
   const normalizeCamera = (camera: DemoCamera): DemoCamera => {
     const binding = resolveBinding(camera);
-    return { ...camera, greenhouseId: binding.greenhouseId, zoneId: binding.zoneId, zone: binding.zoneName };
+    return {
+      ...camera,
+      greenhouseId: binding.greenhouseId,
+      zoneId: binding.zoneId,
+      zone: binding.preserved ? camera.zone : binding.zoneName,
+    };
   };
   const normalizeSensor = (sensor: DemoSensor): DemoSensor => {
     const binding = resolveBinding(sensor);
