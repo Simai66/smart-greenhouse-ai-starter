@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.875rem;
   --background: #f3f5f3;
   --foreground: #1d2923;
   --card: #ffffff;
@@ -134,6 +134,18 @@
   .text-xs {
     font-size: var(--type-caption);
     line-height: 1.45;
+  }
+
+  .page-kicker {
+    @apply text-xs font-semibold uppercase tracking-[0.12em] text-primary;
+  }
+
+  .quiet-surface {
+    @apply rounded-2xl border border-border/80 bg-card;
+  }
+
+  .data-row {
+    @apply border-b border-border/70 py-3 last:border-b-0;
   }
 }
 

@@ -36,7 +36,7 @@ function PlantDetail({
   onInspect: () => void;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="relative aspect-[16/10] overflow-hidden rounded-lg bg-muted">
         <Image
           src={plant.health === "ปกติ"
@@ -59,7 +59,7 @@ function PlantDetail({
           {plant.health}
         </Badge>
       </div>
-      <dl className="grid grid-cols-2 gap-3 text-sm">
+      <dl className="grid grid-cols-2 gap-3 border-y border-border/70 py-4 text-sm">
         <div><dt className="text-muted-foreground">ความชื้นดิน</dt><dd className="font-medium tabular-nums">{plant.moisture}%</dd></div>
         <div><dt className="text-muted-foreground">AI confidence</dt><dd className="font-medium tabular-nums">{plant.confidence}%</dd></div>
       </dl>
@@ -92,9 +92,9 @@ export function PlantsView({
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(20rem,.7fr)]">
-      <Card>
-        <CardHeader className="gap-4">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(20rem,.7fr)]">
+      <Card className="shadow-none">
+        <CardHeader className="gap-4 border-b border-border/70 pb-5">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
@@ -133,7 +133,7 @@ export function PlantsView({
           {!visible.length ? <p className="p-8 text-center text-sm text-muted-foreground">ไม่พบต้นพืชตามตัวกรองนี้</p> : null}
         </CardContent>
       </Card>
-      {selected ? <Card className="hidden lg:block"><CardContent className="p-5"><PlantDetail plant={selected} onInspect={() => onInspectPlant(selected.id)} /></CardContent></Card> : null}
+      {selected ? <Card className="hidden lg:block shadow-none"><CardContent className="p-5"><PlantDetail plant={selected} onInspect={() => onInspectPlant(selected.id)} /></CardContent></Card> : null}
       <Sheet open={Boolean(isMobile && sheetOpen && selected)} onOpenChange={setSheetOpen}>
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
           <SheetHeader><SheetTitle>รายละเอียดต้นพืช</SheetTitle></SheetHeader>

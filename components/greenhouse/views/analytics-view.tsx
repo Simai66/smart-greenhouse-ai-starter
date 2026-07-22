@@ -11,7 +11,6 @@ import {
   ScanLine,
   Sun,
   Thermometer,
-  TimerReset,
   Zap,
 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
@@ -173,11 +172,12 @@ export function AnalyticsView({
   ];
 
   return (
-    <section className="space-y-5" aria-labelledby="analytics-overview-title">
-      <div className="flex flex-col gap-3 rounded-2xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <section className="space-y-6" aria-labelledby="analytics-overview-title">
+      <div className="flex flex-col gap-3 border-b border-border/70 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 id="analytics-overview-title" className="text-lg font-semibold">ภาพรวมการวิเคราะห์</h2>
-          <p className="text-sm text-muted-foreground">ตัวเลขในหน้านี้เป็นข้อมูลตัวอย่างเพื่อประกอบการแสดงผล ยังไม่ใช่ข้อมูลสดจากอุปกรณ์</p>
+          <p className="page-kicker">มุมมองการตัดสินใจ</p>
+          <h2 id="analytics-overview-title" className="mt-1 text-lg font-semibold">ภาพรวมการวิเคราะห์</h2>
+          <p className="mt-1 text-sm text-muted-foreground">ตัวเลขในหน้านี้เป็นข้อมูลตัวอย่างเพื่อประกอบการแสดงผล ยังไม่ใช่ข้อมูลสดจากอุปกรณ์</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="sr-only" htmlFor="analytics-zone">เลือกโซน</label>
@@ -197,19 +197,17 @@ export function AnalyticsView({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="quiet-surface grid divide-y divide-border/70 overflow-hidden sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4" aria-label="สรุปการวิเคราะห์">
         {summary.map(({ label, value, note, icon: Icon }) => (
-          <Card key={label} className="border-border/70 shadow-sm transition-shadow hover:shadow-md">
-            <CardContent className="flex items-start gap-3 p-4">
+          <article key={label} className="flex items-start gap-3 p-4 sm:p-5">
               <span className="rounded-xl bg-primary/10 p-2.5 text-primary"><Icon className="size-5" aria-hidden="true" /></span>
               <span className="min-w-0"><span className="block text-sm text-muted-foreground">{label}</span><strong className="block text-2xl tabular-nums">{value}</strong><span className="block text-xs text-muted-foreground">{note}</span></span>
-            </CardContent>
-          </Card>
+          </article>
         ))}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-5">
-        <Card className="xl:col-span-3">
+        <Card className="xl:col-span-3 shadow-none">
           <CardHeader className="flex-row items-start justify-between gap-4">
             <div><h2 className="font-semibold">อุณหภูมิและความชื้นอากาศ</h2><p className="text-sm text-muted-foreground">แนวโน้มสภาพแวดล้อม · {zone}</p></div>
             <Badge variant="secondary"><Activity aria-hidden="true" /> เหมาะสม {data.comfort}%</Badge>
@@ -233,7 +231,7 @@ export function AnalyticsView({
           </CardContent>
         </Card>
 
-        <Card className="xl:col-span-2">
+        <Card className="xl:col-span-2 shadow-none">
           <CardHeader className="gap-1"><h2 className="font-semibold">แสงและรอบไฟ</h2><p className="text-sm text-muted-foreground">สรุปจากตารางและข้อมูลตัวอย่างสำหรับ {zone} ไม่ใช่ค่าจากเซ็นเซอร์แสงจริง</p></CardHeader>
           <CardContent className="space-y-5">
             <div><div className="mb-2 flex items-baseline justify-between gap-4"><span className="text-sm font-medium">แสงสะสมรวมวันนี้</span><strong className="text-2xl tabular-nums">{data.light}<span className="text-sm font-normal text-muted-foreground"> / 10 ชม.</span></strong></div><p className="mb-2 text-xs text-muted-foreground">รวมแสงธรรมชาติและไฟปลูกพืช · ชั่วโมงเปิดไฟแสดงแยกในส่วนอุปกรณ์</p><Progress value={data.light * 10} aria-label={`แสงสะสมรวม ${data.light} จาก 10 ชั่วโมง`} /></div>
@@ -266,13 +264,13 @@ export function AnalyticsView({
       <SoilMoistureChart points={soilPoints} rangeLabel={period} targetMin={50} targetMax={65} title={zone === "ทุกโซน" ? "ความชื้นดิน · ภาพรวมทุกโซน" : `ความชื้นดิน · ${zone}`} sensorLabel={zone === "โซน A" ? "A-02" : zone === "โซน B" ? "B-02" : "A-02, B-02"} recommendation={`ข้อมูลตัวอย่างแนะนำให้ตรวจรอบรดน้ำของ${scopedZoneLabel} แล้วทบทวนค่าอีกครั้งใน 15 นาที`} />
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="flex-row items-start justify-between gap-4"><div><h2 className="font-semibold">สุขภาพพืชจาก AI</h2><p className="text-sm text-muted-foreground">{zone === "ทุกโซน" ? "แยกผลตามโซนและกล้องในข้อมูลตัวอย่าง" : `ผลจาก ${zone} ในข้อมูลตัวอย่าง`}</p></div><Badge variant="secondary">{data.health}% ปกติ</Badge></CardHeader>
           <CardContent className="space-y-3">
-            {aiHealthRows.map((item) => <div key={item.zone} className="flex items-center gap-3 rounded-xl border p-3"><span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary"><Bot className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><strong className="block text-sm">{item.zone}</strong><span className="text-xs text-muted-foreground">{item.camera} · {item.scans} ภาพ</span></span><span className="text-right"><strong className="block text-sm tabular-nums">{item.value}%</strong><span className="text-xs text-muted-foreground">ปกติ</span></span></div>)}
+            {aiHealthRows.map((item) => <div key={item.zone} className="flex items-center gap-3 border-b border-border/70 py-3 last:border-b-0"><span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary"><Bot className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><strong className="block text-sm">{item.zone}</strong><span className="text-xs text-muted-foreground">{item.camera} · {item.scans} ภาพ</span></span><span className="text-right"><strong className="block text-sm tabular-nums">{item.value}%</strong><span className="text-xs text-muted-foreground">ปกติ</span></span></div>)}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-none">
           <CardHeader><h2 className="font-semibold">การทำงานของอุปกรณ์</h2><p className="text-sm text-muted-foreground">เวลาและพลังงานโดยประมาณจากข้อมูลตัวอย่าง</p></CardHeader>
           <CardContent className="space-y-4">
             {deviceUsageByZone[zone].map((item) => <div key={item.label}><div className="mb-2 flex justify-between gap-4"><span><strong className="block text-sm">{item.label}</strong><span className="text-xs text-muted-foreground">{item.detail}</span></span><span className="text-xs text-muted-foreground">การใช้งาน</span></div><Progress value={item.value} aria-label={`${item.label} ใช้งาน ${item.value} เปอร์เซ็นต์`} /></div>)}
@@ -280,7 +278,7 @@ export function AnalyticsView({
         </Card>
       </div>
 
-      <Card className="border-primary/15 bg-primary/[0.03]"><CardHeader><h2 className="font-semibold">สิ่งที่ควรดำเนินการต่อ</h2><p className="text-sm text-muted-foreground">ข้อเสนอแนะจากรูปแบบข้อมูลตัวอย่าง ไม่ใช่คำสั่งควบคุมอุปกรณ์</p></CardHeader><CardContent className="grid gap-3 lg:grid-cols-3">{insights.map(({ title, detail, tone, icon: Icon }) => <article key={title} className={`rounded-xl border p-4 ${tone}`}><Icon className="mb-3 size-5" aria-hidden="true" /><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm opacity-80">{detail}</p></article>)}</CardContent></Card>
+      <section className="rounded-2xl border border-primary/15 bg-primary/[0.035] p-5"><div><p className="page-kicker">ควรทำต่อ</p><h2 className="mt-1 font-semibold">สิ่งที่ควรดำเนินการต่อ</h2><p className="mt-1 text-sm text-muted-foreground">ข้อเสนอแนะจากรูปแบบข้อมูลตัวอย่าง ไม่ใช่คำสั่งควบคุมอุปกรณ์</p></div><div className="mt-5 grid gap-3 lg:grid-cols-3">{insights.map(({ title, detail, tone, icon: Icon }) => <article key={title} className={`rounded-xl border p-4 ${tone}`}><Icon className="mb-3 size-5" aria-hidden="true" /><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm opacity-80">{detail}</p></article>)}</div></section>
     </section>
   );
 }

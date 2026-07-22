@@ -118,8 +118,8 @@ export function DevicesView({
   };
 
   return (
-    <section className="space-y-5" aria-labelledby="device-operations-title">
-      <header className="rounded-2xl border border-primary/15 bg-primary/[0.035] p-5 shadow-sm sm:p-6">
+    <section className="space-y-6" aria-labelledby="device-operations-title">
+      <header className="border-b border-border/70 pb-5 sm:pb-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="flex items-center gap-2 text-sm font-medium text-primary"><SlidersHorizontal className="size-4" aria-hidden="true" />Operations board</p>
@@ -137,23 +137,21 @@ export function DevicesView({
         </div>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="สรุปการทำงานของอุปกรณ์">
+      <div className="quiet-surface grid divide-y divide-border/70 overflow-hidden sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4" aria-label="สรุปการทำงานของอุปกรณ์">
         {[
           { label: "อุปกรณ์พร้อมใช้งาน", value: `${online ? devices.length : 0}/${devices.length}`, note: online ? "สถานะเดโมปัจจุบัน" : "คำสั่งถูกพักไว้", icon: PlugZap },
           { label: "กำลังทำงาน", value: `${activeDevices} เครื่อง`, note: "ตามสถานะที่แสดง", icon: Activity },
           { label: "Manual override", value: manualDevice ? "1 รายการ" : "ไม่มี", note: manualDevice ? `หมดอายุใน ${override?.minutes} นาที` : "ทุกเครื่องอยู่โหมด Auto", icon: TimerReset },
           { label: "ต้องตรวจสอบ", value: "0 รายการ", note: "จากข้อมูลตัวอย่าง", icon: BadgeCheck },
         ].map(({ label, value, note, icon: Icon }) => (
-          <Card key={label} className="border-border/70 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-            <CardContent className="flex items-start gap-3 p-4">
+          <article key={label} className="flex items-start gap-3 p-4 sm:p-5">
               <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" aria-hidden="true" /></span>
               <span className="min-w-0"><span className="block text-sm text-muted-foreground">{label}</span><strong className="block text-2xl tabular-nums">{value}</strong><span className="block text-xs text-muted-foreground">{note}</span></span>
-            </CardContent>
-          </Card>
+          </article>
         ))}
       </div>
 
-      <Card className="border-border/70 shadow-sm">
+      <Card className="shadow-none">
         <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2"><Gauge className="size-4 text-primary" aria-hidden="true" /><span className="text-sm font-medium">กรองอุปกรณ์</span></div>
           <div className="grid gap-2 sm:grid-cols-3">
@@ -181,7 +179,7 @@ export function DevicesView({
             const pending = pendingDeviceId === device.id;
             const isManual = override?.deviceId === device.id;
             return (
-              <Card key={device.id} className="group overflow-hidden border-border/70 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <Card key={device.id} className="group overflow-hidden shadow-none transition-colors hover:border-primary/30">
                 <CardHeader className="flex-row items-start justify-between gap-3 pb-3">
                   <div className="flex min-w-0 gap-3">
                     <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Icon className="size-6" aria-hidden="true" /></span>
@@ -211,7 +209,7 @@ export function DevicesView({
         </section>
 
         <aside className="space-y-5" aria-label="การทำงานอัตโนมัติและประวัติล่าสุด">
-          <Card className="border-primary/15 bg-primary/[0.025] shadow-sm">
+          <Card className="border-primary/15 bg-primary/[0.025] shadow-none">
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><TimerReset className="size-4 text-primary" aria-hidden="true" />Manual override</CardTitle><CardDescription>ตั้งค่าเพื่อทดสอบหน้าจอเท่านั้น ยังไม่สั่งงานจริง</CardDescription></CardHeader>
             <CardContent className="space-y-3">
               {manualDevice ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><strong className="block">{manualDevice.name} อยู่ใน Manual</strong><span className="mt-1 block text-amber-800">จะกลับสู่ Auto อัตโนมัติใน {override?.minutes} นาที · สถานะอุปกรณ์จริงไม่เปลี่ยน</span></div> : <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">เลือก “สั่งงานชั่วคราว” จากการ์ดอุปกรณ์เพื่อทดลองกำหนดเวลา</p>}
@@ -220,13 +218,13 @@ export function DevicesView({
               {manualDevice ? <Button variant="outline" className="w-full" onClick={clearOverride}>กลับสู่ Auto ตอนนี้</Button> : null}
             </CardContent>
           </Card>
-          <Card className="shadow-sm">
+          <Card className="shadow-none">
             <CardHeader><CardTitle className="text-base">กฎอัตโนมัติที่ใช้งาน</CardTitle><CardDescription>เงื่อนไขสำหรับข้อมูลเดโม</CardDescription></CardHeader>
             <CardContent className="space-y-3">
               {devices.map((device) => <div key={device.id} className="flex gap-2 border-b pb-3 last:border-0 last:pb-0"><span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-primary">{(() => { const Icon = icons[device.icon]; return <Icon className="size-3.5" aria-hidden="true" />; })()}</span><span><strong className="block text-sm">{device.name}</strong><span className="block text-xs text-muted-foreground">{deviceMeta[device.id].rule}</span></span></div>)}
             </CardContent>
           </Card>
-          <Card className="shadow-sm">
+          <Card className="shadow-none">
             <CardHeader><CardTitle className="text-base">กิจกรรมล่าสุด</CardTitle><CardDescription>บันทึกตัวอย่าง ไม่ใช่ประวัติคำสั่งจริง</CardDescription></CardHeader>
             <CardContent className="space-y-3">
               {recentActivity.map(({ time, title, detail, icon: Icon }) => <div key={title} className="flex gap-2.5"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="size-3.5" aria-hidden="true" /></span><span className="min-w-0"><span className="flex items-baseline justify-between gap-2"><strong className="text-sm">{title}</strong><time className="shrink-0 text-xs text-muted-foreground">{time}</time></span><span className="block text-xs text-muted-foreground">{detail}</span></span></div>)}

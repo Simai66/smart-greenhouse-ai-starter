@@ -35,7 +35,7 @@ export function SiteHeader({
   onNotify: (message: string) => void;
 }) {
   return (
-    <header className="sticky top-0 z-40 flex min-h-16 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+    <header className="sticky top-0 z-40 flex min-h-16 items-center gap-2 border-b border-border/80 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/85">
       <SidebarTrigger className="size-11" aria-label="ย่อหรือเปิดเมนูหลัก" />
       <Separator orientation="vertical" className="mr-2 h-5" />
       <strong className="hidden text-sm sm:block">{pageTitle}</strong>

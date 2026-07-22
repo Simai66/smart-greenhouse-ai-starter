@@ -174,7 +174,7 @@ export function SoilMoistureChart({
         </p>
         <ChartContainer
           config={chartConfig}
-          className="min-h-[15rem] w-full"
+          className="h-64 w-full sm:h-72"
         >
           <AreaChart
             accessibilityLayer

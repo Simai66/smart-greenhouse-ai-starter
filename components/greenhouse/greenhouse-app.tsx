@@ -311,7 +311,7 @@ export function GreenhouseApp() {
           onOpenAlerts={() => navigate("alerts")}
           onNotify={(text) => notify(text, "info")}
         />
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem] space-y-6 p-4 pb-12 sm:p-6 lg:p-8">
+        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[86rem] space-y-7 p-4 pb-12 sm:p-6 lg:px-8 lg:py-7">
           <PageHeader metadata={pageMetadata[activePage]} refreshing={refreshing} onExport={exportCsv} onRefresh={refresh} />
           {!storageAvailable ? <MemoryOnlyNotice /> : null}
           {!online ? <OfflineNotice lastUpdated={lastUpdated} /> : dataStale ? <StaleDataNotice lastUpdated={lastUpdated} onRefresh={refresh} /> : null}
