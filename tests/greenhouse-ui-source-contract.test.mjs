@@ -96,7 +96,10 @@ test("keeps live status and decisions ahead of dashboard detail", async () => {
   assert.ok(workIndex > liveIndex);
   assert.ok(chartIndex > liveIndex);
   assert.match(source, /สถานะทรัพยากรสำคัญ/);
-  assert.match(source, /ภาพสดจากกล้องจำลอง 01/);
+  assert.match(source, /context: GreenhouseContext/);
+  assert.match(source, /const activeCamera = context\.cameras\.find/);
+  assert.match(source, /activeCamera \? activeCamera\.name : "ยังไม่มีกล้องในโรงเรือนนี้"/);
+  assert.doesNotMatch(source, /ภาพสดจากกล้องจำลอง 01/);
 });
 
 test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", async () => {
