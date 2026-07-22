@@ -229,7 +229,7 @@ export function DevicesView({
           <Card className="shadow-none">
             <CardHeader><CardTitle className="text-base">กฎอัตโนมัติที่ใช้งาน</CardTitle><CardDescription>เงื่อนไขสำหรับข้อมูลเดโม</CardDescription></CardHeader>
             <CardContent className="space-y-3">
-              {devices.map((device) => <div key={device.id} className="flex gap-2 border-b pb-3 last:border-0 last:pb-0"><span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-primary">{(() => { const Icon = icons[device.icon]; return <Icon className="size-3.5" aria-hidden="true" />; })()}</span><span><strong className="block text-sm">{device.name}</strong><span className="block text-xs text-muted-foreground">{deviceMeta[device.id].rule}</span></span></div>)}
+              {devices.map((device) => <div key={device.id} className="flex gap-2 border-b pb-3 last:border-0 last:pb-0"><span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-primary">{(() => { const Icon = icons[device.icon]; return <Icon className="size-3.5" aria-hidden="true" />; })()}</span><span><strong className="block text-sm">{device.name}</strong><span className="block text-xs text-muted-foreground">{(deviceMeta[device.id] ?? fallbackDeviceMeta(device)).rule}</span></span></div>)}
             </CardContent>
           </Card>
           <Card className="shadow-none">
