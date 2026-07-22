@@ -93,7 +93,7 @@ export function GreenhouseApp() {
         staleTimer.current = window.setTimeout(() => setDataStale(true), 300_000);
       }
       setReady(true);
-      if (result.recovered) notify("ข้อมูลเดโมไม่สมบูรณ์ จึงรีเซ็ตข้อมูลตัวอย่างแล้ว", "info");
+      if (result.recovered) notify("ข้อมูลที่บันทึกไม่สมบูรณ์ จึงกู้คืนค่าเริ่มต้นแล้ว", "info");
       if (!result.storageAvailable) notify("บันทึกข้อมูลเดโมไม่ได้ การเปลี่ยนแปลงจะอยู่ในหน่วยความจำ", "error");
     });
     return () => {

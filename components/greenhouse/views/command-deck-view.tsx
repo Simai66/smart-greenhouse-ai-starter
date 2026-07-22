@@ -1,7 +1,5 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Image from "next/image";
 import {
   ArrowRight,
   BellRing,
@@ -17,9 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { DashboardSoilMoistureChart, type SoilMoistureZone } from "@/components/greenhouse/charts/soil-moisture-chart";
 import {
-  soilMoistureSeries,
   type ChartPeriod,
   type DashboardMetric,
   type DashboardViewModel,
@@ -50,39 +46,6 @@ const metricPresentation: Record<DashboardMetric["id"], { icon: typeof Leaf; ico
   alerts: { icon: BellRing, iconClass: "bg-amber-50 text-amber-600", label: "ติดตาม" },
 };
 
-const metricTrends: Record<DashboardMetric["id"], number[]> = {
-  health: [54, 56, 57, 56, 61, 62, 66, 65, 67, 70],
-  temperature: [48, 51, 54, 62, 66, 61, 58, 64, 68, 63],
-  humidity: [51, 52, 52, 53, 55, 61, 60, 62, 62, 64],
-  alerts: [65, 65, 62, 59, 55, 51, 45, 43, 39, 36],
-};
-
-function MetricTrend({ metric }: { metric: DashboardMetric }) {
-  const values = metricTrends[metric.id];
-  const coordinates = values.map((value, index) => ({
-    x: (index / (values.length - 1)) * 100,
-    y: 100 - value,
-  }));
-  const stepPath = coordinates.reduce(
-    (path, point, index) => index === 0
-      ? `M ${point.x} ${point.y}`
-      : `${path} H ${point.x} V ${point.y}`,
-    "",
-  );
-  const areaPath = `${stepPath} V 100 H 0 Z`;
-  const colorClass = metric.tone === "warning" || metric.tone === "danger" ? "text-amber-500" : "text-primary";
-  return (
-    <svg className={`mt-4 h-10 w-full ${colorClass}`} viewBox="0 0 100 100" role="img" aria-label={`กราฟแนวโน้ม ${metric.label}`} preserveAspectRatio="none">
-      <g stroke="currentColor" strokeOpacity="0.14" strokeWidth="1" vectorEffect="non-scaling-stroke">
-        <path d="M 0 25 H 100 M 0 50 H 100 M 0 75 H 100" />
-        <path d="M 20 0 V 100 M 40 0 V 100 M 60 0 V 100 M 80 0 V 100" />
-      </g>
-      <path d={areaPath} fill="currentColor" opacity="0.1" />
-      <path d={stepPath} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="butt" strokeLinejoin="miter" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
 function MetricCard({ metric }: { metric: DashboardMetric }) {
   const presentation = metricPresentation[metric.id];
   const Icon = presentation.icon;
@@ -99,7 +62,6 @@ function MetricCard({ metric }: { metric: DashboardMetric }) {
             <p className="mt-0.5 text-xs text-muted-foreground">{metric.note}</p>
           </div>
         </div>
-        <MetricTrend metric={metric} />
       </CardContent>
     </Card>
   );
@@ -109,17 +71,9 @@ export function CommandDeckView({
   viewModel, devices, plants, context, period, lastUpdated, pendingDeviceId, online,
   onPeriodChange, onNavigate, onDeviceRequest, onInspectPlant,
 }: CommandDeckViewProps) {
-  const [soilMoistureZone, setSoilMoistureZone] = useState<SoilMoistureZone>("all");
-  const dashboardSoilMoisture = useMemo(() => ({
-    zoneA: soilMoistureSeries[period],
-    zoneB: soilMoistureSeries[period].map((point, index) => ({
-      ...point,
-      value: Math.max(0, Math.min(100, point.value + [1, -1, 2, 3, 4, 5, 6][index % 7])),
-    })),
-  }), [period]);
   const activeCamera = context.cameras.find((camera) => camera.enabled && camera.status === "online") ?? context.cameras[0];
   const cameraZone = context.greenhouse?.zones.find((zone) => zone.id === activeCamera?.zoneId)?.name ?? activeCamera?.zone ?? "ไม่ระบุโซน";
-  const hasSoilCoverage = context.sensors.filter((sensor) => sensor.metric === "soilMoisture" && sensor.status === "online").length >= 2;
+  const soilSensors = context.sensors.filter((sensor) => sensor.metric === "soilMoisture" && sensor.status === "online");
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-4 border-b border-border/70 pb-5 sm:flex-row sm:items-center sm:justify-between">
@@ -130,9 +84,9 @@ export function CommandDeckView({
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="สถานะสำคัญ">{viewModel.metrics.map((metric) => <MetricCard key={metric.id} metric={metric} />)}</section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(19rem,.7fr)]">
-        <div className="min-w-0"><div className="mb-3 flex items-center justify-end gap-2"><span className="mr-auto text-sm font-medium text-muted-foreground">แนวโน้มความชื้นดิน</span>{(["วันนี้", "7 วัน", "30 วัน"] as ChartPeriod[]).map((option) => <Button key={option} size="sm" variant={period === option ? "default" : "outline"} className="rounded-xl" onClick={() => onPeriodChange(option)}>{option}</Button>)}</div>{hasSoilCoverage ? <DashboardSoilMoistureChart pointsByZone={dashboardSoilMoisture} rangeLabel={period} targetMin={50} targetMax={65} selectedZone={soilMoistureZone} onSelectedZoneChange={setSoilMoistureZone} /> : <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><p className="font-semibold">ยังไม่มีข้อมูลความชื้นดินเพียงพอ</p><p className="mt-1 text-sm text-muted-foreground">เพิ่มเซ็นเซอร์ความชื้นดินออนไลน์อย่างน้อย 2 ตัวในโรงเรือนนี้ก่อน จึงจะแสดงกราฟเปรียบเทียบได้</p></CardContent></Card>}</div>
+        <div className="min-w-0"><div className="mb-3 flex items-center justify-end gap-2"><span className="mr-auto text-sm font-medium text-muted-foreground">แนวโน้มความชื้นดิน</span>{(["วันนี้", "7 วัน", "30 วัน"] as ChartPeriod[]).map((option) => <Button key={option} size="sm" variant={period === option ? "default" : "outline"} className="rounded-xl" onClick={() => onPeriodChange(option)}>{option}</Button>)}</div><Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><p className="font-semibold">ยังไม่มีค่าความชื้นดินที่บันทึก</p><p className="mt-1 text-sm text-muted-foreground">{soilSensors.length ? `พบเซ็นเซอร์ ${soilSensors.map((sensor) => sensor.name).join(", ")} แล้ว แต่ยังไม่มีค่าตามช่วง ${period}` : "เพิ่มและเชื่อมต่อเซ็นเซอร์ความชื้นดินในโรงเรือนนี้ก่อน จึงจะแสดงกราฟได้"}</p></CardContent></Card></div>
         <div className="space-y-5">
-          <Card className="overflow-hidden shadow-none"><CardHeader className="flex-row items-center justify-between pb-3"><div><p className="page-kicker">การมองเห็น</p><h2 className="mt-1 font-semibold">{activeCamera ? activeCamera.name : "ยังไม่มีกล้องในโรงเรือนนี้"}</h2><p className="mt-1 text-sm text-muted-foreground">{activeCamera ? `กล้อง${activeCamera.status === "online" ? "ออนไลน์" : "ออฟไลน์"} · ${cameraZone}` : "เพิ่มและเปิดใช้งานกล้องจากหน้าตั้งค่า"}</p></div>{activeCamera ? <Button variant="ghost" size="sm" className="text-primary" onClick={() => onNavigate("plants")}>ดูทั้งหมด</Button> : null}</CardHeader>{activeCamera ? <CardContent className="p-4 pt-0"><button className="group relative block aspect-[16/9] w-full overflow-hidden rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onNavigate("plants")}><Image src="/images/greenhouse-overview.webp" alt={`ภาพตัวอย่างจาก ${activeCamera.name} ใน${cameraZone}`} fill unoptimized className="object-cover transition-transform duration-300 group-hover:scale-105" /></button><div className="mt-3 flex justify-between text-xs text-muted-foreground"><span>ภาพตัวอย่างในโหมดเดโม</span><span>{cameraZone}</span></div></CardContent> : <CardContent className="pb-6 pt-0 text-sm text-muted-foreground">ยังไม่มีภาพหรือการเชื่อมต่อกล้องสำหรับโรงเรือนที่เลือก</CardContent>}</Card>
+          <Card className="overflow-hidden shadow-none"><CardHeader className="flex-row items-center justify-between pb-3"><div><p className="page-kicker">การมองเห็น</p><h2 className="mt-1 font-semibold">{activeCamera ? activeCamera.name : "ยังไม่มีกล้องในโรงเรือนนี้"}</h2><p className="mt-1 text-sm text-muted-foreground">{activeCamera ? `กล้อง${activeCamera.status === "online" ? "ออนไลน์" : "ออฟไลน์"} · ${cameraZone}` : "เพิ่มและเปิดใช้งานกล้องจากหน้าตั้งค่า"}</p></div>{activeCamera ? <Button variant="ghost" size="sm" className="text-primary" onClick={() => onNavigate("ai")}>ไปที่ AI</Button> : null}</CardHeader><CardContent className="pb-6 pt-0"><div className="grid aspect-[16/9] place-items-center rounded-xl bg-muted p-6 text-center text-sm text-muted-foreground"><div><p className="font-medium text-foreground">ยังไม่มีภาพที่บันทึก</p><p className="mt-1">{activeCamera ? `รอภาพจริงจาก ${activeCamera.name} ก่อนแสดงหลักฐาน` : "เพิ่มกล้องเพื่อเริ่มรับภาพ"}</p></div></div>{activeCamera ? <div className="mt-3 flex justify-between text-xs text-muted-foreground"><span>ยังไม่มีหลักฐานภาพ</span><span>{cameraZone}</span></div> : null}</CardContent></Card>
           <Card className="shadow-none"><CardHeader className="flex-row items-center justify-between pb-2"><div><p className="page-kicker">ต้องตัดสินใจ</p><h2 className="mt-1 font-semibold">งานที่ต้องจัดการ</h2><p className="mt-1 text-sm text-muted-foreground">เรียงตามผลกระทบ</p></div><Button variant="ghost" size="sm" className="text-primary" onClick={() => onNavigate("alerts")}>ดูทั้งหมด</Button></CardHeader><CardContent className="space-y-1 p-3 pt-0">{viewModel.workItems.slice(0, 3).map((item) => <button className="grid w-full grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl p-2 text-left transition-colors hover:bg-muted" key={item.id} onClick={() => onNavigate(item.targetPage)}><span className="grid size-9 place-items-center rounded-xl bg-amber-50 text-amber-600"><CircleAlert className="size-4" /></span><span className="min-w-0"><strong className="block truncate text-sm">{item.title}</strong><small className="block truncate text-muted-foreground">{item.detail}</small></span><ArrowRight className="size-4 text-muted-foreground" /></button>)}{!viewModel.workItems.length ? <p className="py-6 text-center text-sm text-muted-foreground">ไม่มีงานเปิดอยู่ ระบบยังคงติดตามตามปกติ</p> : null}</CardContent></Card>
         </div>
       </section>

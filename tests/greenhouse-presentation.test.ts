@@ -8,7 +8,6 @@ import {
   filterPlants,
   navigationItems,
   pageMetadata,
-  soilMoistureSeries,
 } from "../lib/greenhouse-presentation.ts";
 
 test("publishes the seven approved pages in operational order", () => {
@@ -58,11 +57,13 @@ test("filters plants and alerts without mutating source state", () => {
   assert.equal(demoInitialState.alerts[0]?.resolved, false);
 });
 
-test("describes the approved sampled soil-moisture series", () => {
-  const points = soilMoistureSeries["วันนี้"];
-  assert.equal(points.at(-1)?.value, 46);
+test("describes recorded soil-moisture data without requiring a demo series", () => {
+  const points = [
+    { timestamp: "2026-07-22T07:00:00+07:00", label: "07:00", value: 56 },
+    { timestamp: "2026-07-22T08:00:00+07:00", label: "08:00", value: 48 },
+  ];
   assert.equal(
     describeSoilMoistureTrend(points, 50),
-    "ความชื้นดินลดลงเหลือ 46% ต่ำกว่าเป้าหมาย 4%",
+    "ความชื้นดินลดลงเหลือ 48% ต่ำกว่าเป้าหมาย 2%",
   );
 });

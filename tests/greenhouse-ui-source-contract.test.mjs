@@ -30,8 +30,9 @@ test("keeps evidence, detail, and analytics contracts in the page views", async 
   assert.match(plants, /useIsMobile/);
   assert.match(plants, /Sheet/);
   assert.match(plants, /aria-current/);
-  assert.match(ai, /ความมั่นใจของโมเดล/);
+  assert.match(ai, /ยังไม่มีภาพที่บันทึก/);
   assert.match(ai, /ขั้นตอนถัดไป/);
+  assert.doesNotMatch(ai, /CAM-A-01/);
   assert.match(analytics, /SoilMoistureChart/);
   assert.match(analytics, /เลือกช่วงเวลาของกราฟ/);
 });
@@ -91,10 +92,10 @@ test("keeps live status and decisions ahead of dashboard detail", async () => {
 
   const liveIndex = source.indexOf("ระบบทำงานปกติ");
   const workIndex = source.indexOf("งานที่ต้องจัดการ");
-  const chartIndex = source.lastIndexOf("SoilMoistureChart");
+  const noReadingsIndex = source.lastIndexOf("ยังไม่มีค่าความชื้นดินที่บันทึก");
   assert.ok(liveIndex >= 0);
   assert.ok(workIndex > liveIndex);
-  assert.ok(chartIndex > liveIndex);
+  assert.ok(noReadingsIndex > liveIndex);
   assert.match(source, /สถานะทรัพยากรสำคัญ/);
   assert.match(source, /context: GreenhouseContext/);
   assert.match(source, /const activeCamera = context\.cameras\.find/);

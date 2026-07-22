@@ -111,39 +111,6 @@ export const pageMetadata: Record<GreenhousePageId, PageMetadata> = {
   },
 };
 
-export const soilMoistureSeries: Record<
-  ChartPeriod,
-  SoilMoisturePoint[]
-> = {
-  "วันนี้": [
-    { timestamp: "2026-07-21T00:00:00+07:00", label: "00:00", value: 62 },
-    { timestamp: "2026-07-21T04:00:00+07:00", label: "04:00", value: 64 },
-    { timestamp: "2026-07-21T08:00:00+07:00", label: "08:00", value: 59 },
-    { timestamp: "2026-07-21T12:00:00+07:00", label: "12:00", value: 55 },
-    { timestamp: "2026-07-21T16:00:00+07:00", label: "16:00", value: 52 },
-    { timestamp: "2026-07-21T20:00:00+07:00", label: "20:00", value: 48 },
-    { timestamp: "2026-07-21T21:42:00+07:00", label: "ตอนนี้", value: 46 },
-  ],
-  "7 วัน": [
-    { timestamp: "2026-07-15", label: "พ. 15", value: 58 },
-    { timestamp: "2026-07-16", label: "พฤ. 16", value: 61 },
-    { timestamp: "2026-07-17", label: "ศ. 17", value: 56 },
-    { timestamp: "2026-07-18", label: "ส. 18", value: 54 },
-    { timestamp: "2026-07-19", label: "อา. 19", value: 50 },
-    { timestamp: "2026-07-20", label: "จ. 20", value: 49 },
-    { timestamp: "2026-07-21", label: "อ. 21", value: 46 },
-  ],
-  "30 วัน": [
-    { timestamp: "2026-06-22", label: "22 มิ.ย.", value: 60 },
-    { timestamp: "2026-06-27", label: "27 มิ.ย.", value: 57 },
-    { timestamp: "2026-07-02", label: "2 ก.ค.", value: 62 },
-    { timestamp: "2026-07-07", label: "7 ก.ค.", value: 55 },
-    { timestamp: "2026-07-12", label: "12 ก.ค.", value: 53 },
-    { timestamp: "2026-07-17", label: "17 ก.ค.", value: 49 },
-    { timestamp: "2026-07-21", label: "21 ก.ค.", value: 46 },
-  ],
-};
-
 export function buildDashboardViewModel(
   state: DemoState,
 ): DashboardViewModel {
@@ -178,16 +145,16 @@ export function buildDashboardViewModel(
       {
         id: "temperature",
         label: "อุณหภูมิ",
-        value: hasTemperatureSensor ? "24.8°C" : "—",
-        note: hasTemperatureSensor ? "ข้อมูลตัวอย่างจากเซ็นเซอร์ที่ตั้งค่า" : "ยังไม่มีเซ็นเซอร์อุณหภูมิออนไลน์",
-        tone: hasTemperatureSensor ? "healthy" : "neutral",
+        value: "—",
+        note: hasTemperatureSensor ? "ตั้งค่าเซ็นเซอร์แล้ว แต่ยังไม่มีค่าที่บันทึก" : "ยังไม่มีเซ็นเซอร์อุณหภูมิออนไลน์",
+        tone: "neutral",
       },
       {
         id: "humidity",
         label: "ความชื้นอากาศ",
-        value: hasHumiditySensor ? "68%" : "—",
-        note: hasHumiditySensor ? "ข้อมูลตัวอย่างจากเซ็นเซอร์ที่ตั้งค่า" : "ยังไม่มีเซ็นเซอร์ความชื้นออนไลน์",
-        tone: hasHumiditySensor ? "healthy" : "neutral",
+        value: "—",
+        note: hasHumiditySensor ? "ตั้งค่าเซ็นเซอร์แล้ว แต่ยังไม่มีค่าที่บันทึก" : "ยังไม่มีเซ็นเซอร์ความชื้นออนไลน์",
+        tone: "neutral",
       },
       {
         id: "alerts",
