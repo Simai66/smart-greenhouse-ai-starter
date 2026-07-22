@@ -178,7 +178,7 @@ function CropBatchesSection({ greenhouses, cropBatches, activeGreenhouseId, onSa
   </>;
 }
 
-function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cameras, sensors, onCreateResource, onMoveResource, onRenameResource, onDeleteResource }: {
+function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cameras, sensors, onCreateResource, onMoveResource, onRenameResource, onUpdateResourceStatus, onDeleteResource }: {
   greenhouses: DemoGreenhouse[];
   activeGreenhouseId: string;
   devices: DemoDevice[];
@@ -187,6 +187,7 @@ function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cam
   onCreateResource: (value: ResourceEditorValue) => void;
   onMoveResource: (kind: ResourceKind, id: string, zoneId: string) => void;
   onRenameResource: (kind: ResourceKind, id: string, name: string) => void;
+  onUpdateResourceStatus: (kind: ResourceKind, id: string, value: Pick<ResourceEditorValue, "enabled" | "status">) => void;
   onDeleteResource: (kind: ResourceKind, id: string) => void;
 }) {
   const [editing, setEditing] = useState<ResourceListItem | null>(null);
@@ -205,6 +206,7 @@ function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cam
     if (editing) {
       if (editing.name !== value.name) onRenameResource(editing.kind, editing.id, value.name);
       if (editing.zoneId !== value.zoneId) onMoveResource(editing.kind, editing.id, value.zoneId);
+      if (editing.enabled !== value.enabled || editing.status !== value.status) onUpdateResourceStatus(editing.kind, editing.id, value);
       setEditing(null);
       return;
     }
@@ -220,7 +222,7 @@ function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cam
   </>;
 }
 
-export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, devices, sensors, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch, onCreateResource, onMoveResource, onRenameResource, onDeleteResource }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; devices: DemoDevice[]; sensors: DemoSensor[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void; onCreateResource: (value: ResourceEditorValue) => void; onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void; onRenameResource: (kind: "device" | "camera" | "sensor", id: string, name: string) => void; onDeleteResource: (kind: "device" | "camera" | "sensor", id: string) => void }) {
+export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, devices, sensors, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch, onCreateResource, onMoveResource, onRenameResource, onUpdateResourceStatus, onDeleteResource }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; devices: DemoDevice[]; sensors: DemoSensor[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void; onCreateResource: (value: ResourceEditorValue) => void; onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void; onRenameResource: (kind: "device" | "camera" | "sensor", id: string, name: string) => void; onUpdateResourceStatus: (kind: "device" | "camera" | "sensor", id: string, value: Pick<ResourceEditorValue, "enabled" | "status">) => void; onDeleteResource: (kind: "device" | "camera" | "sensor", id: string) => void }) {
   const [draft, setDraft] = useState(settings);
   const [error, setError] = useState("");
   const [prevSettings, setPrevSettings] = useState(settings);
@@ -232,7 +234,7 @@ export function SettingsView({ settings, greenhouses, cropBatches, activeGreenho
   return <div className="space-y-6">
     <FarmStructureSection greenhouses={greenhouses} onSaveGreenhouse={onSaveGreenhouse} onArchiveGreenhouse={onArchiveGreenhouse} onRestoreGreenhouse={onRestoreGreenhouse} onAddZone={onAddZone} onArchiveZone={onArchiveZone} onRestoreZone={onRestoreZone} />
     <CropBatchesSection greenhouses={greenhouses} cropBatches={cropBatches} activeGreenhouseId={activeGreenhouseId} onSaveBatch={onSaveBatch} onArchiveBatch={onArchiveBatch} onRestoreBatch={onRestoreBatch} />
-    <ResourceBindingsSection greenhouses={greenhouses} activeGreenhouseId={activeGreenhouseId} devices={devices} cameras={settings.cameras} sensors={sensors} onCreateResource={onCreateResource} onMoveResource={onMoveResource} onRenameResource={onRenameResource} onDeleteResource={onDeleteResource} />
+    <ResourceBindingsSection greenhouses={greenhouses} activeGreenhouseId={activeGreenhouseId} devices={devices} cameras={settings.cameras} sensors={sensors} onCreateResource={onCreateResource} onMoveResource={onMoveResource} onRenameResource={onRenameResource} onUpdateResourceStatus={onUpdateResourceStatus} onDeleteResource={onDeleteResource} />
     <SettingSection icon={<Settings2 className="size-5" aria-hidden="true" />} title="ค่าเป้าหมายสภาพแวดล้อม" description="ใช้กับการควบคุมอัตโนมัติและคำเตือนในเดโม">
       <div className="grid gap-4 md:grid-cols-2"><NumberField id="minTemperature" label="อุณหภูมิต่ำสุด" unit="°C" value={draft.minTemperature} onChange={(value) => update("minTemperature", value)} /><NumberField id="maxTemperature" label="อุณหภูมิสูงสุด" unit="°C" value={draft.maxTemperature} onChange={(value) => update("maxTemperature", value)} /><NumberField id="minHumidity" label="ความชื้นอากาศต่ำสุด" unit="%" value={draft.minHumidity} onChange={(value) => update("minHumidity", value)} /><NumberField id="minSoilMoisture" label="ความชื้นดินต่ำสุด" unit="%" value={draft.minSoilMoisture} onChange={(value) => update("minSoilMoisture", value)} /></div>
     </SettingSection>

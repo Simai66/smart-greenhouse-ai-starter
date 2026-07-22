@@ -509,6 +509,28 @@ export function GreenhouseApp() {
           });
           notify("แก้ไขชื่อทรัพยากรแล้ว");
         }}
+        onUpdateResourceStatus={(kind, id, { enabled, status }) => {
+          setState((current) => {
+            if (kind === "device") return {
+              ...current,
+              devices: current.devices.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, active: enabled } : item),
+            };
+            if (kind === "sensor") return {
+              ...current,
+              sensors: current.sensors.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, status: status === "online" ? "online" : "offline" } : item),
+            };
+            return {
+              ...current,
+              settings: {
+                ...current.settings,
+                cameras: current.settings.cameras.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id
+                  ? { ...item, enabled, status: status === "online" ? "online" : "offline" }
+                  : item),
+              },
+            };
+          });
+          notify("อัปเดตสถานะทรัพยากรแล้ว");
+        }}
         onDeleteResource={(kind, id) => {
           setState((current) => {
             if (kind === "device") return { ...current, devices: current.devices.filter((item) => item.id !== id) };

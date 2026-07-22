@@ -61,11 +61,17 @@ test("keeps reusable resource editing and deliberate deletion in settings", asyn
   assert.match(settings, /ResourceEditorDialog/);
   assert.match(settings, /onCreateResource: \(value: ResourceEditorValue\) => void/);
   assert.match(settings, /onCreateResource=\{onCreateResource\}/);
+  assert.match(settings, /onUpdateResourceStatus=\{onUpdateResourceStatus\}/);
+  assert.match(settings, /onUpdateResourceStatus\(editing\.kind, editing\.id, value\)/);
   assert.match(settings, /onDeleteResource=\{onDeleteResource\}/);
   assert.match(settings, /ลบทรัพยากร\?/);
   assert.doesNotMatch(settings, /pendingCreate|knownIds/);
   assert.match(app, /onCreateResource=\{\(value\) => \{/);
   assert.match(app, /return createResource\(current,/);
+  assert.match(app, /onUpdateResourceStatus=\{\(kind, id, \{ enabled, status \}\) => \{/);
+  assert.match(app, /item\.greenhouseId === activeGreenhouse\.id/);
+  assert.match(app, /active: enabled/);
+  assert.match(app, /enabled, status: status === "online" \? "online" : "offline"/);
 });
 
 test("keeps live status and decisions ahead of dashboard detail", async () => {
