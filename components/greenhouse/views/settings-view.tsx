@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Archive, BellRing, Bot, Camera, Clock3, Cpu, Droplets, MapPin, Pencil, Plus, Radio, RotateCcw, Settings2, Sparkles, Trash2, Warehouse } from "lucide-react";
+import { Archive, BellRing, Bot, Camera, Clock3, Cpu, Droplets, Pencil, Plus, RotateCcw, Settings2, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -10,6 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ResourceEditorDialog, type ResourceEditorValue, type ResourceKind } from "@/components/greenhouse/settings/resource-editor-dialog";
+import { ResourceList, type ResourceListItem } from "@/components/greenhouse/settings/resource-list";
+import { FarmStructureSection, type GreenhouseDraft } from "@/components/greenhouse/settings/farm-structure-section";
 import { validateDemoSettings } from "@/lib/dashboard-interactions";
 import type { DemoCamera, DemoCropBatch, DemoDevice, DemoGreenhouse, DemoSensor, DemoSettings } from "@/lib/greenhouse-demo-store";
 
@@ -33,16 +36,6 @@ function CameraRow({ camera, onChange }: { camera: DemoCamera; onChange: (next: 
   return <div className="flex flex-col gap-3 border-b border-border/70 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><Camera className="size-4" aria-hidden="true" /></span><div><div className="flex flex-wrap items-center gap-2"><Label htmlFor={`camera-${camera.id}`}>{camera.name}</Label><Badge variant={camera.status === "online" ? "secondary" : "outline"} className={camera.status === "online" ? "text-primary" : "text-muted-foreground"}>{camera.status === "online" ? "ออนไลน์" : "ออฟไลน์"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{camera.id} · {camera.zone} · {camera.source} · ถ่ายทุก {camera.captureInterval}</p></div></div><Switch id={`camera-${camera.id}`} aria-label={`เปิดใช้งาน ${camera.name}`} checked={camera.enabled} onCheckedChange={(enabled) => onChange({ ...camera, enabled })} /></div>;
 }
 
-type GreenhouseDraft = Pick<DemoGreenhouse, "name" | "code">;
-
-const greenhouseSuggestions: Array<GreenhouseDraft> = [
-  { name: "โรงเรือนผักสลัด", code: "GREENHOUSE 02" },
-  { name: "โรงเรือนสมุนไพร", code: "GREENHOUSE 03" },
-  { name: "โรงเรือนเพาะกล้า", code: "NURSERY 01" },
-];
-
-const zoneSuggestions = ["โซน A", "โซน B", "โซนเพาะกล้า", "โซนทดลอง"];
-
 function NameSuggestions({
   label,
   suggestions,
@@ -53,95 +46,6 @@ function NameSuggestions({
   onChoose: (suggestion: string) => void;
 }) {
   return <div className="space-y-2"><p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Sparkles className="size-3.5" aria-hidden="true" />{label}</p><div className="flex flex-wrap gap-2">{suggestions.map((suggestion) => <Button key={suggestion} type="button" variant="outline" size="sm" className="h-8 rounded-full px-3 text-xs" onClick={() => onChoose(suggestion)}>{suggestion}</Button>)}</div></div>;
-}
-
-function FarmStructureSection({ greenhouses, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone }: {
-  greenhouses: DemoGreenhouse[];
-  onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void;
-  onArchiveGreenhouse: (id: string) => void;
-  onRestoreGreenhouse: (id: string) => void;
-  onAddZone: (greenhouseId: string, name: string) => void;
-  onArchiveZone: (greenhouseId: string, zoneId: string) => void;
-  onRestoreZone: (greenhouseId: string, zoneId: string) => void;
-}) {
-  const [editing, setEditing] = useState<DemoGreenhouse | null | undefined>(undefined);
-  const [draft, setDraft] = useState<GreenhouseDraft>({ name: "", code: "" });
-  const [zoneGreenhouseId, setZoneGreenhouseId] = useState<string | null>(null);
-  const [zoneName, setZoneName] = useState("");
-  const [formError, setFormError] = useState("");
-  const editingOpen = editing !== undefined;
-  const zoneGreenhouse = greenhouses.find((greenhouse) => greenhouse.id === zoneGreenhouseId);
-  const activeCount = greenhouses.filter((greenhouse) => greenhouse.status === "active").length;
-
-  const openCreate = () => {
-    setEditing(null);
-    setDraft({ name: "", code: "" });
-    setFormError("");
-  };
-  const openEdit = (greenhouse: DemoGreenhouse) => {
-    setEditing(greenhouse);
-    setDraft({ name: greenhouse.name, code: greenhouse.code });
-    setFormError("");
-  };
-  const saveGreenhouse = () => {
-    const name = draft.name.trim();
-    const code = draft.code.trim();
-    if (!name || !code) {
-      setFormError("กรุณาระบุชื่อและรหัสโรงเรือน");
-      return;
-    }
-    onSaveGreenhouse(editing?.id ?? null, { name, code });
-    setEditing(undefined);
-  };
-  const saveZone = () => {
-    const name = zoneName.trim();
-    if (!zoneGreenhouse || !name) {
-      setFormError("กรุณาระบุชื่อโซน");
-      return;
-    }
-    onAddZone(zoneGreenhouse.id, name);
-    setZoneGreenhouseId(null);
-    setZoneName("");
-    setFormError("");
-  };
-
-  return <>
-    <SettingSection icon={<Warehouse className="size-5" aria-hidden="true" />} title="โรงเรือนและโซน" description="กำหนดโครงสร้างพื้นที่ก่อนเพิ่มรอบปลูก อุปกรณ์ หรือกล้อง">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-4">
-        <p className="text-sm text-muted-foreground">เปิดใช้งาน <span className="font-medium text-foreground">{activeCount} โรงเรือน</span> · จัดการโซนได้จากรายการด้านล่าง</p>
-        <Button type="button" size="sm" className="min-h-10" onClick={openCreate}><Plus className="size-4" aria-hidden="true" />เพิ่มโรงเรือน</Button>
-      </div>
-      <div className="divide-y">
-        {greenhouses.map((greenhouse) => {
-          const activeZones = greenhouse.zones.filter((zone) => zone.status === "active");
-          return <section key={greenhouse.id} className="py-5 first:pt-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Warehouse className="size-4" aria-hidden="true" /></span><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-medium">{greenhouse.name}</h3><Badge variant={greenhouse.status === "active" ? "secondary" : "outline"} className={greenhouse.status === "active" ? "text-primary" : "text-muted-foreground"}>{greenhouse.status === "active" ? "ใช้งานอยู่" : "เก็บถาวร"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{greenhouse.code} · {activeZones.length} โซนที่ใช้งาน</p></div></div>
-              <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" className="min-h-9" onClick={() => openEdit(greenhouse)}><Pencil className="size-3.5" aria-hidden="true" />แก้ไข</Button>{greenhouse.status === "active" ? <Button type="button" variant="ghost" size="sm" className="min-h-9 text-muted-foreground" onClick={() => onArchiveGreenhouse(greenhouse.id)}><Archive className="size-3.5" aria-hidden="true" />เก็บถาวร</Button> : <Button type="button" variant="outline" size="sm" className="min-h-9" onClick={() => onRestoreGreenhouse(greenhouse.id)}><RotateCcw className="size-3.5" aria-hidden="true" />เรียกคืน</Button>}</div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {greenhouse.zones.map((zone) => <div key={zone.id} className="flex items-center gap-1 rounded-lg border bg-muted/30 px-2.5 py-1.5 text-sm"><MapPin className="size-3.5 text-muted-foreground" aria-hidden="true" /><span>{zone.name}</span>{zone.status === "archived" ? <><Badge variant="outline" className="ml-1 px-1.5 py-0 text-[10px] text-muted-foreground">เก็บถาวร</Badge><Button type="button" variant="ghost" size="icon" className="ml-1 size-6 text-muted-foreground" aria-label={`เรียกคืน ${zone.name}`} onClick={() => onRestoreZone(greenhouse.id, zone.id)}><RotateCcw className="size-3" aria-hidden="true" /></Button></> : <Button type="button" variant="ghost" size="icon" className="ml-1 size-6 text-muted-foreground" aria-label={`เก็บ ${zone.name} ถาวร`} onClick={() => onArchiveZone(greenhouse.id, zone.id)}><Archive className="size-3" aria-hidden="true" /></Button>}</div>)}
-              {greenhouse.status === "active" ? <Button type="button" variant="outline" size="sm" className="min-h-9" onClick={() => { setZoneGreenhouseId(greenhouse.id); setZoneName(""); setFormError(""); }}><Plus className="size-3.5" aria-hidden="true" />เพิ่มโซน</Button> : null}
-            </div>
-          </section>;
-        })}
-      </div>
-    </SettingSection>
-    <Dialog open={editingOpen} onOpenChange={(open) => !open && setEditing(undefined)}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>{editing ? "แก้ไขโรงเรือน" : "เพิ่มโรงเรือน"}</DialogTitle><DialogDescription>ชื่อและรหัสนี้จะใช้ระบุพื้นที่ในระบบ</DialogDescription></DialogHeader>
-        <div className="grid gap-4 py-2"><div className="space-y-2"><Label htmlFor="greenhouse-name">ชื่อโรงเรือน</Label><Input id="greenhouse-name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="เช่น โรงเรือนผักสลัด" /></div>{!editing ? <NameSuggestions label="เลือกชื่อแนะนำเพื่อเริ่มต้น" suggestions={greenhouseSuggestions.map((suggestion) => suggestion.name)} onChoose={(name) => setDraft(greenhouseSuggestions.find((suggestion) => suggestion.name === name) ?? { name, code: draft.code })} /> : null}<div className="space-y-2"><Label htmlFor="greenhouse-code">รหัสโรงเรือน</Label><Input id="greenhouse-code" value={draft.code} onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))} placeholder="เช่น GREENHOUSE 02" /></div>{formError ? <p className="text-sm text-destructive" role="alert">{formError}</p> : null}</div>
-        <DialogFooter><Button type="button" variant="outline" onClick={() => setEditing(undefined)}>ยกเลิก</Button><Button type="button" onClick={saveGreenhouse}>บันทึกโรงเรือน</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
-    <Dialog open={Boolean(zoneGreenhouseId)} onOpenChange={(open) => !open && setZoneGreenhouseId(null)}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>เพิ่มโซน</DialogTitle><DialogDescription>{zoneGreenhouse ? `เพิ่มพื้นที่ภายใน ${zoneGreenhouse.name}` : "ระบุชื่อพื้นที่"}</DialogDescription></DialogHeader>
-        <div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="zone-name">ชื่อโซน</Label><Input id="zone-name" value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="เช่น โซน C" /></div><NameSuggestions label="เลือกชื่อแนะนำเพื่อเริ่มต้น" suggestions={zoneSuggestions} onChoose={setZoneName} />{formError ? <p className="text-sm text-destructive" role="alert">{formError}</p> : null}</div>
-        <DialogFooter><Button type="button" variant="outline" onClick={() => setZoneGreenhouseId(null)}>ยกเลิก</Button><Button type="button" onClick={saveZone}>เพิ่มโซน</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
-  </>;
 }
 
 type CropBatchDraft = Pick<DemoCropBatch, "greenhouseId" | "zoneId" | "cropName" | "cultivar" | "plantCount" | "plantedAt">;
@@ -176,34 +80,60 @@ function CropBatchesSection({ greenhouses, cropBatches, activeGreenhouseId, onSa
   </>;
 }
 
-function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cameras, sensors, onAddResource, onMoveResource, onRenameResource, onDeleteResource }: {
+function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cameras, sensors, onCreateResource, onMoveResource, onRenameResource, onUpdateResourceStatus, onDeleteResource }: {
   greenhouses: DemoGreenhouse[];
   activeGreenhouseId: string;
   devices: DemoDevice[];
   cameras: DemoCamera[];
   sensors: DemoSensor[];
-  onAddResource: (kind: "device" | "camera" | "sensor") => void;
-  onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void;
-  onRenameResource: (kind: "device" | "camera" | "sensor", id: string, name: string) => void;
-  onDeleteResource: (kind: "device" | "camera" | "sensor", id: string) => void;
+  onCreateResource: (value: ResourceEditorValue) => void;
+  onMoveResource: (kind: ResourceKind, id: string, zoneId: string) => void;
+  onRenameResource: (kind: ResourceKind, id: string, name: string) => void;
+  onUpdateResourceStatus: (kind: ResourceKind, id: string, value: Pick<ResourceEditorValue, "enabled" | "status">) => void;
+  onDeleteResource: (kind: ResourceKind, id: string) => void;
 }) {
-  const [editing, setEditing] = useState<{ kind: "device" | "camera" | "sensor"; id: string; name: string } | null>(null);
-  const [deleting, setDeleting] = useState<{ kind: "device" | "camera" | "sensor"; id: string; name: string } | null>(null);
-  const [name, setName] = useState("");
+  const [editing, setEditing] = useState<ResourceListItem | null>(null);
+  const [creatingKind, setCreatingKind] = useState<ResourceKind | null>(null);
+  const [deleting, setDeleting] = useState<ResourceListItem | null>(null);
   const greenhouse = greenhouses.find((item) => item.id === activeGreenhouseId);
   const zones = greenhouse?.zones.filter((zone) => zone.status === "active") ?? [];
-  const zoneName = (zoneId?: string) => zones.find((zone) => zone.id === zoneId)?.name ?? "ยังไม่กำหนด";
-  const ResourceList = ({ title, icon, kind, items }: { title: string; icon: React.ReactNode; kind: "device" | "camera" | "sensor"; items: Array<{ id: string; name: string; zoneId?: string }> }) => <div className="rounded-xl border border-border/70"><div className="flex items-center justify-between gap-3 border-b border-border/70 p-3"><p className="flex items-center gap-2 text-sm font-medium">{icon}{title}</p><Button type="button" size="sm" variant="outline" onClick={() => onAddResource(kind)}><Plus className="size-3.5" aria-hidden="true" />เพิ่ม</Button></div><div className="divide-y">{items.length ? items.map((item) => <div key={item.id} className="flex flex-col gap-2 p-3"><div className="flex items-center justify-between gap-2"><div><p className="text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.id} · {zoneName(item.zoneId)}</p></div><div className="flex gap-1"><Button type="button" variant="ghost" size="icon" aria-label={`แก้ไข ${item.name}`} onClick={() => { setEditing({ kind, id: item.id, name: item.name }); setName(item.name); }}><Pencil className="size-3.5" aria-hidden="true" /></Button><Button type="button" variant="ghost" size="icon" className="text-destructive hover:text-destructive" aria-label={`ลบ ${item.name}`} onClick={() => setDeleting({ kind, id: item.id, name: item.name })}><Trash2 className="size-3.5" aria-hidden="true" /></Button></div></div><Select value={item.zoneId ?? zones[0]?.id} onValueChange={(zoneId) => onMoveResource(kind, item.id, zoneId)}><SelectTrigger aria-label={`เลือกโซนของ ${item.name}`} className="h-9 w-full"><SelectValue placeholder="เลือกโซน" /></SelectTrigger><SelectContent>{zones.map((zone) => <SelectItem key={zone.id} value={zone.id}>{zone.name}</SelectItem>)}</SelectContent></Select></div>) : <p className="p-4 text-center text-sm text-muted-foreground">ยังไม่มีรายการ</p>}</div></div>;
+  const resourceGroups = useMemo(() => ({
+    device: devices.filter((item) => item.greenhouseId === activeGreenhouseId).map((item): ResourceListItem => ({ id: item.id, name: item.name, kind: "device", zoneId: item.zoneId, enabled: item.active, status: item.active ? "enabled" : "disabled" })),
+    camera: cameras.filter((item) => item.greenhouseId === activeGreenhouseId).map((item): ResourceListItem => ({ id: item.id, name: item.name, kind: "camera", zoneId: item.zoneId, enabled: item.enabled, status: item.status })),
+    sensor: sensors.filter((item) => item.greenhouseId === activeGreenhouseId).map((item): ResourceListItem => ({ id: item.id, name: item.name, kind: "sensor", zoneId: item.zoneId, enabled: item.status === "online", status: item.status })),
+  }), [activeGreenhouseId, cameras, devices, sensors]);
+  const defaultEditorValue = (kind: ResourceKind): ResourceEditorValue => ({ kind, name: "", zoneId: zones[0]?.id ?? "", enabled: kind !== "device", status: kind === "sensor" || kind === "camera" ? "online" : "disabled" });
+  const editorValue = editing ? { kind: editing.kind, name: editing.name, zoneId: editing.zoneId ?? zones[0]?.id ?? "", enabled: editing.enabled, status: editing.status } : defaultEditorValue(creatingKind ?? "device");
+  const submitEditor = (value: ResourceEditorValue) => {
+    if (editing) {
+      if (editing.name !== value.name) onRenameResource(editing.kind, editing.id, value.name);
+      if (editing.zoneId !== value.zoneId) onMoveResource(editing.kind, editing.id, value.zoneId);
+      if (editing.enabled !== value.enabled || editing.status !== value.status) onUpdateResourceStatus(editing.kind, editing.id, value);
+      setEditing(null);
+      return;
+    }
+    onCreateResource(value);
+    setCreatingKind(null);
+  };
+
   return <><SettingSection icon={<Cpu className="size-5" aria-hidden="true" />} title="ทรัพยากรในโรงเรือน" description="ผูกอุปกรณ์ กล้อง และเซ็นเซอร์กับโซนของโรงเรือนที่กำลังเลือกอยู่">
-    {!zones.length ? <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">เพิ่มโซนก่อน แล้วจึงผูกอุปกรณ์ กล้อง หรือเซ็นเซอร์ได้</p> : <div className="grid gap-4 xl:grid-cols-3"><ResourceList title="อุปกรณ์" icon={<Cpu className="size-4 text-primary" />} kind="device" items={devices.filter((item) => item.greenhouseId === activeGreenhouseId)} /><ResourceList title="กล้อง" icon={<Camera className="size-4 text-primary" />} kind="camera" items={cameras.filter((item) => item.greenhouseId === activeGreenhouseId)} /><ResourceList title="เซ็นเซอร์" icon={<Radio className="size-4 text-primary" />} kind="sensor" items={sensors.filter((item) => item.greenhouseId === activeGreenhouseId)} /></div>}
-  </SettingSection><Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}><DialogContent><DialogHeader><DialogTitle>แก้ไขชื่อทรัพยากร</DialogTitle><DialogDescription>ชื่อนี้ใช้แสดงในหน้าควบคุมและการตั้งค่าของโรงเรือน</DialogDescription></DialogHeader><div className="space-y-2 py-2"><Label htmlFor="resource-name">ชื่อ</Label><Input id="resource-name" value={name} onChange={(event) => setName(event.target.value)} autoFocus /></div><DialogFooter><Button type="button" variant="outline" onClick={() => setEditing(null)}>ยกเลิก</Button><Button type="button" disabled={!name.trim()} onClick={() => { if (!editing) return; onRenameResource(editing.kind, editing.id, name.trim()); setEditing(null); }}>บันทึกชื่อ</Button></DialogFooter></DialogContent></Dialog><Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}><DialogContent><DialogHeader><DialogTitle>ลบทรัพยากร?</DialogTitle><DialogDescription>{deleting ? `จะลบ “${deleting.name}” ออกจากโรงเรือน ข้อมูลนี้เรียกคืนจากหน้านี้ไม่ได้` : ""}</DialogDescription></DialogHeader><DialogFooter><Button type="button" variant="outline" onClick={() => setDeleting(null)}>ยกเลิก</Button><Button type="button" variant="destructive" onClick={() => { if (!deleting) return; onDeleteResource(deleting.kind, deleting.id); setDeleting(null); }}>ลบถาวร</Button></DialogFooter></DialogContent></Dialog></>;
+    {!zones.length ? <p className="mb-4 rounded-lg bg-muted p-4 text-sm text-muted-foreground">เพิ่มโซนก่อน แล้วจึงผูกอุปกรณ์ กล้อง หรือเซ็นเซอร์ได้</p> : null}
+    <div className="grid gap-4 xl:grid-cols-3">{(["device", "camera", "sensor"] as ResourceKind[]).map((kind) => <ResourceList key={kind} kind={kind} resources={resourceGroups[kind]} zones={zones} onCreate={setCreatingKind} onEdit={setEditing} onDelete={setDeleting} />)}</div>
+  </SettingSection>
+  <ResourceEditorDialog open={Boolean(editing || creatingKind)} mode={editing ? "edit" : "create"} zones={zones} initialValue={editorValue} onOpenChange={(open) => { if (!open) { setEditing(null); setCreatingKind(null); } }} onSubmit={submitEditor} />
+  <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}><DialogContent><DialogHeader><DialogTitle>ลบทรัพยากร?</DialogTitle><DialogDescription>{deleting ? `จะลบ “${deleting.name}” ออกจากโรงเรือน ข้อมูลนี้เรียกคืนจากหน้านี้ไม่ได้` : ""}</DialogDescription></DialogHeader><DialogFooter><Button type="button" variant="outline" onClick={() => setDeleting(null)}>ยกเลิก</Button><Button type="button" variant="destructive" onClick={() => { if (!deleting) return; onDeleteResource(deleting.kind, deleting.id); setDeleting(null); }}>ลบถาวร</Button></DialogFooter></DialogContent></Dialog>
+  </>;
 }
 
-export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, devices, sensors, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch, onAddResource, onMoveResource, onRenameResource, onDeleteResource }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; devices: DemoDevice[]; sensors: DemoSensor[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void; onAddResource: (kind: "device" | "camera" | "sensor") => void; onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void; onRenameResource: (kind: "device" | "camera" | "sensor", id: string, name: string) => void; onDeleteResource: (kind: "device" | "camera" | "sensor", id: string) => void }) {
+export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, devices, sensors, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch, onCreateResource, onMoveResource, onRenameResource, onUpdateResourceStatus, onDeleteResource }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; devices: DemoDevice[]; sensors: DemoSensor[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void; onCreateResource: (value: ResourceEditorValue) => void; onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void; onRenameResource: (kind: "device" | "camera" | "sensor", id: string, name: string) => void; onUpdateResourceStatus: (kind: "device" | "camera" | "sensor", id: string, value: Pick<ResourceEditorValue, "enabled" | "status">) => void; onDeleteResource: (kind: "device" | "camera" | "sensor", id: string) => void }) {
   const [draft, setDraft] = useState(settings);
   const [error, setError] = useState("");
   const [prevSettings, setPrevSettings] = useState(settings);
-  if (settings !== prevSettings) { setDraft(settings); setPrevSettings(settings); }
+  if (settings !== prevSettings) {
+    const hasUnsavedSettingsChanges = JSON.stringify(draft) !== JSON.stringify(prevSettings);
+    setDraft(hasUnsavedSettingsChanges ? { ...draft, cameras: settings.cameras } : settings);
+    setPrevSettings(settings);
+  }
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(settings), [draft, settings]);
   const update = <K extends keyof DemoSettings>(key: K, value: DemoSettings[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const save = () => { const message = validateDemoSettings(draft); if (message) { setError(message); return; } setError(""); onSave(draft); };
@@ -211,7 +141,7 @@ export function SettingsView({ settings, greenhouses, cropBatches, activeGreenho
   return <div className="space-y-6">
     <FarmStructureSection greenhouses={greenhouses} onSaveGreenhouse={onSaveGreenhouse} onArchiveGreenhouse={onArchiveGreenhouse} onRestoreGreenhouse={onRestoreGreenhouse} onAddZone={onAddZone} onArchiveZone={onArchiveZone} onRestoreZone={onRestoreZone} />
     <CropBatchesSection greenhouses={greenhouses} cropBatches={cropBatches} activeGreenhouseId={activeGreenhouseId} onSaveBatch={onSaveBatch} onArchiveBatch={onArchiveBatch} onRestoreBatch={onRestoreBatch} />
-    <ResourceBindingsSection greenhouses={greenhouses} activeGreenhouseId={activeGreenhouseId} devices={devices} cameras={settings.cameras} sensors={sensors} onAddResource={onAddResource} onMoveResource={onMoveResource} onRenameResource={onRenameResource} onDeleteResource={onDeleteResource} />
+    <ResourceBindingsSection greenhouses={greenhouses} activeGreenhouseId={activeGreenhouseId} devices={devices} cameras={settings.cameras} sensors={sensors} onCreateResource={onCreateResource} onMoveResource={onMoveResource} onRenameResource={onRenameResource} onUpdateResourceStatus={onUpdateResourceStatus} onDeleteResource={onDeleteResource} />
     <SettingSection icon={<Settings2 className="size-5" aria-hidden="true" />} title="ค่าเป้าหมายสภาพแวดล้อม" description="ใช้กับการควบคุมอัตโนมัติและคำเตือนในเดโม">
       <div className="grid gap-4 md:grid-cols-2"><NumberField id="minTemperature" label="อุณหภูมิต่ำสุด" unit="°C" value={draft.minTemperature} onChange={(value) => update("minTemperature", value)} /><NumberField id="maxTemperature" label="อุณหภูมิสูงสุด" unit="°C" value={draft.maxTemperature} onChange={(value) => update("maxTemperature", value)} /><NumberField id="minHumidity" label="ความชื้นอากาศต่ำสุด" unit="%" value={draft.minHumidity} onChange={(value) => update("minHumidity", value)} /><NumberField id="minSoilMoisture" label="ความชื้นดินต่ำสุด" unit="%" value={draft.minSoilMoisture} onChange={(value) => update("minSoilMoisture", value)} /></div>
     </SettingSection>

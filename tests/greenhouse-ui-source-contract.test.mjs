@@ -30,8 +30,9 @@ test("keeps evidence, detail, and analytics contracts in the page views", async 
   assert.match(plants, /useIsMobile/);
   assert.match(plants, /Sheet/);
   assert.match(plants, /aria-current/);
-  assert.match(ai, /ความมั่นใจของโมเดล/);
+  assert.match(ai, /ยังไม่มีภาพที่บันทึก/);
   assert.match(ai, /ขั้นตอนถัดไป/);
+  assert.doesNotMatch(ai, /CAM-A-01/);
   assert.match(analytics, /SoilMoistureChart/);
   assert.match(analytics, /เลือกช่วงเวลาของกราฟ/);
 });
@@ -43,29 +44,91 @@ test("keeps safe controls and persisted operational page contracts", async () =>
     readFile(new URL("../components/greenhouse/views/settings-view.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(devices, /aria-describedby="device-demo-note"/);
+  assert.match(devices, /aria-describedby="device-command-note"/);
   assert.match(devices, /pendingDeviceId/);
-  assert.match(devices, /disabled=\{!online \|\| Boolean\(pendingDeviceId\)\}/);
+  assert.match(devices, /disabled=\{Boolean\(pendingDeviceId\)\}/);
+  assert.match(devices, /ยังไม่มีประวัติคำสั่งที่บันทึกไว้/);
+  assert.doesNotMatch(devices, /\["07:42", "07:30", "07:00"\]/);
+  assert.doesNotMatch(devices, /ข้อมูลตัวอย่าง/);
+  assert.doesNotMatch(devices, /สุขภาพอุปกรณ์/);
   assert.match(alerts, /filterAlerts/);
   assert.match(alerts, /รับทราบ|ดำเนินการแล้ว/);
   assert.match(settings, /validateDemoSettings/);
   assert.match(settings, /ยกเลิกการแก้ไข/);
 });
 
-test("keeps live status and decisions ahead of dashboard detail", async () => {
-  const source = await readFile(
-    new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url),
+test("keeps reusable resource editing and deliberate deletion in settings", async () => {
+  const [settings, app, editor] = await Promise.all([
+    readFile(new URL("../components/greenhouse/views/settings-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/settings/resource-editor-dialog.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(settings, /ResourceEditorDialog/);
+  assert.match(settings, /onCreateResource: \(value: ResourceEditorValue\) => void/);
+  assert.match(settings, /onCreateResource=\{onCreateResource\}/);
+  assert.match(settings, /onUpdateResourceStatus=\{onUpdateResourceStatus\}/);
+  assert.match(settings, /onUpdateResourceStatus\(editing\.kind, editing\.id, value\)/);
+  assert.match(settings, /onDeleteResource=\{onDeleteResource\}/);
+  assert.match(settings, /ลบทรัพยากร\?/);
+  assert.match(settings, /hasUnsavedSettingsChanges/);
+  assert.match(settings, /cameras: settings\.cameras/);
+  assert.match(settings, /<ResourceList key=\{kind\}/);
+  assert.match(editor, /ยังไม่มีโซนที่ใช้งานอยู่ กรุณาเพิ่มโซนก่อนผูกทรัพยากร/);
+  assert.match(editor, /disabled=\{!canBind\}/);
+  assert.doesNotMatch(settings, /pendingCreate|knownIds/);
+  assert.match(app, /onCreateResource=\{\(value\) => \{/);
+  assert.match(app, /return createResource\(current,/);
+  assert.match(app, /onUpdateResourceStatus=\{\(kind, id, \{ enabled, status \}\) => \{/);
+  assert.match(app, /item\.greenhouseId === activeGreenhouse\.id/);
+  assert.match(app, /item\.id === id && item\.greenhouseId === activeGreenhouse\.id \? \{ \.\.\.item, zoneId/);
+  assert.match(app, /item\.id === id && item\.greenhouseId === activeGreenhouse\.id \? \{ \.\.\.item, name \}/);
+  assert.match(app, /item\.id !== id \|\| item\.greenhouseId !== activeGreenhouse\.id/);
+  assert.match(app, /active: enabled/);
+  assert.match(app, /enabled, status: status === "online" \? "online" : "offline"/);
+});
+
+test("keeps truthful configured status and decisions ahead of dashboard detail", async () => {
+  const [source, app, ai] = await Promise.all([
+    readFile(new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/ai-detection-view.tsx", import.meta.url), "utf8"),
+  ]);
+
+  const configuredIndex = source.indexOf("ตั้งค่าทรัพยากรแล้ว · รอข้อมูลบันทึก");
+  const workIndex = source.indexOf("งานที่ต้องจัดการ");
+  const noReadingsIndex = source.lastIndexOf("ยังไม่มีค่าความชื้นดินที่บันทึก");
+  assert.ok(configuredIndex >= 0);
+  assert.ok(workIndex > configuredIndex);
+  assert.ok(noReadingsIndex > configuredIndex);
+  assert.match(source, /ยังไม่มีเหตุการณ์หรือค่าที่บันทึกไว้/);
+  assert.match(source, /ตั้งค่าให้เปิด/);
+  assert.doesNotMatch(source, /อุปกรณ์ออนไลน์/);
+  assert.doesNotMatch(source, /LIVE/);
+  assert.match(source, /สถานะทรัพยากรสำคัญ/);
+  assert.match(source, /context: GreenhouseContext/);
+  assert.match(source, /const activeCamera = context\.cameras\.find/);
+  assert.match(source, /activeCamera \? activeCamera\.name : "ยังไม่มีกล้องในโรงเรือนนี้"/);
+  assert.doesNotMatch(source, /ภาพสดจากกล้องจำลอง 01/);
+  assert.match(source, /ยังไม่มีเวลาซิงก์ที่บันทึก/);
+  assert.doesNotMatch(source, /dashboard-device-demo-note|คำสั่งเดโม/);
+  assert.match(app, /!activeGreenhouse && activePage !== "settings"/);
+  assert.match(app, /ระบบจะไม่แสดงข้อมูลจากโรงเรือนอื่นแทน/);
+  assert.match(app, /greenhouse\.id === activeGreenhouseId && greenhouse\.status === "active"/);
+  assert.doesNotMatch(app, /\?\? state\.greenhouses\.find\(\(greenhouse\) => greenhouse\.status === "active"\)/);
+  assert.doesNotMatch(app, /demoInitialState\.greenhouses\[0\]|07:42|ข้อมูลเดโม|เดโมตอบรับ|รายงาน CSV เดโม/);
+  assert.doesNotMatch(ai, /ระบบเดโม/);
+});
+
+test("keeps analytics plant filtering compatible with the plant data model", async () => {
+  const analytics = await readFile(
+    new URL("../components/greenhouse/views/analytics-view.tsx", import.meta.url),
     "utf8",
   );
 
-  const liveIndex = source.indexOf("ระบบทำงานปกติ");
-  const workIndex = source.indexOf("งานที่ต้องจัดการ");
-  const chartIndex = source.lastIndexOf("SoilMoistureChart");
-  assert.ok(liveIndex >= 0);
-  assert.ok(workIndex > liveIndex);
-  assert.ok(chartIndex > liveIndex);
-  assert.match(source, /สถานะทรัพยากรสำคัญ/);
-  assert.match(source, /ภาพสดจากกล้องจำลอง 01/);
+  assert.match(analytics, /context\.cropBatches\.find\(\(item\) => item\.id === plant\.batchId\)/);
+  assert.match(analytics, /batch \? batch\.zoneId === selectedZone\.id : plant\.zone === selectedZone\.name/);
+  assert.doesNotMatch(analytics, /plant\.zoneId/);
 });
 
 test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", async () => {

@@ -152,7 +152,6 @@ function isState(value: unknown): value is DemoState {
   return (
     state.version === 1 &&
     Array.isArray(state.devices) &&
-    state.devices.length > 0 &&
     state.devices.every(validDevice) &&
     Array.isArray(state.plants) &&
     state.plants.length > 0 &&
@@ -174,15 +173,15 @@ function isState(value: unknown): value is DemoState {
 function cloneInitial(): DemoState { return structuredClone(demoInitialState); }
 
 function upgradeState(state: DemoState): DemoState {
-  const defaults = cloneInitial().settings;
-  const defaultGreenhouses = cloneInitial().greenhouses;
+  const defaultState = cloneInitial();
+  const defaults = defaultState.settings;
+  const defaultGreenhouses = defaultState.greenhouses;
   const saved = state.settings as Partial<DemoSettings>;
   const isRecord = (item: unknown): item is Record<string, unknown> =>
     !!item && typeof item === "object";
   const savedGreenhouses = (state as Partial<DemoState>).greenhouses;
   const savedCropBatches = (state as Partial<DemoState>).cropBatches;
-  const savedSensors = (state as Partial<DemoState>).sensors;
-  const greenhouses = Array.isArray(savedGreenhouses) && savedGreenhouses.length > 0
+  const savedGreenhouseList = Array.isArray(savedGreenhouses) && savedGreenhouses.length > 0
     ? savedGreenhouses.filter((greenhouse): greenhouse is DemoGreenhouse =>
       isRecord(greenhouse) &&
       typeof greenhouse.id === "string" &&
@@ -190,6 +189,7 @@ function upgradeState(state: DemoState): DemoState {
       typeof greenhouse.code === "string" &&
       ["active", "archived"].includes(String(greenhouse.status)) &&
       Array.isArray(greenhouse.zones) &&
+      greenhouse.zones.length > 0 &&
       greenhouse.zones.every((zone) =>
         isRecord(zone) &&
         typeof zone.id === "string" &&
@@ -198,25 +198,94 @@ function upgradeState(state: DemoState): DemoState {
       ),
     )
     : defaultGreenhouses;
+  const greenhouses = savedGreenhouseList.length > 0
+    ? savedGreenhouseList
+    : defaultGreenhouses;
+  const primaryGreenhouse = greenhouses.find((greenhouse) => greenhouse.zones.length > 0)
+    ?? defaultGreenhouses[0]!;
+  const primaryZone = primaryGreenhouse.zones[0] ?? defaultGreenhouses[0]!.zones[0]!;
+  const resolveBinding = (resource: { greenhouseId?: unknown; zoneId?: unknown }) => {
+    const savedGreenhouse = typeof resource.greenhouseId === "string"
+      ? greenhouses.find((candidate) => candidate.id === resource.greenhouseId)
+      : undefined;
+    const greenhouse = savedGreenhouse ?? primaryGreenhouse;
+    const savedZone = typeof resource.zoneId === "string"
+      ? greenhouse.zones.find((candidate) => candidate.id === resource.zoneId)
+      : undefined;
+    const zone = savedZone ?? greenhouse.zones[0] ?? primaryZone;
+    return {
+      greenhouseId: greenhouse.id,
+      zoneId: zone.id,
+      zoneName: zone.name,
+      preserved: Boolean(savedGreenhouse && savedZone),
+    };
+  };
+  const normalizeDevice = (device: DemoDevice): DemoDevice => {
+    const binding = resolveBinding(device);
+    return { ...device, greenhouseId: binding.greenhouseId, zoneId: binding.zoneId };
+  };
+  const normalizeCamera = (camera: DemoCamera): DemoCamera => {
+    const binding = resolveBinding(camera);
+    return {
+      ...camera,
+      greenhouseId: binding.greenhouseId,
+      zoneId: binding.zoneId,
+      zone: binding.preserved ? camera.zone : binding.zoneName,
+    };
+  };
+  const normalizeSensor = (sensor: DemoSensor): DemoSensor => {
+    const binding = resolveBinding(sensor);
+    return { ...sensor, greenhouseId: binding.greenhouseId, zoneId: binding.zoneId };
+  };
   const cropBatches = Array.isArray(savedCropBatches)
-    ? savedCropBatches.filter((batch): batch is DemoCropBatch =>
-      isRecord(batch) && typeof batch.id === "string" && typeof batch.greenhouseId === "string" &&
-      typeof batch.zoneId === "string" && typeof batch.cropName === "string" && typeof batch.cultivar === "string" &&
-      typeof batch.plantCount === "number" && typeof batch.plantedAt === "string" &&
-      ["active", "harvested", "archived"].includes(String(batch.status)),
-    )
-    : cloneInitial().cropBatches;
-  const sensors = Array.isArray(savedSensors)
-    ? savedSensors.filter((sensor): sensor is DemoSensor => isRecord(sensor) && typeof sensor.id === "string" && typeof sensor.name === "string" && typeof sensor.greenhouseId === "string" && typeof sensor.zoneId === "string" && ["soilMoisture", "temperature", "humidity"].includes(String(sensor.metric)) && ["online", "offline"].includes(String(sensor.status)))
-    : cloneInitial().sensors;
+    ? savedCropBatches.filter((batch): batch is DemoCropBatch => {
+      if (
+        !isRecord(batch) || typeof batch.id !== "string" || typeof batch.greenhouseId !== "string" ||
+        typeof batch.zoneId !== "string" || typeof batch.cropName !== "string" || typeof batch.cultivar !== "string" ||
+        typeof batch.plantCount !== "number" || typeof batch.plantedAt !== "string" ||
+        !["active", "harvested", "archived"].includes(String(batch.status))
+      ) return false;
+      const greenhouse = greenhouses.find((candidate) => candidate.id === batch.greenhouseId);
+      return greenhouse?.zones.some((zone) => zone.id === batch.zoneId) ?? false;
+    })
+    : defaultState.cropBatches;
+  const validSensors = (items: unknown): items is DemoSensor[] =>
+    Array.isArray(items) &&
+    items.every((sensor) =>
+      isRecord(sensor) &&
+      typeof sensor.id === "string" &&
+      typeof sensor.name === "string" &&
+      typeof sensor.greenhouseId === "string" &&
+      typeof sensor.zoneId === "string" &&
+      ["soilMoisture", "temperature", "humidity"].includes(String(sensor.metric)) &&
+      ["online", "offline"].includes(String(sensor.status)),
+    );
+  const isValidCameras = (items: unknown): items is DemoCamera[] =>
+    Array.isArray(items) &&
+    items.every((camera) =>
+      isRecord(camera) && typeof camera.id === "string" && typeof camera.name === "string" &&
+      typeof camera.zone === "string" && ["IP camera", "USB gateway"].includes(String(camera.source)) &&
+      ["online", "offline"].includes(String(camera.status)) && typeof camera.captureInterval === "string" &&
+      typeof camera.enabled === "boolean",
+    );
   return {
     ...state,
-    devices: state.devices.map((device) => ({ ...device, greenhouseId: device.greenhouseId ?? "GH-01", zoneId: device.zoneId ?? "ZONE-A" })),
-    plants: state.plants.map((plant) => ({ ...plant, greenhouseId: plant.greenhouseId ?? "GH-01" })),
-    alerts: state.alerts.map((alert) => ({ ...alert, greenhouseId: alert.greenhouseId ?? "GH-01" })),
-    greenhouses: greenhouses.length > 0 ? greenhouses : defaultGreenhouses,
+    devices: state.devices.map(normalizeDevice),
+    plants: state.plants.map((plant) => ({
+      ...plant,
+      greenhouseId: typeof plant.greenhouseId === "string" && greenhouses.some((greenhouse) => greenhouse.id === plant.greenhouseId)
+        ? plant.greenhouseId
+        : primaryGreenhouse.id,
+    })),
+    alerts: state.alerts.map((alert) => ({
+      ...alert,
+      greenhouseId: typeof alert.greenhouseId === "string" && greenhouses.some((greenhouse) => greenhouse.id === alert.greenhouseId)
+        ? alert.greenhouseId
+        : primaryGreenhouse.id,
+    })),
+    greenhouses,
     cropBatches,
-    sensors,
+    sensors: (validSensors(state.sensors) ? state.sensors : defaultState.sensors).map(normalizeSensor),
     aiReviewedEvidence: state.aiReviewedEvidence ?? {},
     settings: {
       ...defaults,
@@ -225,14 +294,9 @@ function upgradeState(state: DemoState): DemoState {
       schedules: { ...defaults.schedules, ...saved.schedules },
       notifications: { ...defaults.notifications, ...saved.notifications },
       ai: { ...defaults.ai, ...saved.ai },
-      cameras: Array.isArray(saved.cameras) && saved.cameras.length > 0
-        ? saved.cameras.filter((camera): camera is DemoCamera =>
-          isRecord(camera) && typeof camera.id === "string" && typeof camera.name === "string" &&
-          typeof camera.zone === "string" && ["IP camera", "USB gateway"].includes(String(camera.source)) &&
-          ["online", "offline"].includes(String(camera.status)) && typeof camera.captureInterval === "string" &&
-          typeof camera.enabled === "boolean",
-        ).map((camera) => ({ ...camera, greenhouseId: camera.greenhouseId ?? "GH-01", zoneId: camera.zoneId ?? "ZONE-A" }))
-        : defaults.cameras,
+      cameras: isValidCameras(saved.cameras)
+        ? saved.cameras.map(normalizeCamera)
+        : defaults.cameras.map(normalizeCamera),
     },
   };
 }

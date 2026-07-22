@@ -8,7 +8,6 @@ import {
   filterPlants,
   navigationItems,
   pageMetadata,
-  soilMoistureSeries,
 } from "../lib/greenhouse-presentation.ts";
 
 test("publishes the seven approved pages in operational order", () => {
@@ -27,7 +26,39 @@ test("derives the command-deck summary from demo state", () => {
   assert.equal(view.openAlerts, 2);
   assert.equal(view.workItems.length, 2);
   assert.equal(view.workItems[0]?.severity, "critical");
-  assert.equal(view.resourceRows.some((row) => row.id === "TOM-003"), true);
+  assert.equal(view.hasRecordedActivity, true);
+  assert.equal(view.resourceRows.some((row) => row.id === "leaf-spot"), true);
+});
+
+test("keeps dashboard metrics honest for a selected greenhouse with no operational data", () => {
+  const emptyGreenhouseState = {
+    ...structuredClone(demoInitialState),
+    devices: [],
+    plants: [],
+    alerts: [],
+    sensors: [],
+    settings: { ...structuredClone(demoInitialState.settings), cameras: [] },
+  };
+  const view = buildDashboardViewModel(emptyGreenhouseState);
+
+  assert.equal(view.hasOperationalData, false);
+  assert.equal(view.metrics.find((metric) => metric.id === "temperature")?.value, "—");
+  assert.equal(view.metrics.find((metric) => metric.id === "humidity")?.value, "—");
+  assert.deepEqual(view.resourceRows, []);
+});
+
+test("uses neutral setup state instead of fabricated device activity without recorded events", () => {
+  const configuredWithoutRecords = {
+    ...structuredClone(demoInitialState),
+    alerts: [],
+  };
+  const view = buildDashboardViewModel(configuredWithoutRecords);
+
+  assert.equal(view.hasOperationalData, true);
+  assert.equal(view.hasRecordedActivity, false);
+  assert.equal(view.metrics.find((metric) => metric.id === "alerts")?.tone, "neutral");
+  assert.equal(view.metrics.find((metric) => metric.id === "alerts")?.note, "ยังไม่มีเหตุการณ์ที่บันทึก");
+  assert.deepEqual(view.resourceRows, []);
 });
 
 test("filters plants and alerts without mutating source state", () => {
@@ -41,11 +72,13 @@ test("filters plants and alerts without mutating source state", () => {
   assert.equal(demoInitialState.alerts[0]?.resolved, false);
 });
 
-test("describes the approved sampled soil-moisture series", () => {
-  const points = soilMoistureSeries["วันนี้"];
-  assert.equal(points.at(-1)?.value, 46);
+test("describes recorded soil-moisture data without requiring a demo series", () => {
+  const points = [
+    { timestamp: "2026-07-22T07:00:00+07:00", label: "07:00", value: 56 },
+    { timestamp: "2026-07-22T08:00:00+07:00", label: "08:00", value: 48 },
+  ];
   assert.equal(
     describeSoilMoistureTrend(points, 50),
-    "ความชื้นดินลดลงเหลือ 46% ต่ำกว่าเป้าหมาย 4%",
+    "ความชื้นดินลดลงเหลือ 48% ต่ำกว่าเป้าหมาย 2%",
   );
 });

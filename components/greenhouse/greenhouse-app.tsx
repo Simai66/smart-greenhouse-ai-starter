@@ -34,6 +34,7 @@ import {
   type DemoGreenhouse,
   type DemoState,
 } from "@/lib/greenhouse-demo-store";
+import { createResource, deleteZone, selectGreenhouseContext } from "@/lib/greenhouse-domain";
 import {
   buildDashboardViewModel,
   pageMetadata,
@@ -51,7 +52,7 @@ export function GreenhouseApp() {
   const [search, setSearch] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState("07:42 น.");
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [online, setOnline] = useState(true);
   const [dataStale, setDataStale] = useState(false);
@@ -92,8 +93,8 @@ export function GreenhouseApp() {
         staleTimer.current = window.setTimeout(() => setDataStale(true), 300_000);
       }
       setReady(true);
-      if (result.recovered) notify("ข้อมูลเดโมไม่สมบูรณ์ จึงรีเซ็ตข้อมูลตัวอย่างแล้ว", "info");
-      if (!result.storageAvailable) notify("บันทึกข้อมูลเดโมไม่ได้ การเปลี่ยนแปลงจะอยู่ในหน่วยความจำ", "error");
+      if (result.recovered) notify("ข้อมูลที่บันทึกไม่สมบูรณ์ จึงกู้คืนค่าเริ่มต้นแล้ว", "info");
+      if (!result.storageAvailable) notify("บันทึกการตั้งค่าในเครื่องไม่ได้ การเปลี่ยนแปลงจะอยู่ในหน่วยความจำ", "error");
     });
     return () => {
       active = false;
@@ -112,19 +113,22 @@ export function GreenhouseApp() {
   }, [ready, state]);
 
   const activeGreenhouse = useMemo(
-    () => state.greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId && greenhouse.status === "active") ?? state.greenhouses.find((greenhouse) => greenhouse.status === "active") ?? demoInitialState.greenhouses[0]!,
+    () => state.greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId && greenhouse.status === "active"),
     [activeGreenhouseId, state.greenhouses],
+  );
+  const greenhouseContext = useMemo(
+    () => selectGreenhouseContext(state, activeGreenhouse?.id ?? ""),
+    [activeGreenhouse?.id, state],
   );
   const greenhouseState = useMemo(() => ({
     ...state,
-    devices: state.devices.filter((device) => (device.greenhouseId ?? "GH-01") === activeGreenhouse.id),
-    plants: state.plants.filter((plant) => (plant.greenhouseId ?? "GH-01") === activeGreenhouse.id),
-    alerts: state.alerts.filter((alert) => (alert.greenhouseId ?? "GH-01") === activeGreenhouse.id),
-    settings: {
-      ...state.settings,
-      cameras: state.settings.cameras.filter((camera) => (camera.greenhouseId ?? "GH-01") === activeGreenhouse.id),
-    },
-  }), [activeGreenhouse.id, state]);
+    devices: greenhouseContext.devices,
+    plants: greenhouseContext.plants,
+    alerts: greenhouseContext.alerts,
+    sensors: greenhouseContext.sensors,
+    cropBatches: greenhouseContext.cropBatches,
+    settings: { ...state.settings, cameras: greenhouseContext.cameras },
+  }), [greenhouseContext, state]);
   const dashboard = useMemo(() => buildDashboardViewModel(greenhouseState), [greenhouseState]);
   const openAlerts = dashboard.openAlerts;
   const searchResults = useMemo(
@@ -178,18 +182,16 @@ export function GreenhouseApp() {
     setRefreshing(false);
     notify(
       result.recovered
-        ? "รีเซ็ตข้อมูลเดโมที่ไม่สมบูรณ์แล้ว"
-        : "โหลดข้อมูลเดโมล่าสุดแล้ว",
+        ? "รีเซ็ตข้อมูลที่บันทึกไม่สมบูรณ์แล้ว"
+        : "โหลดการตั้งค่าที่บันทึกล่าสุดแล้ว",
       "info",
     );
   };
 
   const exportCsv = () => {
-    const sensorRows = [
-      ["อุณหภูมิ", "24.8", "°C"],
-      ["ความชื้นอากาศ", "68", "%"],
-      ["ความชื้นดินโซน A", "46", "%"],
-    ] as const;
+    const sensorRows = greenhouseContext.sensors.length
+      ? greenhouseContext.sensors.map((sensor) => [sensor.name, "ไม่มีค่าที่บันทึก", "—"] as const)
+      : [["ไม่มีเซ็นเซอร์ในโรงเรือนที่เลือก", "ไม่มีข้อมูล", "—"] as const];
     const csv = createDemoCsv(
       greenhouseState,
       sensorRows,
@@ -200,10 +202,10 @@ export function GreenhouseApp() {
     );
     const link = document.createElement("a");
     link.href = url;
-    link.download = "smart-greenhouse-demo-report.csv";
+    link.download = "smart-greenhouse-report.csv";
     link.click();
     URL.revokeObjectURL(url);
-    notify("ดาวน์โหลดรายงาน CSV เดโมแล้ว");
+    notify("ดาวน์โหลดรายงาน CSV แล้ว");
   };
 
   const confirmDeviceCommand = async () => {
@@ -225,7 +227,7 @@ export function GreenhouseApp() {
         pendingDevice.device.name +
           ": " +
           (pendingDevice.nextActive ? "เปิดแล้ว" : "ปิดแล้ว") +
-          " (เดโมตอบรับแล้ว)",
+          " (ระบบรับคำขอแล้ว)",
       );
       setPendingDevice(null);
     } catch (error) {
@@ -245,17 +247,20 @@ export function GreenhouseApp() {
     );
     notify(
       resolved
-        ? "บันทึกการดำเนินการเดโมแล้ว"
-        : "เปิดการแจ้งเตือนเดโมอีกครั้งแล้ว",
+        ? "บันทึกการดำเนินการแล้ว"
+        : "เปิดการแจ้งเตือนอีกครั้งแล้ว",
     );
   };
 
   const page = ready ? (
-    activePage === "dashboard" ? (
+    !activeGreenhouse && activePage !== "settings" ? (
+      <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center"><p className="font-semibold">ยังไม่มีโรงเรือนที่ใช้งาน</p><p className="max-w-md text-sm text-muted-foreground">เพิ่มโรงเรือนใหม่หรือเรียกคืนโรงเรือนที่เก็บไว้ก่อน ระบบจะไม่แสดงข้อมูลจากโรงเรือนอื่นแทน</p><Button onClick={() => navigate("settings")}>ไปที่ตั้งค่าโรงเรือน</Button></CardContent></Card>
+    ) : activePage === "dashboard" ? (
       <CommandDeckView
         viewModel={dashboard}
         devices={greenhouseState.devices}
         plants={greenhouseState.plants}
+        context={greenhouseContext}
         period={period}
         lastUpdated={lastUpdated}
         pendingDeviceId={pendingDevice?.device.id ?? null}
@@ -268,7 +273,7 @@ export function GreenhouseApp() {
     ) : activePage === "plants" ? (
       <PlantsView
         plants={greenhouseState.plants}
-        cropBatches={state.cropBatches.filter((batch) => batch.greenhouseId === activeGreenhouse.id)}
+        cropBatches={greenhouseContext.cropBatches}
         selectedPlantId={selectedPlantId}
         onSelectPlant={setSelectedPlantId}
         onInspectPlant={(plantId) => { setSelectedPlantId(plantId); navigate("ai"); }}
@@ -291,19 +296,20 @@ export function GreenhouseApp() {
               ])),
             },
           }));
-          notify("บันทึกผลตรวจเดโมแล้ว การแจ้งเตือนยังคงเปิดอยู่");
+          notify("บันทึกผลตรวจแล้ว การแจ้งเตือนยังคงเปิดอยู่");
         }}
       />
       ) : <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center"><p className="font-semibold">ยังไม่มีพืชสำหรับตรวจด้วย AI</p><p className="max-w-md text-sm text-muted-foreground">เพิ่มรอบปลูกและข้อมูลพืชของ {activeGreenhouse.name} ก่อน แล้วจึงเริ่มตรวจหลักฐานจากกล้องได้</p><Button variant="outline" onClick={() => navigate("settings")}>ไปที่ตั้งค่า</Button></CardContent></Card>
     ) : activePage === "devices" ? (
       <DevicesView
         devices={greenhouseState.devices}
+        context={greenhouseContext}
         pendingDeviceId={pendingDevice?.device.id ?? null}
         online={online}
         onRequest={(device) => setPendingDevice({ device, nextActive: !device.active })}
       />
     ) : activePage === "analytics" ? (
-      <AnalyticsView period={period} onPeriodChange={setPeriod} />
+      <AnalyticsView period={period} onPeriodChange={setPeriod} context={greenhouseContext} />
     ) : activePage === "alerts" ? (
       <AlertsView alerts={greenhouseState.alerts} onOpen={setSelectedAlert} />
     ) : (
@@ -311,12 +317,12 @@ export function GreenhouseApp() {
         settings={state.settings}
         greenhouses={state.greenhouses}
         cropBatches={state.cropBatches}
-        activeGreenhouseId={activeGreenhouse.id}
+        activeGreenhouseId={activeGreenhouse?.id ?? ""}
         devices={state.devices}
         sensors={state.sensors}
         onSave={(settings) => {
           setState((current) => ({ ...current, settings }));
-          notify("บันทึกการตั้งค่าเดโมแล้ว");
+          notify("บันทึกการตั้งค่าแล้ว");
         }}
         onSaveGreenhouse={(id, draft) => {
           setState((current) => {
@@ -375,20 +381,16 @@ export function GreenhouseApp() {
           notify(`เพิ่ม ${name} แล้ว`);
         }}
         onArchiveZone={(greenhouseId, zoneId) => {
-          setState((current) => ({
-            ...current,
-            greenhouses: current.greenhouses.map((greenhouse) =>
-              greenhouse.id === greenhouseId
-                ? {
-                    ...greenhouse,
-                    zones: greenhouse.zones.map((zone) =>
-                      zone.id === zoneId ? { ...zone, status: "archived" } : zone,
-                    ),
-                  }
-                : greenhouse,
-            ),
-          }));
-          notify("เก็บโซนถาวรแล้ว", "info");
+          try {
+            const nextState = deleteZone(state, { greenhouseId, zoneId });
+            setState(nextState);
+            notify("เก็บโซนถาวรแล้ว", "info");
+          } catch (error) {
+            notify(
+              error instanceof Error ? error.message : "ไม่สามารถเก็บโซนได้",
+              "error",
+            );
+          }
         }}
         onRestoreZone={(greenhouseId, zoneId) => {
           setState((current) => ({
@@ -453,40 +455,89 @@ export function GreenhouseApp() {
           setState((current) => ({ ...current, cropBatches: current.cropBatches.map((batch) => batch.id === id ? { ...batch, status: "active" } : batch) }));
           notify("เรียกคืนรอบปลูกแล้ว");
         }}
-        onAddResource={(kind) => {
-          const zoneId = activeGreenhouse.zones.find((zone) => zone.status === "active")?.id;
-          const zoneName = activeGreenhouse.zones.find((zone) => zone.id === zoneId)?.name ?? "โซนใหม่";
-          if (!zoneId) { notify("กรุณาเพิ่มโซนก่อนเพิ่มทรัพยากร", "error"); return; }
-          const suffix = crypto.randomUUID().slice(0, 5).toUpperCase();
+        onCreateResource={(value) => {
+          if (!activeGreenhouse) { notify("เพิ่มโรงเรือนก่อนจึงจะผูกทรัพยากรได้", "error"); return; }
+          const zone = activeGreenhouse.zones.find((item) => item.id === value.zoneId && item.status === "active");
+          if (!zone) { notify("กรุณาเลือกโซนที่กำลังใช้งานก่อนเพิ่มทรัพยากร", "error"); return; }
           setState((current) => {
-            if (kind === "device") return { ...current, devices: [...current.devices, { id: `DEVICE-${suffix}`, name: "อุปกรณ์ใหม่", detail: `ผูกกับ ${zoneName}`, icon: "pump", active: false, greenhouseId: activeGreenhouse.id, zoneId }] };
-            if (kind === "sensor") return { ...current, sensors: [...current.sensors, { id: `SENSOR-${suffix}`, name: "เซ็นเซอร์ดินใหม่", metric: "soilMoisture", greenhouseId: activeGreenhouse.id, zoneId, status: "online" }] };
-            return { ...current, settings: { ...current.settings, cameras: [...current.settings.cameras, { id: `CAM-${suffix}`, name: "กล้องใหม่", zone: zoneName, source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: activeGreenhouse.id, zoneId }] } };
+            if (value.kind === "device") {
+              return createResource(current, {
+                kind: "device",
+                name: value.name,
+                greenhouseId: activeGreenhouse.id,
+                zoneId: value.zoneId,
+                deviceKind: "pump",
+                detail: `ผูกกับ ${zone.name}`,
+                active: value.enabled,
+              });
+            }
+            if (value.kind === "sensor") {
+              return createResource(current, {
+                kind: "sensor",
+                name: value.name,
+                greenhouseId: activeGreenhouse.id,
+                zoneId: value.zoneId,
+                metric: "soilMoisture",
+                status: value.enabled ? "online" : "offline",
+              });
+            }
+            return createResource(current, {
+              kind: "camera",
+              name: value.name,
+              greenhouseId: activeGreenhouse.id,
+              zoneId: value.zoneId,
+              source: "IP camera",
+              status: value.enabled ? "online" : "offline",
+              captureInterval: "15 นาที",
+              enabled: value.enabled,
+            });
           });
-          notify(kind === "device" ? "เพิ่มอุปกรณ์ใหม่แล้ว" : kind === "sensor" ? "เพิ่มเซ็นเซอร์ใหม่แล้ว" : "เพิ่มกล้องใหม่แล้ว");
+          notify(value.kind === "device" ? "เพิ่มอุปกรณ์ใหม่แล้ว" : value.kind === "sensor" ? "เพิ่มเซ็นเซอร์ใหม่แล้ว" : "เพิ่มกล้องใหม่แล้ว");
         }}
         onMoveResource={(kind, id, zoneId) => {
           const zoneName = activeGreenhouse.zones.find((zone) => zone.id === zoneId)?.name ?? "ไม่ระบุโซน";
           setState((current) => {
-            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id ? { ...item, greenhouseId: activeGreenhouse.id, zoneId, detail: `ผูกกับ ${zoneName}` } : item) };
-            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id ? { ...item, greenhouseId: activeGreenhouse.id, zoneId } : item) };
-            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id ? { ...item, greenhouseId: activeGreenhouse.id, zoneId, zone: zoneName } : item) } };
+            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, zoneId, detail: `ผูกกับ ${zoneName}` } : item) };
+            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, zoneId } : item) };
+            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, zoneId, zone: zoneName } : item) } };
           });
           notify(`ย้ายทรัพยากรไป${zoneName}แล้ว`);
         }}
         onRenameResource={(kind, id, name) => {
           setState((current) => {
-            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id ? { ...item, name } : item) };
-            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id ? { ...item, name } : item) };
-            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id ? { ...item, name } : item) } };
+            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, name } : item) };
+            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, name } : item) };
+            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, name } : item) } };
           });
           notify("แก้ไขชื่อทรัพยากรแล้ว");
         }}
+        onUpdateResourceStatus={(kind, id, { enabled, status }) => {
+          setState((current) => {
+            if (kind === "device") return {
+              ...current,
+              devices: current.devices.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, active: enabled } : item),
+            };
+            if (kind === "sensor") return {
+              ...current,
+              sensors: current.sensors.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, status: status === "online" ? "online" : "offline" } : item),
+            };
+            return {
+              ...current,
+              settings: {
+                ...current.settings,
+                cameras: current.settings.cameras.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id
+                  ? { ...item, enabled, status: status === "online" ? "online" : "offline" }
+                  : item),
+              },
+            };
+          });
+          notify("อัปเดตสถานะทรัพยากรแล้ว");
+        }}
         onDeleteResource={(kind, id) => {
           setState((current) => {
-            if (kind === "device") return { ...current, devices: current.devices.filter((item) => item.id !== id) };
-            if (kind === "sensor") return { ...current, sensors: current.sensors.filter((item) => item.id !== id) };
-            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.filter((item) => item.id !== id) } };
+            if (kind === "device") return { ...current, devices: current.devices.filter((item) => item.id !== id || item.greenhouseId !== activeGreenhouse.id) };
+            if (kind === "sensor") return { ...current, sensors: current.sensors.filter((item) => item.id !== id || item.greenhouseId !== activeGreenhouse.id) };
+            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.filter((item) => item.id !== id || item.greenhouseId !== activeGreenhouse.id) } };
           });
           if (pendingDevice?.device.id === id) setPendingDevice(null);
           notify("ลบทรัพยากรแล้ว", "info");
@@ -502,31 +553,31 @@ export function GreenhouseApp() {
       <a className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-3 focus:text-primary-foreground" href="#main-content">
         ข้ามไปยังเนื้อหาหลัก
       </a>
-      <AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={greenhouseState.devices.length} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
-      <SidebarInset>
-        <SiteHeader
-          pageTitle={pageMetadata[activePage].title}
-          openAlerts={openAlerts}
-          search={search}
-          searchIndex={searchIndex}
-          searchResults={searchResults}
-          onSearchChange={setSearch}
-          onSearchIndexChange={setSearchIndex}
-          onChooseSearch={chooseSearch}
-          onOpenMobileSearch={() => setMobileSearchOpen(true)}
-          onOpenAlerts={() => navigate("alerts")}
-          onNotify={(text) => notify(text, "info")}
-          greenhouses={state.greenhouses}
-          activeGreenhouseId={activeGreenhouse.id}
-          onGreenhouseChange={changeGreenhouse}
-        />
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[86rem] space-y-7 p-4 pb-12 sm:p-6 lg:px-8 lg:py-7">
-          <PageHeader metadata={pageMetadata[activePage]} greenhouse={activeGreenhouse} refreshing={refreshing} onExport={exportCsv} onRefresh={refresh} />
-          {!storageAvailable ? <MemoryOnlyNotice /> : null}
-          {!online ? <OfflineNotice lastUpdated={lastUpdated} /> : dataStale ? <StaleDataNotice lastUpdated={lastUpdated} onRefresh={refresh} /> : null}
-          {page}
-        </main>
-      </SidebarInset>
+      {activeGreenhouse ? <><AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={greenhouseState.devices.length} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
+        <SidebarInset>
+          <SiteHeader
+            pageTitle={pageMetadata[activePage].title}
+            openAlerts={openAlerts}
+            search={search}
+            searchIndex={searchIndex}
+            searchResults={searchResults}
+            onSearchChange={setSearch}
+            onSearchIndexChange={setSearchIndex}
+            onChooseSearch={chooseSearch}
+            onOpenMobileSearch={() => setMobileSearchOpen(true)}
+            onOpenAlerts={() => navigate("alerts")}
+            onNotify={(text) => notify(text, "info")}
+            greenhouses={state.greenhouses}
+            activeGreenhouseId={activeGreenhouse.id}
+            onGreenhouseChange={changeGreenhouse}
+          />
+          <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[86rem] space-y-7 p-4 pb-12 sm:p-6 lg:px-8 lg:py-7">
+            <PageHeader metadata={pageMetadata[activePage]} greenhouse={activeGreenhouse} refreshing={refreshing} onExport={exportCsv} onRefresh={refresh} />
+            {!storageAvailable ? <MemoryOnlyNotice /> : null}
+            {!online && lastUpdated ? <OfflineNotice lastUpdated={lastUpdated} /> : dataStale && lastUpdated ? <StaleDataNotice lastUpdated={lastUpdated} onRefresh={refresh} /> : null}
+            {page}
+          </main>
+        </SidebarInset></> : <SidebarInset><main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh w-full max-w-3xl items-center p-4 sm:p-6">{page}</main></SidebarInset>}
 
       <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
         <DialogContent className="top-4 translate-y-0 sm:top-1/2 sm:-translate-y-1/2">

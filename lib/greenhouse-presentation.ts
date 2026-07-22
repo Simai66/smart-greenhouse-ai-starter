@@ -49,13 +49,16 @@ export type WorkItem = {
 export type ResourceRow = {
   id: string;
   label: string;
-  kind: "พืช" | "อุปกรณ์" | "เซ็นเซอร์";
+  kind: "เหตุการณ์";
   status: string;
   tone: StatusTone;
   updated: string;
+  targetPage: GreenhousePageId;
 };
 
 export type DashboardViewModel = {
+  hasOperationalData: boolean;
+  hasRecordedActivity: boolean;
   healthScore: number;
   activeDevices: number;
   deviceCount: number;
@@ -110,53 +113,22 @@ export const pageMetadata: Record<GreenhousePageId, PageMetadata> = {
   },
 };
 
-export const soilMoistureSeries: Record<
-  ChartPeriod,
-  SoilMoisturePoint[]
-> = {
-  "วันนี้": [
-    { timestamp: "2026-07-21T00:00:00+07:00", label: "00:00", value: 62 },
-    { timestamp: "2026-07-21T04:00:00+07:00", label: "04:00", value: 64 },
-    { timestamp: "2026-07-21T08:00:00+07:00", label: "08:00", value: 59 },
-    { timestamp: "2026-07-21T12:00:00+07:00", label: "12:00", value: 55 },
-    { timestamp: "2026-07-21T16:00:00+07:00", label: "16:00", value: 52 },
-    { timestamp: "2026-07-21T20:00:00+07:00", label: "20:00", value: 48 },
-    { timestamp: "2026-07-21T21:42:00+07:00", label: "ตอนนี้", value: 46 },
-  ],
-  "7 วัน": [
-    { timestamp: "2026-07-15", label: "พ. 15", value: 58 },
-    { timestamp: "2026-07-16", label: "พฤ. 16", value: 61 },
-    { timestamp: "2026-07-17", label: "ศ. 17", value: 56 },
-    { timestamp: "2026-07-18", label: "ส. 18", value: 54 },
-    { timestamp: "2026-07-19", label: "อา. 19", value: 50 },
-    { timestamp: "2026-07-20", label: "จ. 20", value: 49 },
-    { timestamp: "2026-07-21", label: "อ. 21", value: 46 },
-  ],
-  "30 วัน": [
-    { timestamp: "2026-06-22", label: "22 มิ.ย.", value: 60 },
-    { timestamp: "2026-06-27", label: "27 มิ.ย.", value: 57 },
-    { timestamp: "2026-07-02", label: "2 ก.ค.", value: 62 },
-    { timestamp: "2026-07-07", label: "7 ก.ค.", value: 55 },
-    { timestamp: "2026-07-12", label: "12 ก.ค.", value: 53 },
-    { timestamp: "2026-07-17", label: "17 ก.ค.", value: 49 },
-    { timestamp: "2026-07-21", label: "21 ก.ค.", value: 46 },
-  ],
-};
-
 export function buildDashboardViewModel(
   state: DemoState,
 ): DashboardViewModel {
   const hasPlantData = state.plants.length > 0;
+  const hasTemperatureSensor = state.sensors.some((sensor) => sensor.metric === "temperature" && sensor.status === "online");
+  const hasHumiditySensor = state.sensors.some((sensor) => sensor.metric === "humidity" && sensor.status === "online");
   const healthScore = hasPlantData
     ? Math.round(state.plants.reduce((total, plant) => total + plant.confidence, 0) / state.plants.length)
     : 0;
   const activeDevices = state.devices.filter((device) => device.active).length;
   const openAlerts = state.alerts.filter((alert) => !alert.resolved);
-  const warningPlant = state.plants.find(
-    (plant) => plant.health === "ควรตรวจสอบ",
-  );
+  const hasRecordedActivity = state.alerts.length > 0;
 
   return {
+    hasOperationalData: Boolean(state.devices.length || state.sensors.length || state.plants.length || state.settings.cameras.length),
+    hasRecordedActivity,
     healthScore,
     activeDevices,
     deviceCount: state.devices.length,
@@ -172,23 +144,23 @@ export function buildDashboardViewModel(
       {
         id: "temperature",
         label: "อุณหภูมิ",
-        value: "24.8°C",
-        note: "อยู่ในช่วงเหมาะสม",
-        tone: "healthy",
+        value: "—",
+        note: hasTemperatureSensor ? "ตั้งค่าเซ็นเซอร์แล้ว แต่ยังไม่มีค่าที่บันทึก" : "ยังไม่มีเซ็นเซอร์อุณหภูมิออนไลน์",
+        tone: "neutral",
       },
       {
         id: "humidity",
         label: "ความชื้นอากาศ",
-        value: "68%",
-        note: "คงที่ใน 2 ชั่วโมง",
-        tone: "healthy",
+        value: "—",
+        note: hasHumiditySensor ? "ตั้งค่าเซ็นเซอร์แล้ว แต่ยังไม่มีค่าที่บันทึก" : "ยังไม่มีเซ็นเซอร์ความชื้นออนไลน์",
+        tone: "neutral",
       },
       {
         id: "alerts",
         label: "ต้องตรวจสอบ",
         value: String(openAlerts.length),
-        note: openAlerts.length ? "ยังเปิดอยู่" : "ไม่มีรายการเปิด",
-        tone: openAlerts.length ? "warning" : "healthy",
+        note: openAlerts.length ? "ยังเปิดอยู่" : "ยังไม่มีเหตุการณ์ที่บันทึก",
+        tone: openAlerts.length ? "warning" : "neutral",
       },
     ],
     workItems: openAlerts.map((alert) => ({
@@ -199,36 +171,15 @@ export function buildDashboardViewModel(
       severity: alert.type,
       targetPage: "alerts",
     })),
-    resourceRows: [
-      ...(warningPlant
-        ? [{
-            id: warningPlant.id,
-            label: warningPlant.name,
-            kind: "พืช" as const,
-            status: "ควรตรวจสอบ",
-            tone: "warning" as const,
-            updated: "8 นาทีที่แล้ว",
-          }]
-        : []),
-      ...(state.devices.length ? [{
-        id: "pump",
-        label: "ปั๊มน้ำ · โซน A",
-        kind: "อุปกรณ์",
-        status: state.devices.find((device) => device.id === "pump")?.active
-          ? "กำลังทำงาน"
-          : "ออนไลน์",
-        tone: "healthy",
-        updated: "เมื่อครู่",
-      }] : []),
-      ...(hasPlantData ? [{
-        id: "soil-a-02",
-        label: "เซ็นเซอร์ดิน A-02",
-        kind: "เซ็นเซอร์",
-        status: "46% · ต่ำกว่าเป้าหมาย",
-        tone: "warning",
-        updated: "เมื่อครู่",
-      }] : []),
-    ],
+    resourceRows: state.alerts.map((alert) => ({
+      id: alert.id,
+      label: alert.title,
+      kind: "เหตุการณ์" as const,
+      status: alert.resolved ? "ปิดเหตุการณ์แล้ว" : "ต้องตรวจสอบ",
+      tone: alert.resolved ? "neutral" as const : "warning" as const,
+      updated: alert.time || "ไม่มีเวลาที่บันทึก",
+      targetPage: "alerts" as const,
+    })),
   };
 }
 
