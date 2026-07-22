@@ -56,6 +56,7 @@ export type ResourceRow = {
 };
 
 export type DashboardViewModel = {
+  hasOperationalData: boolean;
   healthScore: number;
   activeDevices: number;
   deviceCount: number;
@@ -147,6 +148,10 @@ export function buildDashboardViewModel(
   state: DemoState,
 ): DashboardViewModel {
   const hasPlantData = state.plants.length > 0;
+  const hasTemperatureSensor = state.sensors.some((sensor) => sensor.metric === "temperature" && sensor.status === "online");
+  const hasHumiditySensor = state.sensors.some((sensor) => sensor.metric === "humidity" && sensor.status === "online");
+  const firstDevice = state.devices[0];
+  const firstSensor = state.sensors[0];
   const healthScore = hasPlantData
     ? Math.round(state.plants.reduce((total, plant) => total + plant.confidence, 0) / state.plants.length)
     : 0;
@@ -157,6 +162,7 @@ export function buildDashboardViewModel(
   );
 
   return {
+    hasOperationalData: Boolean(state.devices.length || state.sensors.length || state.plants.length || state.settings.cameras.length),
     healthScore,
     activeDevices,
     deviceCount: state.devices.length,
@@ -172,16 +178,16 @@ export function buildDashboardViewModel(
       {
         id: "temperature",
         label: "อุณหภูมิ",
-        value: "24.8°C",
-        note: "อยู่ในช่วงเหมาะสม",
-        tone: "healthy",
+        value: hasTemperatureSensor ? "24.8°C" : "—",
+        note: hasTemperatureSensor ? "ข้อมูลตัวอย่างจากเซ็นเซอร์ที่ตั้งค่า" : "ยังไม่มีเซ็นเซอร์อุณหภูมิออนไลน์",
+        tone: hasTemperatureSensor ? "healthy" : "neutral",
       },
       {
         id: "humidity",
         label: "ความชื้นอากาศ",
-        value: "68%",
-        note: "คงที่ใน 2 ชั่วโมง",
-        tone: "healthy",
+        value: hasHumiditySensor ? "68%" : "—",
+        note: hasHumiditySensor ? "ข้อมูลตัวอย่างจากเซ็นเซอร์ที่ตั้งค่า" : "ยังไม่มีเซ็นเซอร์ความชื้นออนไลน์",
+        tone: hasHumiditySensor ? "healthy" : "neutral",
       },
       {
         id: "alerts",
@@ -210,22 +216,22 @@ export function buildDashboardViewModel(
             updated: "8 นาทีที่แล้ว",
           }]
         : []),
-      ...(state.devices.length ? [{
-        id: "pump",
-        label: "ปั๊มน้ำ · โซน A",
+      ...(firstDevice ? [{
+        id: firstDevice.id,
+        label: firstDevice.name,
         kind: "อุปกรณ์",
-        status: state.devices.find((device) => device.id === "pump")?.active
+        status: firstDevice.active
           ? "กำลังทำงาน"
           : "ออนไลน์",
         tone: "healthy",
         updated: "เมื่อครู่",
       }] : []),
-      ...(hasPlantData ? [{
-        id: "soil-a-02",
-        label: "เซ็นเซอร์ดิน A-02",
+      ...(firstSensor ? [{
+        id: firstSensor.id,
+        label: firstSensor.name,
         kind: "เซ็นเซอร์",
-        status: "46% · ต่ำกว่าเป้าหมาย",
-        tone: "warning",
+        status: firstSensor.status === "online" ? "ออนไลน์" : "ออฟไลน์",
+        tone: firstSensor.status === "online" ? "healthy" : "neutral",
         updated: "เมื่อครู่",
       }] : []),
     ],

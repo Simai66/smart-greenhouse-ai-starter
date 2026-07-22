@@ -30,6 +30,23 @@ test("derives the command-deck summary from demo state", () => {
   assert.equal(view.resourceRows.some((row) => row.id === "TOM-003"), true);
 });
 
+test("keeps dashboard metrics honest for a selected greenhouse with no operational data", () => {
+  const emptyGreenhouseState = {
+    ...structuredClone(demoInitialState),
+    devices: [],
+    plants: [],
+    alerts: [],
+    sensors: [],
+    settings: { ...structuredClone(demoInitialState.settings), cameras: [] },
+  };
+  const view = buildDashboardViewModel(emptyGreenhouseState);
+
+  assert.equal(view.hasOperationalData, false);
+  assert.equal(view.metrics.find((metric) => metric.id === "temperature")?.value, "—");
+  assert.equal(view.metrics.find((metric) => metric.id === "humidity")?.value, "—");
+  assert.deepEqual(view.resourceRows, []);
+});
+
 test("filters plants and alerts without mutating source state", () => {
   assert.deepEqual(
     filterPlants(demoInitialState.plants, "tom-003", "all").map((plant) => plant.id),

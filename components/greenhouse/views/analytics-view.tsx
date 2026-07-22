@@ -36,6 +36,7 @@ import {
   soilMoistureSeries,
   type ChartPeriod,
 } from "@/lib/greenhouse-presentation";
+import type { GreenhouseContext } from "@/lib/greenhouse-domain";
 
 const environmentalChartConfig = {
   temperature: { label: "อุณหภูมิ", color: "var(--chart-1)" },
@@ -75,17 +76,9 @@ const environmentalSeries: Record<ChartPeriod, Array<{ label: string; temperatur
   ],
 };
 
-const zoneData = {
-  "ทุกโซน": { comfort: 89, light: 8.6, health: 92, scans: 18, deviceHours: 14.2, energy: 3.8 },
-  "โซน A": { comfort: 86, light: 8.4, health: 91, scans: 9, deviceHours: 8.1, energy: 2.2 },
-  "โซน B": { comfort: 92, light: 8.8, health: 94, scans: 6, deviceHours: 4.3, energy: 1.1 },
-} as const;
-
-type Zone = keyof typeof zoneData;
-
 type LightTrendPoint = { label: string; availability: number };
 
-const lightStatusByZone: Record<Zone, {
+const demoLightStatus: {
   trend: LightTrendPoint[];
   status: "เปิดอยู่" | "ปิดอยู่";
   runtime: string;
@@ -94,49 +87,47 @@ const lightStatusByZone: Record<Zone, {
   timeToEvent: string;
   goalGap: string;
   hint: string;
-}> = {
-  "ทุกโซน": {
+} = {
     trend: [{ label: "00", availability: 0 }, { label: "02", availability: 0 }, { label: "04", availability: 0 }, { label: "06", availability: 28 }, { label: "08", availability: 78 }, { label: "10", availability: 92 }, { label: "12", availability: 88 }, { label: "14", availability: 94 }, { label: "16", availability: 84 }, { label: "18", availability: 18 }, { label: "20", availability: 0 }, { label: "22", availability: 0 }, { label: "24", availability: 0 }],
     status: "เปิดอยู่", runtime: "8.6 ชม. วันนี้", powerProxy: "3.8 kWh โดยประมาณ", nextEvent: "ปิดไฟตามตาราง 18:00 น.", timeToEvent: "อีกประมาณ 1 ชม. 40 นาที", goalGap: "ขาดอีก 1.4 ชม.", hint: "ติดตามรอบไฟที่เหลือก่อนเพิ่มเวลาเปิดไฟ",
-  },
-  "โซน A": {
-    trend: [{ label: "00", availability: 0 }, { label: "02", availability: 0 }, { label: "04", availability: 0 }, { label: "06", availability: 22 }, { label: "08", availability: 72 }, { label: "10", availability: 86 }, { label: "12", availability: 82 }, { label: "14", availability: 88 }, { label: "16", availability: 76 }, { label: "18", availability: 14 }, { label: "20", availability: 0 }, { label: "22", availability: 0 }, { label: "24", availability: 0 }],
-    status: "เปิดอยู่", runtime: "8.4 ชม. วันนี้", powerProxy: "2.2 kWh โดยประมาณ", nextEvent: "ปิดไฟตามตาราง 18:00 น.", timeToEvent: "อีกประมาณ 1 ชม. 40 นาที", goalGap: "ขาดอีก 1.6 ชม.", hint: "หากรอบนี้จบตามแผน ให้ทบทวนตารางพรุ่งนี้",
-  },
-  "โซน B": {
-    trend: [{ label: "00", availability: 0 }, { label: "02", availability: 0 }, { label: "04", availability: 0 }, { label: "06", availability: 34 }, { label: "08", availability: 84 }, { label: "10", availability: 96 }, { label: "12", availability: 91 }, { label: "14", availability: 96 }, { label: "16", availability: 89 }, { label: "18", availability: 22 }, { label: "20", availability: 0 }, { label: "22", availability: 0 }, { label: "24", availability: 0 }],
-    status: "เปิดอยู่", runtime: "8.8 ชม. วันนี้", powerProxy: "1.1 kWh โดยประมาณ", nextEvent: "ปิดไฟตามตาราง 18:00 น.", timeToEvent: "อีกประมาณ 1 ชม. 40 นาที", goalGap: "ขาดอีก 1.2 ชม.", hint: "รอบปัจจุบันสม่ำเสมอ รักษาตารางเดิมและตรวจซ้ำวันพรุ่งนี้",
-  },
-};
-
-const deviceUsageByZone: Record<Zone, Array<{ label: string; detail: string; value: number }>> = {
-  "ทุกโซน": [{ label: "ปั๊มน้ำ", detail: "6 รอบ · 42 นาที", value: 78 }, { label: "ไฟปลูกพืช", detail: "8.6 ชั่วโมง", value: 86 }, { label: "พัดลมระบายอากาศ", detail: "4 ชั่วโมง", value: 40 }],
-  "โซน A": [{ label: "ปั๊มน้ำโซน A", detail: "4 รอบ · 30 นาที", value: 68 }, { label: "ไฟปลูกพืชโซน A", detail: "5.2 ชั่วโมง", value: 52 }, { label: "พัดลมระบายอากาศ", detail: "3.1 ชั่วโมง", value: 31 }],
-  "โซน B": [{ label: "ปั๊มน้ำโซน B", detail: "2 รอบ · 12 นาที", value: 28 }, { label: "ไฟปลูกพืชโซน B", detail: "3.4 ชั่วโมง", value: 34 }, { label: "พัดลมระบายอากาศ", detail: "0.9 ชั่วโมง", value: 9 }],
 };
 
 export function AnalyticsView({
   period,
   onPeriodChange,
+  context,
 }: {
   period: ChartPeriod;
   onPeriodChange: (period: ChartPeriod) => void;
+  context: GreenhouseContext;
 }) {
-  const [zone, setZone] = useState<Zone>("ทุกโซน");
-  const data = zoneData[zone];
-  const lightStatus = lightStatusByZone[zone];
+  const zoneOptions = context.greenhouse?.zones.filter((item) => item.status === "active") ?? [];
+  const [zoneId, setZoneId] = useState("all");
+  const selectedZone = zoneOptions.find((item) => item.id === zoneId);
+  const zone = selectedZone?.name ?? "ทุกโซน";
+  const scopedCameras = selectedZone ? context.cameras.filter((camera) => camera.zoneId === selectedZone.id) : context.cameras;
+  const scopedDevices = selectedZone ? context.devices.filter((device) => device.zoneId === selectedZone.id) : context.devices;
+  const data = {
+    comfort: context.sensors.length ? 89 : 0,
+    light: scopedDevices.some((device) => device.icon === "light") ? 8.6 : 0,
+    health: context.plants.length ? Math.round(context.plants.reduce((sum, plant) => sum + plant.confidence, 0) / context.plants.length) : 0,
+    scans: scopedCameras.filter((camera) => camera.status === "online" && camera.enabled).length,
+    deviceHours: scopedDevices.length ? 1.5 * scopedDevices.length : 0,
+    energy: scopedDevices.length ? Number((0.4 * scopedDevices.length).toFixed(1)) : 0,
+  };
+  const lightStatus = demoLightStatus;
+  const hasAnalysisData = Boolean(context.sensors.length || context.cameras.length || context.devices.length || context.plants.length);
   const environment = useMemo(
     () => environmentalSeries[period].map((point) => ({
       ...point,
-      temperature: Math.round((point.temperature + (zone === "โซน A" ? -0.4 : zone === "โซน B" ? 0.3 : 0)) * 10) / 10,
-      humidity: point.humidity + (zone === "โซน A" ? 2 : zone === "โซน B" ? -1 : 0),
+      temperature: point.temperature,
+      humidity: point.humidity,
     })),
     [period, zone],
   );
   const soilPoints = useMemo(() => {
-    const offset = zone === "โซน A" ? -2 : zone === "โซน B" ? 3 : 0;
-    return soilMoistureSeries[period].map((point) => ({ ...point, value: Math.max(0, Math.min(100, point.value + offset)) }));
-  }, [period, zone]);
+    return soilMoistureSeries[period];
+  }, [period]);
 
   const summary = [
     { label: "ความสบายของสภาพแวดล้อม", value: `${data.comfort}%`, note: "อุณหภูมิและความชื้นอยู่ในเกณฑ์", icon: Thermometer },
@@ -145,11 +136,14 @@ export function AnalyticsView({
     { label: "พลังงานอุปกรณ์โดยประมาณ", value: `${data.energy} kWh`, note: `ทำงานรวม ${data.deviceHours} ชม.`, icon: Zap },
   ];
 
-  const aiHealthRows = [
-    { zone: "โซน A", camera: "CAM-A-01 · กล้องโซน A", value: 91, scans: 9 },
-    { zone: "โซน B", camera: "CAM-B-01 · กล้องโซน B", value: 94, scans: 6 },
-  ].filter((item) => zone === "ทุกโซน" || item.zone === zone);
-  const scopedZoneLabel = zone === "ทุกโซน" ? "โซนที่มีค่าต่ำ" : zone;
+  const aiHealthRows = scopedCameras.map((camera) => ({
+    zone: context.greenhouse?.zones.find((item) => item.id === camera.zoneId)?.name ?? camera.zone,
+    camera: `${camera.id} · ${camera.name}`,
+    value: context.plants.length ? data.health : 0,
+    scans: camera.status === "online" && camera.enabled ? 1 : 0,
+  }));
+  const deviceUsage = scopedDevices.map((device) => ({ label: device.name, detail: device.detail, value: device.active ? 70 : 20 }));
+  const scopedZoneLabel = selectedZone?.name ?? "โซนที่มีค่าต่ำ";
   const insights = [
     {
       title: `เติมความชื้นดินใน${scopedZoneLabel}`,
@@ -171,6 +165,10 @@ export function AnalyticsView({
     },
   ];
 
+  if (!hasAnalysisData) {
+    return <section className="space-y-6" aria-labelledby="analytics-overview-title"><div className="border-b border-border/70 pb-5"><p className="page-kicker">มุมมองการตัดสินใจ</p><h2 id="analytics-overview-title" className="mt-1 text-lg font-semibold">ภาพรวมการวิเคราะห์</h2></div><Card className="shadow-none"><CardContent className="flex min-h-64 flex-col items-center justify-center p-6 text-center"><p className="font-semibold">ยังไม่มีข้อมูลสำหรับวิเคราะห์</p><p className="mt-1 max-w-md text-sm text-muted-foreground">เพิ่มอุปกรณ์ เซ็นเซอร์ กล้อง หรือรอบปลูกใน {context.greenhouse?.name ?? "โรงเรือนนี้"} ก่อน จึงจะแสดงผลวิเคราะห์ได้</p></CardContent></Card></section>;
+  }
+
   return (
     <section className="space-y-6" aria-labelledby="analytics-overview-title">
       <div className="flex flex-col gap-3 border-b border-border/70 pb-5 sm:flex-row sm:items-center sm:justify-between">
@@ -181,10 +179,11 @@ export function AnalyticsView({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="sr-only" htmlFor="analytics-zone">เลือกโซน</label>
-          <Select value={zone} onValueChange={(value) => setZone(value as Zone)}>
+          <Select value={zoneId} onValueChange={setZoneId}>
             <SelectTrigger id="analytics-zone" className="w-full sm:w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {Object.keys(zoneData).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              <SelectItem value="all">ทุกโซน</SelectItem>
+              {zoneOptions.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Tabs value={period} onValueChange={(value) => onPeriodChange(value as ChartPeriod)}>
@@ -261,19 +260,19 @@ export function AnalyticsView({
         </Card>
       </div>
 
-      <SoilMoistureChart points={soilPoints} rangeLabel={period} targetMin={50} targetMax={65} title={zone === "ทุกโซน" ? "ความชื้นดิน · ภาพรวมทุกโซน" : `ความชื้นดิน · ${zone}`} sensorLabel={zone === "โซน A" ? "A-02" : zone === "โซน B" ? "B-02" : "A-02, B-02"} recommendation={`ข้อมูลตัวอย่างแนะนำให้ตรวจรอบรดน้ำของ${scopedZoneLabel} แล้วทบทวนค่าอีกครั้งใน 15 นาที`} />
+      {context.sensors.some((sensor) => sensor.metric === "soilMoisture" && (!selectedZone || sensor.zoneId === selectedZone.id)) ? <SoilMoistureChart points={soilPoints} rangeLabel={period} targetMin={50} targetMax={65} title={selectedZone ? `ความชื้นดิน · ${selectedZone.name}` : "ความชื้นดิน · ภาพรวมทุกโซน"} sensorLabel={context.sensors.filter((sensor) => sensor.metric === "soilMoisture" && (!selectedZone || sensor.zoneId === selectedZone.id)).map((sensor) => sensor.name).join(", ")} recommendation={`ข้อมูลตัวอย่างแนะนำให้ตรวจรอบรดน้ำของ${scopedZoneLabel} แล้วทบทวนค่าอีกครั้งใน 15 นาที`} /> : <Card className="shadow-none"><CardContent className="p-6 text-center text-sm text-muted-foreground">ยังไม่มีเซ็นเซอร์ความชื้นดินในขอบเขตที่เลือก</CardContent></Card>}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card className="shadow-none">
-          <CardHeader className="flex-row items-start justify-between gap-4"><div><h2 className="font-semibold">สุขภาพพืชจาก AI</h2><p className="text-sm text-muted-foreground">{zone === "ทุกโซน" ? "แยกผลตามโซนและกล้องในข้อมูลตัวอย่าง" : `ผลจาก ${zone} ในข้อมูลตัวอย่าง`}</p></div><Badge variant="secondary">{data.health}% ปกติ</Badge></CardHeader>
+          <CardHeader className="flex-row items-start justify-between gap-4"><div><h2 className="font-semibold">สุขภาพพืชจาก AI</h2><p className="text-sm text-muted-foreground">{selectedZone ? `ผลจาก ${selectedZone.name} ในข้อมูลตัวอย่าง` : "แยกผลตามกล้องที่ผูกกับโรงเรือนนี้"}</p></div><Badge variant="secondary">{context.plants.length ? `${data.health}% ปกติ` : "ยังไม่มีพืช"}</Badge></CardHeader>
           <CardContent className="space-y-3">
-            {aiHealthRows.map((item) => <div key={item.zone} className="flex items-center gap-3 border-b border-border/70 py-3 last:border-b-0"><span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary"><Bot className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><strong className="block text-sm">{item.zone}</strong><span className="text-xs text-muted-foreground">{item.camera} · {item.scans} ภาพ</span></span><span className="text-right"><strong className="block text-sm tabular-nums">{item.value}%</strong><span className="text-xs text-muted-foreground">ปกติ</span></span></div>)}
+            {aiHealthRows.length ? aiHealthRows.map((item) => <div key={item.camera} className="flex items-center gap-3 border-b border-border/70 py-3 last:border-b-0"><span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary"><Bot className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><strong className="block text-sm">{item.zone}</strong><span className="text-xs text-muted-foreground">{item.camera} · {item.scans} ภาพ</span></span><span className="text-right"><strong className="block text-sm tabular-nums">{context.plants.length ? `${item.value}%` : "—"}</strong><span className="text-xs text-muted-foreground">{context.plants.length ? "ข้อมูลตัวอย่าง" : "รอข้อมูลพืช"}</span></span></div>) : <p className="py-5 text-center text-sm text-muted-foreground">ยังไม่มีกล้องในขอบเขตที่เลือก</p>}
           </CardContent>
         </Card>
         <Card className="shadow-none">
           <CardHeader><h2 className="font-semibold">การทำงานของอุปกรณ์</h2><p className="text-sm text-muted-foreground">เวลาและพลังงานโดยประมาณจากข้อมูลตัวอย่าง</p></CardHeader>
           <CardContent className="space-y-4">
-            {deviceUsageByZone[zone].map((item) => <div key={item.label}><div className="mb-2 flex justify-between gap-4"><span><strong className="block text-sm">{item.label}</strong><span className="text-xs text-muted-foreground">{item.detail}</span></span><span className="text-xs text-muted-foreground">การใช้งาน</span></div><Progress value={item.value} aria-label={`${item.label} ใช้งาน ${item.value} เปอร์เซ็นต์`} /></div>)}
+            {deviceUsage.length ? deviceUsage.map((item) => <div key={item.label}><div className="mb-2 flex justify-between gap-4"><span><strong className="block text-sm">{item.label}</strong><span className="text-xs text-muted-foreground">{item.detail}</span></span><span className="text-xs text-muted-foreground">การใช้งานโดยประมาณ</span></div><Progress value={item.value} aria-label={`${item.label} ใช้งาน ${item.value} เปอร์เซ็นต์`} /></div>) : <p className="py-5 text-center text-sm text-muted-foreground">ยังไม่มีอุปกรณ์ในขอบเขตที่เลือก</p>}
           </CardContent>
         </Card>
       </div>

@@ -189,11 +189,9 @@ export function GreenhouseApp() {
   };
 
   const exportCsv = () => {
-    const sensorRows = [
-      ["อุณหภูมิ", "24.8", "°C"],
-      ["ความชื้นอากาศ", "68", "%"],
-      ["ความชื้นดินโซน A", "46", "%"],
-    ] as const;
+    const sensorRows = greenhouseContext.sensors.length
+      ? greenhouseContext.sensors.map((sensor) => [sensor.name, "ไม่มีค่าที่บันทึก", "—"] as const)
+      : [["ไม่มีเซ็นเซอร์ในโรงเรือนที่เลือก", "ไม่มีข้อมูล", "—"] as const];
     const csv = createDemoCsv(
       greenhouseState,
       sensorRows,
@@ -260,6 +258,7 @@ export function GreenhouseApp() {
         viewModel={dashboard}
         devices={greenhouseState.devices}
         plants={greenhouseState.plants}
+        context={greenhouseContext}
         period={period}
         lastUpdated={lastUpdated}
         pendingDeviceId={pendingDevice?.device.id ?? null}
@@ -308,7 +307,7 @@ export function GreenhouseApp() {
         onRequest={(device) => setPendingDevice({ device, nextActive: !device.active })}
       />
     ) : activePage === "analytics" ? (
-      <AnalyticsView period={period} onPeriodChange={setPeriod} />
+      <AnalyticsView period={period} onPeriodChange={setPeriod} context={greenhouseContext} />
     ) : activePage === "alerts" ? (
       <AlertsView alerts={greenhouseState.alerts} onOpen={setSelectedAlert} />
     ) : (
