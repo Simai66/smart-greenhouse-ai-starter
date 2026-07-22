@@ -1,15 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BellRing, Bot, Camera, Clock3, Droplets, Settings2 } from "lucide-react";
+import { Archive, BellRing, Bot, Camera, Clock3, Droplets, MapPin, Pencil, Plus, Settings2, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { validateDemoSettings } from "@/lib/dashboard-interactions";
-import type { DemoCamera, DemoSettings } from "@/lib/greenhouse-demo-store";
+import type { DemoCamera, DemoGreenhouse, DemoSettings } from "@/lib/greenhouse-demo-store";
 
 const automationItems = [
   { key: "water", label: "รดน้ำเมื่อความชื้นในดินต่ำ", detail: "อ้างอิงเกณฑ์ความชื้นดินด้านบน" },
@@ -31,7 +32,96 @@ function CameraRow({ camera, onChange }: { camera: DemoCamera; onChange: (next: 
   return <div className="flex flex-col gap-3 border-b border-border/70 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><Camera className="size-4" aria-hidden="true" /></span><div><div className="flex flex-wrap items-center gap-2"><Label htmlFor={`camera-${camera.id}`}>{camera.name}</Label><Badge variant={camera.status === "online" ? "secondary" : "outline"} className={camera.status === "online" ? "text-primary" : "text-muted-foreground"}>{camera.status === "online" ? "ออนไลน์" : "ออฟไลน์"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{camera.id} · {camera.zone} · {camera.source} · ถ่ายทุก {camera.captureInterval}</p></div></div><Switch id={`camera-${camera.id}`} aria-label={`เปิดใช้งาน ${camera.name}`} checked={camera.enabled} onCheckedChange={(enabled) => onChange({ ...camera, enabled })} /></div>;
 }
 
-export function SettingsView({ settings, onSave }: { settings: DemoSettings; onSave: (settings: DemoSettings) => void }) {
+type GreenhouseDraft = Pick<DemoGreenhouse, "name" | "code">;
+
+function FarmStructureSection({ greenhouses, onSaveGreenhouse, onArchiveGreenhouse, onAddZone, onArchiveZone }: {
+  greenhouses: DemoGreenhouse[];
+  onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void;
+  onArchiveGreenhouse: (id: string) => void;
+  onAddZone: (greenhouseId: string, name: string) => void;
+  onArchiveZone: (greenhouseId: string, zoneId: string) => void;
+}) {
+  const [editing, setEditing] = useState<DemoGreenhouse | null | undefined>(undefined);
+  const [draft, setDraft] = useState<GreenhouseDraft>({ name: "", code: "" });
+  const [zoneGreenhouseId, setZoneGreenhouseId] = useState<string | null>(null);
+  const [zoneName, setZoneName] = useState("");
+  const [formError, setFormError] = useState("");
+  const editingOpen = editing !== undefined;
+  const zoneGreenhouse = greenhouses.find((greenhouse) => greenhouse.id === zoneGreenhouseId);
+  const activeCount = greenhouses.filter((greenhouse) => greenhouse.status === "active").length;
+
+  const openCreate = () => {
+    setEditing(null);
+    setDraft({ name: "", code: "" });
+    setFormError("");
+  };
+  const openEdit = (greenhouse: DemoGreenhouse) => {
+    setEditing(greenhouse);
+    setDraft({ name: greenhouse.name, code: greenhouse.code });
+    setFormError("");
+  };
+  const saveGreenhouse = () => {
+    const name = draft.name.trim();
+    const code = draft.code.trim();
+    if (!name || !code) {
+      setFormError("กรุณาระบุชื่อและรหัสโรงเรือน");
+      return;
+    }
+    onSaveGreenhouse(editing?.id ?? null, { name, code });
+    setEditing(undefined);
+  };
+  const saveZone = () => {
+    const name = zoneName.trim();
+    if (!zoneGreenhouse || !name) {
+      setFormError("กรุณาระบุชื่อโซน");
+      return;
+    }
+    onAddZone(zoneGreenhouse.id, name);
+    setZoneGreenhouseId(null);
+    setZoneName("");
+    setFormError("");
+  };
+
+  return <>
+    <SettingSection icon={<Warehouse className="size-5" aria-hidden="true" />} title="โรงเรือนและโซน" description="กำหนดโครงสร้างพื้นที่ก่อนเพิ่มรอบปลูก อุปกรณ์ หรือกล้อง">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-4">
+        <p className="text-sm text-muted-foreground">เปิดใช้งาน <span className="font-medium text-foreground">{activeCount} โรงเรือน</span> · จัดการโซนได้จากรายการด้านล่าง</p>
+        <Button type="button" size="sm" className="min-h-10" onClick={openCreate}><Plus className="size-4" aria-hidden="true" />เพิ่มโรงเรือน</Button>
+      </div>
+      <div className="divide-y">
+        {greenhouses.map((greenhouse) => {
+          const activeZones = greenhouse.zones.filter((zone) => zone.status === "active");
+          return <section key={greenhouse.id} className="py-5 first:pt-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Warehouse className="size-4" aria-hidden="true" /></span><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-medium">{greenhouse.name}</h3><Badge variant={greenhouse.status === "active" ? "secondary" : "outline"} className={greenhouse.status === "active" ? "text-primary" : "text-muted-foreground"}>{greenhouse.status === "active" ? "ใช้งานอยู่" : "เก็บถาวร"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{greenhouse.code} · {activeZones.length} โซนที่ใช้งาน</p></div></div>
+              <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" className="min-h-9" onClick={() => openEdit(greenhouse)}><Pencil className="size-3.5" aria-hidden="true" />แก้ไข</Button>{greenhouse.status === "active" ? <Button type="button" variant="ghost" size="sm" className="min-h-9 text-muted-foreground" onClick={() => onArchiveGreenhouse(greenhouse.id)}><Archive className="size-3.5" aria-hidden="true" />เก็บถาวร</Button> : null}</div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {greenhouse.zones.map((zone) => <div key={zone.id} className="flex items-center gap-1 rounded-lg border bg-muted/30 px-2.5 py-1.5 text-sm"><MapPin className="size-3.5 text-muted-foreground" aria-hidden="true" /><span>{zone.name}</span>{zone.status === "archived" ? <Badge variant="outline" className="ml-1 px-1.5 py-0 text-[10px] text-muted-foreground">เก็บถาวร</Badge> : <Button type="button" variant="ghost" size="icon" className="ml-1 size-6 text-muted-foreground" aria-label={`เก็บ ${zone.name} ถาวร`} onClick={() => onArchiveZone(greenhouse.id, zone.id)}><Archive className="size-3" aria-hidden="true" /></Button>}</div>)}
+              {greenhouse.status === "active" ? <Button type="button" variant="outline" size="sm" className="min-h-9" onClick={() => { setZoneGreenhouseId(greenhouse.id); setZoneName(""); setFormError(""); }}><Plus className="size-3.5" aria-hidden="true" />เพิ่มโซน</Button> : null}
+            </div>
+          </section>;
+        })}
+      </div>
+    </SettingSection>
+    <Dialog open={editingOpen} onOpenChange={(open) => !open && setEditing(undefined)}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{editing ? "แก้ไขโรงเรือน" : "เพิ่มโรงเรือน"}</DialogTitle><DialogDescription>ชื่อและรหัสนี้จะใช้ระบุพื้นที่ในระบบ</DialogDescription></DialogHeader>
+        <div className="grid gap-4 py-2"><div className="space-y-2"><Label htmlFor="greenhouse-name">ชื่อโรงเรือน</Label><Input id="greenhouse-name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="เช่น โรงเรือนผักสลัด" /></div><div className="space-y-2"><Label htmlFor="greenhouse-code">รหัสโรงเรือน</Label><Input id="greenhouse-code" value={draft.code} onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))} placeholder="เช่น GREENHOUSE 02" /></div>{formError ? <p className="text-sm text-destructive" role="alert">{formError}</p> : null}</div>
+        <DialogFooter><Button type="button" variant="outline" onClick={() => setEditing(undefined)}>ยกเลิก</Button><Button type="button" onClick={saveGreenhouse}>บันทึกโรงเรือน</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={Boolean(zoneGreenhouseId)} onOpenChange={(open) => !open && setZoneGreenhouseId(null)}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>เพิ่มโซน</DialogTitle><DialogDescription>{zoneGreenhouse ? `เพิ่มพื้นที่ภายใน ${zoneGreenhouse.name}` : "ระบุชื่อพื้นที่"}</DialogDescription></DialogHeader>
+        <div className="space-y-2 py-2"><Label htmlFor="zone-name">ชื่อโซน</Label><Input id="zone-name" value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="เช่น โซน C" />{formError ? <p className="text-sm text-destructive" role="alert">{formError}</p> : null}</div>
+        <DialogFooter><Button type="button" variant="outline" onClick={() => setZoneGreenhouseId(null)}>ยกเลิก</Button><Button type="button" onClick={saveZone}>เพิ่มโซน</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>;
+}
+
+export function SettingsView({ settings, greenhouses, onSave, onSaveGreenhouse, onArchiveGreenhouse, onAddZone, onArchiveZone }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void }) {
   const [draft, setDraft] = useState(settings);
   const [error, setError] = useState("");
   const [prevSettings, setPrevSettings] = useState(settings);
@@ -41,6 +131,7 @@ export function SettingsView({ settings, onSave }: { settings: DemoSettings; onS
   const save = () => { const message = validateDemoSettings(draft); if (message) { setError(message); return; } setError(""); onSave(draft); };
 
   return <div className="space-y-6">
+    <FarmStructureSection greenhouses={greenhouses} onSaveGreenhouse={onSaveGreenhouse} onArchiveGreenhouse={onArchiveGreenhouse} onAddZone={onAddZone} onArchiveZone={onArchiveZone} />
     <SettingSection icon={<Settings2 className="size-5" aria-hidden="true" />} title="ค่าเป้าหมายสภาพแวดล้อม" description="ใช้กับการควบคุมอัตโนมัติและคำเตือนในเดโม">
       <div className="grid gap-4 md:grid-cols-2"><NumberField id="minTemperature" label="อุณหภูมิต่ำสุด" unit="°C" value={draft.minTemperature} onChange={(value) => update("minTemperature", value)} /><NumberField id="maxTemperature" label="อุณหภูมิสูงสุด" unit="°C" value={draft.maxTemperature} onChange={(value) => update("maxTemperature", value)} /><NumberField id="minHumidity" label="ความชื้นอากาศต่ำสุด" unit="%" value={draft.minHumidity} onChange={(value) => update("minHumidity", value)} /><NumberField id="minSoilMoisture" label="ความชื้นดินต่ำสุด" unit="%" value={draft.minSoilMoisture} onChange={(value) => update("minSoilMoisture", value)} /></div>
     </SettingSection>

@@ -29,6 +29,7 @@ import {
   demoInitialState,
   greenhouseDemoStore,
   type DemoAlert,
+  type DemoGreenhouse,
   type DemoState,
 } from "@/lib/greenhouse-demo-store";
 import {
@@ -281,9 +282,73 @@ export function GreenhouseApp() {
     ) : (
       <SettingsView
         settings={state.settings}
+        greenhouses={state.greenhouses}
         onSave={(settings) => {
           setState((current) => ({ ...current, settings }));
           notify("บันทึกการตั้งค่าเดโมแล้ว");
+        }}
+        onSaveGreenhouse={(id, draft) => {
+          setState((current) => {
+            if (id) {
+              return {
+                ...current,
+                greenhouses: current.greenhouses.map((greenhouse) =>
+                  greenhouse.id === id ? { ...greenhouse, ...draft } : greenhouse,
+                ),
+              };
+            }
+            const greenhouse: DemoGreenhouse = {
+              id: `GH-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+              ...draft,
+              status: "active",
+              zones: [],
+            };
+            return { ...current, greenhouses: [...current.greenhouses, greenhouse] };
+          });
+          notify(id ? "แก้ไขข้อมูลโรงเรือนแล้ว" : "เพิ่มโรงเรือนแล้ว");
+        }}
+        onArchiveGreenhouse={(id) => {
+          setState((current) => ({
+            ...current,
+            greenhouses: current.greenhouses.map((greenhouse) =>
+              greenhouse.id === id ? { ...greenhouse, status: "archived" } : greenhouse,
+            ),
+          }));
+          notify("เก็บโรงเรือนถาวรแล้ว", "info");
+        }}
+        onAddZone={(greenhouseId, name) => {
+          setState((current) => ({
+            ...current,
+            greenhouses: current.greenhouses.map((greenhouse) =>
+              greenhouse.id === greenhouseId
+                ? {
+                    ...greenhouse,
+                    zones: [...greenhouse.zones, {
+                      id: `ZONE-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+                      name,
+                      status: "active",
+                    }],
+                  }
+                : greenhouse,
+            ),
+          }));
+          notify(`เพิ่ม ${name} แล้ว`);
+        }}
+        onArchiveZone={(greenhouseId, zoneId) => {
+          setState((current) => ({
+            ...current,
+            greenhouses: current.greenhouses.map((greenhouse) =>
+              greenhouse.id === greenhouseId
+                ? {
+                    ...greenhouse,
+                    zones: greenhouse.zones.map((zone) =>
+                      zone.id === zoneId ? { ...zone, status: "archived" } : zone,
+                    ),
+                  }
+                : greenhouse,
+            ),
+          }));
+          notify("เก็บโซนถาวรแล้ว", "info");
         }}
       />
     )

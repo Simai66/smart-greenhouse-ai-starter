@@ -12,6 +12,18 @@ export type DemoCamera = {
   captureInterval: string;
   enabled: boolean;
 };
+export type DemoZone = {
+  id: string;
+  name: string;
+  status: "active" | "archived";
+};
+export type DemoGreenhouse = {
+  id: string;
+  name: string;
+  code: string;
+  status: "active" | "archived";
+  zones: DemoZone[];
+};
 export type DemoSettings = {
   minTemperature: string;
   maxTemperature: string;
@@ -23,7 +35,7 @@ export type DemoSettings = {
   ai: { minConfidence: string; scanInterval: string; retainDays: string; detectLeafSpot: boolean; detectPests: boolean };
   cameras: DemoCamera[];
 };
-export type DemoState = { version: 1; devices: DemoDevice[]; plants: DemoPlant[]; alerts: DemoAlert[]; settings: DemoSettings; aiReviewedPlantId?: string; aiReviewedEvidence?: Record<string, string[]> };
+export type DemoState = { version: 1; devices: DemoDevice[]; plants: DemoPlant[]; alerts: DemoAlert[]; settings: DemoSettings; greenhouses: DemoGreenhouse[]; aiReviewedPlantId?: string; aiReviewedEvidence?: Record<string, string[]> };
 export type DemoLoadResult = { state: DemoState; recovered: boolean; storageAvailable: boolean };
 export type DemoSaveResult = { persisted: boolean };
 
@@ -31,6 +43,18 @@ const STORAGE_KEY = "smart-greenhouse-dashboard-demo:v1";
 
 export const demoInitialState: DemoState = {
   version: 1,
+  greenhouses: [
+    {
+      id: "GH-01",
+      name: "โรงเรือนมะเขือเทศ",
+      code: "GREENHOUSE 01",
+      status: "active",
+      zones: [
+        { id: "ZONE-A", name: "โซน A", status: "active" },
+        { id: "ZONE-B", name: "โซน B", status: "active" },
+      ],
+    },
+  ],
   devices: [
     { id: "pump", name: "ปั๊มน้ำ", detail: "รอบถัดไป 10:30 น.", icon: "pump", active: false },
     { id: "fan", name: "พัดลมระบายอากาศ", detail: "โหมดอัตโนมัติ · มากกว่า 30°C", icon: "fan", active: true },
@@ -129,11 +153,30 @@ function cloneInitial(): DemoState { return structuredClone(demoInitialState); }
 
 function upgradeState(state: DemoState): DemoState {
   const defaults = cloneInitial().settings;
+  const defaultGreenhouses = cloneInitial().greenhouses;
   const saved = state.settings as Partial<DemoSettings>;
   const isRecord = (item: unknown): item is Record<string, unknown> =>
     !!item && typeof item === "object";
+  const savedGreenhouses = (state as Partial<DemoState>).greenhouses;
+  const greenhouses = Array.isArray(savedGreenhouses) && savedGreenhouses.length > 0
+    ? savedGreenhouses.filter((greenhouse): greenhouse is DemoGreenhouse =>
+      isRecord(greenhouse) &&
+      typeof greenhouse.id === "string" &&
+      typeof greenhouse.name === "string" &&
+      typeof greenhouse.code === "string" &&
+      ["active", "archived"].includes(String(greenhouse.status)) &&
+      Array.isArray(greenhouse.zones) &&
+      greenhouse.zones.every((zone) =>
+        isRecord(zone) &&
+        typeof zone.id === "string" &&
+        typeof zone.name === "string" &&
+        ["active", "archived"].includes(String(zone.status)),
+      ),
+    )
+    : defaultGreenhouses;
   return {
     ...state,
+    greenhouses: greenhouses.length > 0 ? greenhouses : defaultGreenhouses,
     aiReviewedEvidence: state.aiReviewedEvidence ?? {},
     settings: {
       ...defaults,

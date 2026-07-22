@@ -21,6 +21,7 @@ test("recovers from corrupt local demo storage", async () => {
 
 test("upgrades a legacy saved settings payload with multi-camera defaults", async () => {
   const legacy = structuredClone(demoInitialState);
+  delete (legacy as Partial<typeof legacy>).greenhouses;
   delete (legacy.settings as Partial<typeof legacy.settings>).schedules;
   delete (legacy.settings as Partial<typeof legacy.settings>).notifications;
   delete (legacy.settings as Partial<typeof legacy.settings>).ai;
@@ -32,6 +33,14 @@ test("upgrades a legacy saved settings payload with multi-camera defaults", asyn
   assert.equal(result.recovered, false);
   assert.equal(result.state.settings.cameras.length, 3);
   assert.equal(result.state.settings.ai.minConfidence, "75");
+  assert.deepEqual(result.state.greenhouses, demoInitialState.greenhouses);
+});
+
+test("ships an editable greenhouse structure with active zones", () => {
+  const greenhouse = demoInitialState.greenhouses[0];
+  assert.equal(greenhouse?.id, "GH-01");
+  assert.equal(greenhouse?.status, "active");
+  assert.deepEqual(greenhouse?.zones.map((zone) => zone.name), ["โซน A", "โซน B"]);
 });
 
 test("transitions device only after a confirmed result", () => {
