@@ -19,6 +19,18 @@ test("recovers from corrupt local demo storage", async () => {
   assert.equal(result.state.devices.length, demoInitialState.devices.length);
 });
 
+test("upgrades a state created before sensor and zone bindings", async () => {
+  const legacy = structuredClone(demoInitialState);
+  delete (legacy as Partial<typeof legacy>).sensors;
+  for (const device of legacy.devices) delete device.zoneId;
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+  assert.equal(result.recovered, false);
+  assert.equal(result.state.sensors.length > 0, true);
+  assert.equal(result.state.devices.every((device) => typeof device.zoneId === "string"), true);
+});
+
 test("upgrades a legacy saved settings payload with multi-camera defaults", async () => {
   const legacy = structuredClone(demoInitialState);
   delete (legacy as Partial<typeof legacy>).greenhouses;

@@ -174,14 +174,15 @@ function isState(value: unknown): value is DemoState {
 function cloneInitial(): DemoState { return structuredClone(demoInitialState); }
 
 function upgradeState(state: DemoState): DemoState {
-  const defaults = cloneInitial().settings;
-  const defaultGreenhouses = cloneInitial().greenhouses;
+  const defaultState = cloneInitial();
+  const defaults = defaultState.settings;
+  const defaultGreenhouses = defaultState.greenhouses;
+  const defaultZoneId = defaultGreenhouses[0]?.zones[0]?.id ?? "ZONE-A";
   const saved = state.settings as Partial<DemoSettings>;
   const isRecord = (item: unknown): item is Record<string, unknown> =>
     !!item && typeof item === "object";
   const savedGreenhouses = (state as Partial<DemoState>).greenhouses;
   const savedCropBatches = (state as Partial<DemoState>).cropBatches;
-  const savedSensors = (state as Partial<DemoState>).sensors;
   const greenhouses = Array.isArray(savedGreenhouses) && savedGreenhouses.length > 0
     ? savedGreenhouses.filter((greenhouse): greenhouse is DemoGreenhouse =>
       isRecord(greenhouse) &&
@@ -205,18 +206,27 @@ function upgradeState(state: DemoState): DemoState {
       typeof batch.plantCount === "number" && typeof batch.plantedAt === "string" &&
       ["active", "harvested", "archived"].includes(String(batch.status)),
     )
-    : cloneInitial().cropBatches;
-  const sensors = Array.isArray(savedSensors)
-    ? savedSensors.filter((sensor): sensor is DemoSensor => isRecord(sensor) && typeof sensor.id === "string" && typeof sensor.name === "string" && typeof sensor.greenhouseId === "string" && typeof sensor.zoneId === "string" && ["soilMoisture", "temperature", "humidity"].includes(String(sensor.metric)) && ["online", "offline"].includes(String(sensor.status)))
-    : cloneInitial().sensors;
+    : defaultState.cropBatches;
+  const validSensors = (items: unknown): items is DemoSensor[] =>
+    Array.isArray(items) &&
+    items.length > 0 &&
+    items.every((sensor) =>
+      isRecord(sensor) &&
+      typeof sensor.id === "string" &&
+      typeof sensor.name === "string" &&
+      typeof sensor.greenhouseId === "string" &&
+      typeof sensor.zoneId === "string" &&
+      ["soilMoisture", "temperature", "humidity"].includes(String(sensor.metric)) &&
+      ["online", "offline"].includes(String(sensor.status)),
+    );
   return {
     ...state,
-    devices: state.devices.map((device) => ({ ...device, greenhouseId: device.greenhouseId ?? "GH-01", zoneId: device.zoneId ?? "ZONE-A" })),
+    devices: state.devices.map((device) => ({ ...device, greenhouseId: device.greenhouseId ?? "GH-01", zoneId: device.zoneId ?? defaultZoneId })),
     plants: state.plants.map((plant) => ({ ...plant, greenhouseId: plant.greenhouseId ?? "GH-01" })),
     alerts: state.alerts.map((alert) => ({ ...alert, greenhouseId: alert.greenhouseId ?? "GH-01" })),
     greenhouses: greenhouses.length > 0 ? greenhouses : defaultGreenhouses,
     cropBatches,
-    sensors,
+    sensors: validSensors(state.sensors) ? state.sensors : defaultState.sensors,
     aiReviewedEvidence: state.aiReviewedEvidence ?? {},
     settings: {
       ...defaults,
