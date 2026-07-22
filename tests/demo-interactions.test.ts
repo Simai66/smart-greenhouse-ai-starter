@@ -22,6 +22,7 @@ test("recovers from corrupt local demo storage", async () => {
 test("upgrades a legacy saved settings payload with multi-camera defaults", async () => {
   const legacy = structuredClone(demoInitialState);
   delete (legacy as Partial<typeof legacy>).greenhouses;
+  delete (legacy as Partial<typeof legacy>).cropBatches;
   delete (legacy.settings as Partial<typeof legacy.settings>).schedules;
   delete (legacy.settings as Partial<typeof legacy.settings>).notifications;
   delete (legacy.settings as Partial<typeof legacy.settings>).ai;
@@ -34,6 +35,7 @@ test("upgrades a legacy saved settings payload with multi-camera defaults", asyn
   assert.equal(result.state.settings.cameras.length, 3);
   assert.equal(result.state.settings.ai.minConfidence, "75");
   assert.deepEqual(result.state.greenhouses, demoInitialState.greenhouses);
+  assert.equal(result.state.cropBatches.length, 2);
 });
 
 test("ships an editable greenhouse structure with active zones", () => {

@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { validateDemoSettings } from "@/lib/dashboard-interactions";
-import type { DemoCamera, DemoGreenhouse, DemoSettings } from "@/lib/greenhouse-demo-store";
+import type { DemoCamera, DemoCropBatch, DemoGreenhouse, DemoSettings } from "@/lib/greenhouse-demo-store";
 
 const automationItems = [
   { key: "water", label: "รดน้ำเมื่อความชื้นในดินต่ำ", detail: "อ้างอิงเกณฑ์ความชื้นดินด้านบน" },
@@ -143,7 +144,39 @@ function FarmStructureSection({ greenhouses, onSaveGreenhouse, onArchiveGreenhou
   </>;
 }
 
-export function SettingsView({ settings, greenhouses, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void }) {
+type CropBatchDraft = Pick<DemoCropBatch, "greenhouseId" | "zoneId" | "cropName" | "cultivar" | "plantCount" | "plantedAt">;
+const cropSuggestions = ["ผักสลัด", "คอส", "กรีนโอ๊ค", "เรดโอ๊ค", "มะเขือเทศเชอร์รี", "โหระพา"];
+
+function CropBatchesSection({ greenhouses, cropBatches, activeGreenhouseId, onSaveBatch, onArchiveBatch, onRestoreBatch }: {
+  greenhouses: DemoGreenhouse[];
+  cropBatches: DemoCropBatch[];
+  activeGreenhouseId: string;
+  onSaveBatch: (id: string | null, draft: CropBatchDraft) => void;
+  onArchiveBatch: (id: string) => void;
+  onRestoreBatch: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState<DemoCropBatch | null | undefined>(undefined);
+  const activeGreenhouse = greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId) ?? greenhouses[0];
+  const [draft, setDraft] = useState<CropBatchDraft>({ greenhouseId: activeGreenhouseId, zoneId: "", cropName: "", cultivar: "", plantCount: 1, plantedAt: new Date().toISOString().slice(0, 10) });
+  const [formError, setFormError] = useState("");
+  const draftGreenhouse = greenhouses.find((greenhouse) => greenhouse.id === draft.greenhouseId);
+  const activeZones = draftGreenhouse?.zones.filter((zone) => zone.status === "active") ?? [];
+  const visibleBatches = cropBatches.filter((batch) => batch.greenhouseId === activeGreenhouseId);
+  const openCreate = () => { setEditing(null); setDraft({ greenhouseId: activeGreenhouseId, zoneId: activeGreenhouse?.zones.find((zone) => zone.status === "active")?.id ?? "", cropName: "", cultivar: "", plantCount: 1, plantedAt: new Date().toISOString().slice(0, 10) }); setFormError(""); };
+  const openEdit = (batch: DemoCropBatch) => { setEditing(batch); setDraft({ greenhouseId: batch.greenhouseId, zoneId: batch.zoneId, cropName: batch.cropName, cultivar: batch.cultivar, plantCount: batch.plantCount, plantedAt: batch.plantedAt }); setFormError(""); };
+  const save = () => { if (!draft.cropName.trim() || !draft.zoneId || draft.plantCount < 1 || !draft.plantedAt) { setFormError("กรุณาระบุผัก โซน จำนวนต้น และวันที่ปลูกให้ครบ"); return; } onSaveBatch(editing?.id ?? null, { ...draft, cropName: draft.cropName.trim(), cultivar: draft.cultivar.trim() }); setEditing(undefined); };
+  const zoneName = (batch: DemoCropBatch) => greenhouses.find((greenhouse) => greenhouse.id === batch.greenhouseId)?.zones.find((zone) => zone.id === batch.zoneId)?.name ?? "ไม่ระบุโซน";
+
+  return <>
+    <SettingSection icon={<Sparkles className="size-5" aria-hidden="true" />} title="รอบปลูก" description="บันทึกพืชและจำนวนต้นตามโรงเรือน/โซนที่กำลังเลือกอยู่">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-4"><p className="text-sm text-muted-foreground">{activeGreenhouse?.name ?? "โรงเรือนที่เลือก"} · {visibleBatches.filter((batch) => batch.status === "active").length} รอบที่กำลังปลูก</p><Button type="button" size="sm" className="min-h-10" onClick={openCreate}><Plus className="size-4" aria-hidden="true" />เพิ่มรอบปลูก</Button></div>
+      <div className="divide-y">{visibleBatches.length ? visibleBatches.map((batch) => <div key={batch.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{batch.cropName}</p><Badge variant={batch.status === "active" ? "secondary" : "outline"} className={batch.status === "active" ? "text-primary" : "text-muted-foreground"}>{batch.status === "active" ? "กำลังปลูก" : batch.status === "harvested" ? "เก็บเกี่ยวแล้ว" : "เก็บถาวร"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{zoneName(batch)} · {batch.plantCount} ต้น · ปลูก {new Intl.DateTimeFormat("th-TH", { dateStyle: "medium" }).format(new Date(`${batch.plantedAt}T00:00:00`))}{batch.cultivar ? ` · ${batch.cultivar}` : ""}</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => openEdit(batch)}><Pencil className="size-3.5" aria-hidden="true" />แก้ไข</Button>{batch.status === "archived" ? <Button type="button" variant="outline" size="sm" onClick={() => onRestoreBatch(batch.id)}><RotateCcw className="size-3.5" aria-hidden="true" />เรียกคืน</Button> : <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onArchiveBatch(batch.id)}><Archive className="size-3.5" aria-hidden="true" />เก็บถาวร</Button>}</div></div>) : <p className="py-8 text-center text-sm text-muted-foreground">ยังไม่มีรอบปลูกในโรงเรือนนี้</p>}</div>
+    </SettingSection>
+    <Dialog open={editing !== undefined} onOpenChange={(open) => !open && setEditing(undefined)}><DialogContent><DialogHeader><DialogTitle>{editing ? "แก้ไขรอบปลูก" : "เพิ่มรอบปลูก"}</DialogTitle><DialogDescription>ข้อมูลนี้แยกตามโรงเรือนและโซน เพื่อไม่ปะปนกับรอบปลูกอื่น</DialogDescription></DialogHeader><div className="grid gap-4 py-2"><div className="space-y-2"><Label htmlFor="crop-greenhouse">โรงเรือน</Label><Select value={draft.greenhouseId} onValueChange={(greenhouseId) => { const greenhouse = greenhouses.find((item) => item.id === greenhouseId); setDraft((current) => ({ ...current, greenhouseId, zoneId: greenhouse?.zones.find((zone) => zone.status === "active")?.id ?? "" })); }}><SelectTrigger id="crop-greenhouse" className="h-11 w-full"><SelectValue /></SelectTrigger><SelectContent>{greenhouses.filter((greenhouse) => greenhouse.status === "active").map((greenhouse) => <SelectItem key={greenhouse.id} value={greenhouse.id}>{greenhouse.name}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label htmlFor="crop-zone">โซน</Label><Select value={draft.zoneId} onValueChange={(zoneId) => setDraft((current) => ({ ...current, zoneId }))}><SelectTrigger id="crop-zone" className="h-11 w-full"><SelectValue placeholder="เลือกโซน" /></SelectTrigger><SelectContent>{activeZones.map((zone) => <SelectItem key={zone.id} value={zone.id}>{zone.name}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label htmlFor="crop-name">ชนิดผัก</Label><Input id="crop-name" value={draft.cropName} onChange={(event) => setDraft((current) => ({ ...current, cropName: event.target.value }))} placeholder="เช่น ผักสลัด" /></div><NameSuggestions label="เลือกชื่อแนะนำเพื่อเริ่มต้น" suggestions={cropSuggestions} onChoose={(cropName) => setDraft((current) => ({ ...current, cropName }))} /><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="crop-cultivar">สายพันธุ์ (ถ้ามี)</Label><Input id="crop-cultivar" value={draft.cultivar} onChange={(event) => setDraft((current) => ({ ...current, cultivar: event.target.value }))} placeholder="เช่น Green Cos" /></div><div className="space-y-2"><Label htmlFor="crop-count">จำนวนต้น</Label><Input id="crop-count" type="number" min="1" value={draft.plantCount} onChange={(event) => setDraft((current) => ({ ...current, plantCount: Number(event.target.value) || 0 }))} /></div></div><div className="space-y-2"><Label htmlFor="crop-date">วันที่ปลูก</Label><Input id="crop-date" type="date" value={draft.plantedAt} onChange={(event) => setDraft((current) => ({ ...current, plantedAt: event.target.value }))} /></div>{formError ? <p className="text-sm text-destructive" role="alert">{formError}</p> : null}</div><DialogFooter><Button type="button" variant="outline" onClick={() => setEditing(undefined)}>ยกเลิก</Button><Button type="button" onClick={save}>บันทึกรอบปลูก</Button></DialogFooter></DialogContent></Dialog>
+  </>;
+}
+
+export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void }) {
   const [draft, setDraft] = useState(settings);
   const [error, setError] = useState("");
   const [prevSettings, setPrevSettings] = useState(settings);
@@ -154,6 +187,7 @@ export function SettingsView({ settings, greenhouses, onSave, onSaveGreenhouse, 
 
   return <div className="space-y-6">
     <FarmStructureSection greenhouses={greenhouses} onSaveGreenhouse={onSaveGreenhouse} onArchiveGreenhouse={onArchiveGreenhouse} onRestoreGreenhouse={onRestoreGreenhouse} onAddZone={onAddZone} onArchiveZone={onArchiveZone} onRestoreZone={onRestoreZone} />
+    <CropBatchesSection greenhouses={greenhouses} cropBatches={cropBatches} activeGreenhouseId={activeGreenhouseId} onSaveBatch={onSaveBatch} onArchiveBatch={onArchiveBatch} onRestoreBatch={onRestoreBatch} />
     <SettingSection icon={<Settings2 className="size-5" aria-hidden="true" />} title="ค่าเป้าหมายสภาพแวดล้อม" description="ใช้กับการควบคุมอัตโนมัติและคำเตือนในเดโม">
       <div className="grid gap-4 md:grid-cols-2"><NumberField id="minTemperature" label="อุณหภูมิต่ำสุด" unit="°C" value={draft.minTemperature} onChange={(value) => update("minTemperature", value)} /><NumberField id="maxTemperature" label="อุณหภูมิสูงสุด" unit="°C" value={draft.maxTemperature} onChange={(value) => update("maxTemperature", value)} /><NumberField id="minHumidity" label="ความชื้นอากาศต่ำสุด" unit="%" value={draft.minHumidity} onChange={(value) => update("minHumidity", value)} /><NumberField id="minSoilMoisture" label="ความชื้นดินต่ำสุด" unit="%" value={draft.minSoilMoisture} onChange={(value) => update("minSoilMoisture", value)} /></div>
     </SettingSection>

@@ -1,7 +1,7 @@
 import type { DeviceCommandAction, DeviceCommandResult } from "@/types/greenhouse";
 
 export type DemoDevice = { id: string; name: string; detail: string; icon: "pump" | "fan" | "light" | "mist"; active: boolean; greenhouseId?: string };
-export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number; health: "ปกติ" | "ควรตรวจสอบ"; confidence: number; greenhouseId?: string };
+export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number; health: "ปกติ" | "ควรตรวจสอบ"; confidence: number; greenhouseId?: string; batchId?: string };
 export type DemoAlert = { id: string; type: "critical" | "warning" | "info"; title: string; detail: string; time: string; resolved: boolean; greenhouseId?: string };
 export type DemoCamera = {
   id: string;
@@ -25,6 +25,16 @@ export type DemoGreenhouse = {
   status: "active" | "archived";
   zones: DemoZone[];
 };
+export type DemoCropBatch = {
+  id: string;
+  greenhouseId: string;
+  zoneId: string;
+  cropName: string;
+  cultivar: string;
+  plantCount: number;
+  plantedAt: string;
+  status: "active" | "harvested" | "archived";
+};
 export type DemoSettings = {
   minTemperature: string;
   maxTemperature: string;
@@ -36,7 +46,7 @@ export type DemoSettings = {
   ai: { minConfidence: string; scanInterval: string; retainDays: string; detectLeafSpot: boolean; detectPests: boolean };
   cameras: DemoCamera[];
 };
-export type DemoState = { version: 1; devices: DemoDevice[]; plants: DemoPlant[]; alerts: DemoAlert[]; settings: DemoSettings; greenhouses: DemoGreenhouse[]; aiReviewedPlantId?: string; aiReviewedEvidence?: Record<string, string[]> };
+export type DemoState = { version: 1; devices: DemoDevice[]; plants: DemoPlant[]; alerts: DemoAlert[]; settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; aiReviewedPlantId?: string; aiReviewedEvidence?: Record<string, string[]> };
 export type DemoLoadResult = { state: DemoState; recovered: boolean; storageAvailable: boolean };
 export type DemoSaveResult = { persisted: boolean };
 
@@ -56,6 +66,10 @@ export const demoInitialState: DemoState = {
       ],
     },
   ],
+  cropBatches: [
+    { id: "BATCH-TOM-A", greenhouseId: "GH-01", zoneId: "ZONE-A", cropName: "มะเขือเทศเชอร์รี", cultivar: "Sweet 100", plantCount: 2, plantedAt: "2026-06-10", status: "active" },
+    { id: "BATCH-TOM-B", greenhouseId: "GH-01", zoneId: "ZONE-B", cropName: "มะเขือเทศเชอร์รี", cultivar: "Sweet 100", plantCount: 2, plantedAt: "2026-06-14", status: "active" },
+  ],
   devices: [
     { id: "pump", name: "ปั๊มน้ำ", detail: "รอบถัดไป 10:30 น.", icon: "pump", active: false, greenhouseId: "GH-01" },
     { id: "fan", name: "พัดลมระบายอากาศ", detail: "โหมดอัตโนมัติ · มากกว่า 30°C", icon: "fan", active: true, greenhouseId: "GH-01" },
@@ -63,10 +77,10 @@ export const demoInitialState: DemoState = {
     { id: "mist", name: "เครื่องพ่นหมอก", detail: "โหมดอัตโนมัติ · ต่ำกว่า 60% RH", icon: "mist", active: true, greenhouseId: "GH-01" },
   ],
   plants: [
-    { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: 46, health: "ปกติ", confidence: 98, greenhouseId: "GH-01" },
-    { id: "TOM-002", name: "มะเขือเทศ 02", zone: "โซน A", age: "42 วัน", moisture: 44, health: "ปกติ", confidence: 96, greenhouseId: "GH-01" },
-    { id: "TOM-003", name: "มะเขือเทศ 03", zone: "โซน B", age: "38 วัน", moisture: 39, health: "ควรตรวจสอบ", confidence: 78, greenhouseId: "GH-01" },
-    { id: "TOM-004", name: "มะเขือเทศ 04", zone: "โซน B", age: "38 วัน", moisture: 36, health: "ปกติ", confidence: 94, greenhouseId: "GH-01" },
+    { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: 46, health: "ปกติ", confidence: 98, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
+    { id: "TOM-002", name: "มะเขือเทศ 02", zone: "โซน A", age: "42 วัน", moisture: 44, health: "ปกติ", confidence: 96, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
+    { id: "TOM-003", name: "มะเขือเทศ 03", zone: "โซน B", age: "38 วัน", moisture: 39, health: "ควรตรวจสอบ", confidence: 78, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
+    { id: "TOM-004", name: "มะเขือเทศ 04", zone: "โซน B", age: "38 วัน", moisture: 36, health: "ปกติ", confidence: 94, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
   ],
   alerts: [
     { id: "leaf-spot", type: "critical", title: "ควรตรวจใบของมะเขือเทศ 03", detail: "ผลวิเคราะห์ภาพพบลักษณะที่อาจเป็นใบจุด ความมั่นใจ 78%", time: "18 นาทีที่แล้ว", resolved: false, greenhouseId: "GH-01" },
@@ -159,6 +173,7 @@ function upgradeState(state: DemoState): DemoState {
   const isRecord = (item: unknown): item is Record<string, unknown> =>
     !!item && typeof item === "object";
   const savedGreenhouses = (state as Partial<DemoState>).greenhouses;
+  const savedCropBatches = (state as Partial<DemoState>).cropBatches;
   const greenhouses = Array.isArray(savedGreenhouses) && savedGreenhouses.length > 0
     ? savedGreenhouses.filter((greenhouse): greenhouse is DemoGreenhouse =>
       isRecord(greenhouse) &&
@@ -175,12 +190,21 @@ function upgradeState(state: DemoState): DemoState {
       ),
     )
     : defaultGreenhouses;
+  const cropBatches = Array.isArray(savedCropBatches)
+    ? savedCropBatches.filter((batch): batch is DemoCropBatch =>
+      isRecord(batch) && typeof batch.id === "string" && typeof batch.greenhouseId === "string" &&
+      typeof batch.zoneId === "string" && typeof batch.cropName === "string" && typeof batch.cultivar === "string" &&
+      typeof batch.plantCount === "number" && typeof batch.plantedAt === "string" &&
+      ["active", "harvested", "archived"].includes(String(batch.status)),
+    )
+    : cloneInitial().cropBatches;
   return {
     ...state,
     devices: state.devices.map((device) => ({ ...device, greenhouseId: device.greenhouseId ?? "GH-01" })),
     plants: state.plants.map((plant) => ({ ...plant, greenhouseId: plant.greenhouseId ?? "GH-01" })),
     alerts: state.alerts.map((alert) => ({ ...alert, greenhouseId: alert.greenhouseId ?? "GH-01" })),
     greenhouses: greenhouses.length > 0 ? greenhouses : defaultGreenhouses,
+    cropBatches,
     aiReviewedEvidence: state.aiReviewedEvidence ?? {},
     settings: {
       ...defaults,

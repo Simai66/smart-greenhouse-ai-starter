@@ -268,6 +268,7 @@ export function GreenhouseApp() {
     ) : activePage === "plants" ? (
       <PlantsView
         plants={greenhouseState.plants}
+        cropBatches={state.cropBatches.filter((batch) => batch.greenhouseId === activeGreenhouse.id)}
         selectedPlantId={selectedPlantId}
         onSelectPlant={setSelectedPlantId}
         onInspectPlant={(plantId) => { setSelectedPlantId(plantId); navigate("ai"); }}
@@ -309,6 +310,8 @@ export function GreenhouseApp() {
       <SettingsView
         settings={state.settings}
         greenhouses={state.greenhouses}
+        cropBatches={state.cropBatches}
+        activeGreenhouseId={activeGreenhouse.id}
         onSave={(settings) => {
           setState((current) => ({ ...current, settings }));
           notify("บันทึกการตั้งค่าเดโมแล้ว");
@@ -400,6 +403,53 @@ export function GreenhouseApp() {
             ),
           }));
           notify("เรียกคืนโซนแล้ว");
+        }}
+        onSaveBatch={(id, draft) => {
+          setState((current) => {
+            const greenhouse = current.greenhouses.find((item) => item.id === draft.greenhouseId);
+            const zone = greenhouse?.zones.find((item) => item.id === draft.zoneId);
+            const zoneName = zone?.name ?? "ไม่ระบุโซน";
+            const makePlants = (batchId: string, from: number, count: number) => Array.from({ length: count }, (_, index) => ({
+              id: `${batchId}-P-${String(from + index + 1).padStart(2, "0")}`,
+              name: `${draft.cropName} ${String(from + index + 1).padStart(2, "0")}`,
+              zone: zoneName,
+              age: "เริ่มปลูก",
+              moisture: 50,
+              health: "ปกติ" as const,
+              confidence: 0,
+              greenhouseId: draft.greenhouseId,
+              batchId,
+            }));
+            if (!id) {
+              const batchId = `BATCH-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+              return {
+                ...current,
+                cropBatches: [...current.cropBatches, { id: batchId, ...draft, status: "active" }],
+                plants: [...current.plants, ...makePlants(batchId, 0, draft.plantCount)],
+              };
+            }
+            const batchPlants = current.plants.filter((plant) => plant.batchId === id);
+            const retainedPlants = batchPlants.slice(0, draft.plantCount).map((plant, index) => ({
+              ...plant,
+              name: `${draft.cropName} ${String(index + 1).padStart(2, "0")}`,
+              zone: zoneName,
+              greenhouseId: draft.greenhouseId,
+            }));
+            return {
+              ...current,
+              cropBatches: current.cropBatches.map((batch) => batch.id === id ? { ...batch, ...draft } : batch),
+              plants: [...current.plants.filter((plant) => plant.batchId !== id), ...retainedPlants, ...makePlants(id, retainedPlants.length, Math.max(0, draft.plantCount - retainedPlants.length))],
+            };
+          });
+          notify(id ? "อัปเดตรอบปลูกและรายชื่อต้นแล้ว" : `เพิ่ม ${draft.cropName} ${draft.plantCount} ต้นแล้ว`);
+        }}
+        onArchiveBatch={(id) => {
+          setState((current) => ({ ...current, cropBatches: current.cropBatches.map((batch) => batch.id === id ? { ...batch, status: "archived" } : batch) }));
+          notify("เก็บรอบปลูกถาวรแล้ว", "info");
+        }}
+        onRestoreBatch={(id) => {
+          setState((current) => ({ ...current, cropBatches: current.cropBatches.map((batch) => batch.id === id ? { ...batch, status: "active" } : batch) }));
+          notify("เรียกคืนรอบปลูกแล้ว");
         }}
       />
     )
