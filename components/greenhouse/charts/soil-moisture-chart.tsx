@@ -52,8 +52,8 @@ export function SoilMoistureChart({
     <Card className="overflow-hidden">
       <CardHeader className="flex-row items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold">ความชื้นดิน · โซน A</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-xl font-semibold leading-snug">ความชื้นดิน · โซน A</h2>
+          <p className="text-base text-muted-foreground">
             ค่าจากเซ็นเซอร์ A-02 · อัปเดตตามช่วงที่เลือก
           </p>
         </div>
@@ -111,7 +111,7 @@ export function SoilMoistureChart({
         </ChartContainer>
       </CardContent>
       <CardFooter className="flex-col items-start gap-3 border-t">
-        <div className="flex w-full items-start justify-between gap-4 text-sm">
+        <div className="flex w-full items-start justify-between gap-4 text-base">
           <div>
             <div className="flex items-center gap-2 font-medium">
               อยู่ในช่วงเป้าหมาย {targetPercent}% ของเวลา
@@ -124,7 +124,7 @@ export function SoilMoistureChart({
           </div>
         </div>
         {recommendation ? (
-          <div className="w-full rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+          <div className="w-full rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-950">
             <strong>คำแนะนำ</strong>
             <span className="ml-2">{recommendation}</span>
           </div>

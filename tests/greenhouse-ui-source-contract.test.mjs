@@ -69,11 +69,12 @@ test("keeps live status and decisions ahead of dashboard detail", async () => {
 });
 
 test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", async () => {
-  const [sidebar, header, search, viewState] = await Promise.all([
+  const [sidebar, header, search, viewState, useMobile] = await Promise.all([
     readFile(new URL("../components/greenhouse/app-sidebar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/greenhouse/site-header.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/greenhouse/global-search.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/greenhouse/view-state.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../hooks/use-mobile.ts", import.meta.url), "utf8"),
   ]);
   assert.match(sidebar, /collapsible="icon"/);
   assert.match(sidebar, /setOpenMobile\(false\)/);
@@ -85,4 +86,7 @@ test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", 
   assert.match(viewState, /ระบบออฟไลน์/);
   assert.match(viewState, /ข้อมูลอาจเก่า/);
   assert.match(viewState, /onRefresh/);
+  assert.match(useMobile, /useState<boolean>\(false\)/);
+  assert.match(useMobile, /setIsMobile\(mql\.matches\)/);
+  assert.doesNotMatch(useMobile, /window\.innerWidth < MOBILE_BREAKPOINT/);
 });

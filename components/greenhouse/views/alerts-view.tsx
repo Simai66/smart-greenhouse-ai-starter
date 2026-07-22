@@ -35,7 +35,7 @@ export function AlertsView({
           <Card key={alert.id}>
             <CardContent className="grid gap-4 p-4 sm:grid-cols-[2.75rem_minmax(0,1fr)_auto] sm:items-center">
               <span className="grid size-11 place-items-center rounded-lg bg-amber-50 text-amber-800"><CircleAlert aria-hidden="true" /></span>
-              <div><div className="flex flex-wrap items-center gap-2"><strong>{alert.title}</strong><Badge variant={alert.resolved ? "secondary" : alert.type === "critical" ? "destructive" : "outline"}>{alert.resolved ? "ดำเนินการแล้ว" : alert.type === "critical" ? "เร่งด่วน" : "ต้องตรวจสอบ"}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{alert.detail}</p><p className="mt-1 text-xs text-muted-foreground">{alert.time}</p></div>
+              <div><div className="flex flex-wrap items-center gap-2"><strong className="text-base">{alert.title}</strong><Badge variant={alert.resolved ? "secondary" : alert.type === "critical" ? "destructive" : "outline"}>{alert.resolved ? "ดำเนินการแล้ว" : alert.type === "critical" ? "เร่งด่วน" : "ต้องตรวจสอบ"}</Badge></div><p className="mt-1 text-base text-muted-foreground">{alert.detail}</p><p className="mt-1 text-xs text-muted-foreground">{alert.time}</p></div>
               <Button variant="outline" className="min-h-11" onClick={() => onOpen(alert)}>ดูรายละเอียด</Button>
             </CardContent>
           </Card>

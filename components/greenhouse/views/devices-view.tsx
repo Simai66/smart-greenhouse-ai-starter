@@ -29,7 +29,7 @@ export function DevicesView({
       <p
         id="device-demo-note"
         role="note"
-        className="rounded-lg border bg-secondary p-4 text-sm text-secondary-foreground"
+        className="rounded-lg border bg-secondary p-4 text-base text-secondary-foreground"
       >
         {online
           ? "โหมดสาธิต: ทุกคำสั่งต้องยืนยันและจะเปลี่ยนสถานะหลังเดโมตอบรับเท่านั้น"
@@ -52,8 +52,8 @@ export function DevicesView({
                     onCheckedChange={() => onRequest(device)}
                   />
                 </div>
-                <div><h2 className="font-semibold">{device.name}</h2><p className="text-sm text-muted-foreground">{device.detail}</p></div>
-                <div className="flex items-center justify-between border-t pt-4 text-sm"><span className="text-muted-foreground">สถานะ</span><Badge variant={device.active ? "secondary" : "outline"}>{!online ? "ออฟไลน์ · ข้อมูลล่าสุด" : pending ? "กำลังส่งคำสั่ง" : device.active ? "กำลังทำงาน" : "ออนไลน์ · ปิดอยู่"}</Badge></div>
+                <div><h2 className="text-xl font-semibold leading-snug">{device.name}</h2><p className="text-base text-muted-foreground">{device.detail}</p></div>
+                <div className="flex items-center justify-between border-t pt-4 text-base"><span className="text-muted-foreground">สถานะ</span><Badge variant={device.active ? "secondary" : "outline"}>{!online ? "ออฟไลน์ · ข้อมูลล่าสุด" : pending ? "กำลังส่งคำสั่ง" : device.active ? "กำลังทำงาน" : "ออนไลน์ · ปิดอยู่"}</Badge></div>
               </CardContent>
             </Card>
           );

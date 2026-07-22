@@ -40,8 +40,8 @@
 }
 
 :root {
-  --type-caption: 0.8125rem;
-  --type-label: 0.875rem;
+  --type-caption: 0.875rem;
+  --type-label: 1rem;
   --type-body: 1rem;
   --type-section: 1.25rem;
   --type-page: 2.5rem;
@@ -108,6 +108,11 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  small {
+    font-size: var(--type-caption);
+    line-height: 1.5;
+  }
+
   button,
   input,
   select,
@@ -122,6 +127,13 @@
   a:focus-visible {
     outline: 0.125rem solid var(--ring);
     outline-offset: 0.125rem;
+  }
+}
+
+@layer utilities {
+  .text-xs {
+    font-size: var(--type-caption);
+    line-height: 1.45;
   }
 }
 

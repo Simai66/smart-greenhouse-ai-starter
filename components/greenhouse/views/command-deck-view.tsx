@@ -63,12 +63,12 @@ export function CommandDeckView({
             <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
             {online ? "ระบบทำงานปกติ" : "ระบบออฟไลน์ · แสดงข้อมูลล่าสุด"}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             อุปกรณ์ออนไลน์ {online ? viewModel.deviceCount : 0}/{viewModel.deviceCount} ·
             มี {viewModel.openAlerts} รายการที่ต้องตรวจสอบ
           </p>
         </div>
-        <div className="text-sm text-muted-foreground">
+        <div className="text-base text-muted-foreground">
           {online ? "LIVE" : "STALE"} · อัปเดต {lastUpdated}
         </div>
       </section>
@@ -100,7 +100,7 @@ export function CommandDeckView({
         />
         <Card>
           <CardHeader className="flex-row items-center justify-between">
-            <div><h2 className="font-semibold">งานที่ต้องจัดการ</h2><p className="text-sm text-muted-foreground">เรียงตามผลกระทบ</p></div>
+            <div><h2 className="text-xl font-semibold leading-snug">งานที่ต้องจัดการ</h2><p className="text-base text-muted-foreground">เรียงตามผลกระทบ</p></div>
             <Badge variant="outline">{viewModel.openAlerts} เปิดอยู่</Badge>
           </CardHeader>
           <CardContent className="divide-y p-0">
@@ -111,7 +111,7 @@ export function CommandDeckView({
                 onClick={() => onNavigate(item.targetPage)}
               >
                 <span className="grid size-11 place-items-center rounded-lg bg-amber-50 text-amber-800"><CircleAlert aria-hidden="true" /></span>
-                <span><strong className="block text-sm">{item.title}</strong><small className="line-clamp-2 text-muted-foreground">{item.detail}</small><small className="text-muted-foreground">{item.time}</small></span>
+                <span><strong className="block text-base">{item.title}</strong><small className="line-clamp-2 text-muted-foreground">{item.detail}</small><small className="text-muted-foreground">{item.time}</small></span>
                 <ArrowRight className="size-4" aria-hidden="true" />
               </button>
             ))}
@@ -126,7 +126,7 @@ export function CommandDeckView({
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <div><h2 className="font-semibold">สถานะทรัพยากรสำคัญ</h2><p className="text-sm text-muted-foreground">พืช อุปกรณ์ และเซ็นเซอร์ที่สัมพันธ์กับงานเปิดอยู่</p></div>
+          <div><h2 className="text-xl font-semibold leading-snug">สถานะทรัพยากรสำคัญ</h2><p className="text-base text-muted-foreground">พืช อุปกรณ์ และเซ็นเซอร์ที่สัมพันธ์กับงานเปิดอยู่</p></div>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
           <Table>
@@ -140,19 +140,19 @@ export function CommandDeckView({
         <Image src="/images/greenhouse-overview.webp" alt="ภาพสดจากกล้องจำลอง 01 ภายในโรงเรือนมะเขือเทศ" fill unoptimized className="object-cover" />
         <div className="absolute inset-x-0 bottom-0 bg-emerald-950/80 p-4 text-white">
           <strong>ภาพสดจากกล้องจำลอง 01</strong>
-          <p className="text-sm text-emerald-50">มะเขือเทศ · หลังที่ 1 · อัปเดตเมื่อครู่</p>
+          <p className="text-base text-emerald-50">มะเขือเทศ · หลังที่ 1 · อัปเดตเมื่อครู่</p>
         </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,.9fr)]">
         <Card>
-          <CardHeader className="flex-row items-center justify-between"><div><h2 className="font-semibold">อุปกรณ์</h2><p className="text-sm text-muted-foreground">เปิดใช้งาน {viewModel.activeDevices} จาก {viewModel.deviceCount}</p></div><Button variant="ghost" onClick={() => onNavigate("devices")}>จัดการทั้งหมด <ArrowRight aria-hidden="true" /></Button></CardHeader>
-          <CardContent className="divide-y">{devices.map((device) => <div className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3" key={device.id}><div><strong className="text-sm">{device.name}</strong><p className="text-xs text-muted-foreground">{device.detail}</p></div><Switch aria-label={(device.active ? "ปิด" : "เปิด") + device.name} aria-describedby="dashboard-device-demo-note" checked={device.active} disabled={!online || Boolean(pendingDeviceId)} onCheckedChange={() => onDeviceRequest(device)} /></div>)}</CardContent>
+          <CardHeader className="flex-row items-center justify-between"><div><h2 className="text-xl font-semibold leading-snug">อุปกรณ์</h2><p className="text-base text-muted-foreground">เปิดใช้งาน {viewModel.activeDevices} จาก {viewModel.deviceCount}</p></div><Button variant="ghost" onClick={() => onNavigate("devices")}>จัดการทั้งหมด <ArrowRight aria-hidden="true" /></Button></CardHeader>
+          <CardContent className="divide-y">{devices.map((device) => <div className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3" key={device.id}><div><strong className="text-base">{device.name}</strong><p className="text-xs text-muted-foreground">{device.detail}</p></div><Switch aria-label={(device.active ? "ปิด" : "เปิด") + device.name} aria-describedby="dashboard-device-demo-note" checked={device.active} disabled={!online || Boolean(pendingDeviceId)} onCheckedChange={() => onDeviceRequest(device)} /></div>)}</CardContent>
           <p className="sr-only" id="dashboard-device-demo-note">{online ? "คำสั่งเดโมต้องยืนยันและรอการตอบรับก่อนเปลี่ยนสถานะ" : "ออฟไลน์ จึงปิดคำสั่งอุปกรณ์ชั่วคราว"}</p>
         </Card>
         <Card>
-          <CardHeader className="flex-row items-center justify-between"><div><h2 className="font-semibold">สุขภาพพืชล่าสุด</h2><p className="text-sm text-muted-foreground">ค่าเฉลี่ย {viewModel.healthScore}/100</p></div><Button variant="ghost" onClick={() => onNavigate("plants")}>ดูทุกต้น <ArrowRight aria-hidden="true" /></Button></CardHeader>
-          <CardContent className="divide-y">{plants.map((plant) => <button className="flex min-h-14 w-full items-center justify-between gap-3 text-left" key={plant.id} onClick={() => onInspectPlant(plant.id)}><span><strong className="block text-sm">{plant.name}</strong><small className="text-muted-foreground">{plant.zone}</small></span><Badge variant={plant.health === "ปกติ" ? "secondary" : "outline"}>{plant.health}</Badge></button>)}</CardContent>
+          <CardHeader className="flex-row items-center justify-between"><div><h2 className="text-xl font-semibold leading-snug">สุขภาพพืชล่าสุด</h2><p className="text-base text-muted-foreground">ค่าเฉลี่ย {viewModel.healthScore}/100</p></div><Button variant="ghost" onClick={() => onNavigate("plants")}>ดูทุกต้น <ArrowRight aria-hidden="true" /></Button></CardHeader>
+          <CardContent className="divide-y">{plants.map((plant) => <button className="flex min-h-14 w-full items-center justify-between gap-3 text-left" key={plant.id} onClick={() => onInspectPlant(plant.id)}><span><strong className="block text-base">{plant.name}</strong><small className="text-muted-foreground">{plant.zone}</small></span><Badge variant={plant.health === "ปกติ" ? "secondary" : "outline"}>{plant.health}</Badge></button>)}</CardContent>
         </Card>
       </section>
     </div>
