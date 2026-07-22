@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Archive, BellRing, Bot, Camera, Clock3, Droplets, MapPin, Pencil, Plus, Settings2, Warehouse } from "lucide-react";
+import { Archive, BellRing, Bot, Camera, Clock3, Droplets, MapPin, Pencil, Plus, Settings2, Sparkles, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -33,6 +33,26 @@ function CameraRow({ camera, onChange }: { camera: DemoCamera; onChange: (next: 
 }
 
 type GreenhouseDraft = Pick<DemoGreenhouse, "name" | "code">;
+
+const greenhouseSuggestions: Array<GreenhouseDraft> = [
+  { name: "โรงเรือนผักสลัด", code: "GREENHOUSE 02" },
+  { name: "โรงเรือนสมุนไพร", code: "GREENHOUSE 03" },
+  { name: "โรงเรือนเพาะกล้า", code: "NURSERY 01" },
+];
+
+const zoneSuggestions = ["โซน A", "โซน B", "โซนเพาะกล้า", "โซนทดลอง"];
+
+function NameSuggestions({
+  label,
+  suggestions,
+  onChoose,
+}: {
+  label: string;
+  suggestions: string[];
+  onChoose: (suggestion: string) => void;
+}) {
+  return <div className="space-y-2"><p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Sparkles className="size-3.5" aria-hidden="true" />{label}</p><div className="flex flex-wrap gap-2">{suggestions.map((suggestion) => <Button key={suggestion} type="button" variant="outline" size="sm" className="h-8 rounded-full px-3 text-xs" onClick={() => onChoose(suggestion)}>{suggestion}</Button>)}</div></div>;
+}
 
 function FarmStructureSection({ greenhouses, onSaveGreenhouse, onArchiveGreenhouse, onAddZone, onArchiveZone }: {
   greenhouses: DemoGreenhouse[];
@@ -107,14 +127,14 @@ function FarmStructureSection({ greenhouses, onSaveGreenhouse, onArchiveGreenhou
     <Dialog open={editingOpen} onOpenChange={(open) => !open && setEditing(undefined)}>
       <DialogContent>
         <DialogHeader><DialogTitle>{editing ? "แก้ไขโรงเรือน" : "เพิ่มโรงเรือน"}</DialogTitle><DialogDescription>ชื่อและรหัสนี้จะใช้ระบุพื้นที่ในระบบ</DialogDescription></DialogHeader>
-        <div className="grid gap-4 py-2"><div className="space-y-2"><Label htmlFor="greenhouse-name">ชื่อโรงเรือน</Label><Input id="greenhouse-name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="เช่น โรงเรือนผักสลัด" /></div><div className="space-y-2"><Label htmlFor="greenhouse-code">รหัสโรงเรือน</Label><Input id="greenhouse-code" value={draft.code} onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))} placeholder="เช่น GREENHOUSE 02" /></div>{formError ? <p className="text-sm text-destructive" role="alert">{formError}</p> : null}</div>
+        <div className="grid gap-4 py-2"><div className="space-y-2"><Label htmlFor="greenhouse-name">ชื่อโรงเรือน</Label><Input id="greenhouse-name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="เช่น โรงเรือนผักสลัด" /></div>{!editing ? <NameSuggestions label="เลือกชื่อแนะนำเพื่อเริ่มต้น" suggestions={greenhouseSuggestions.map((suggestion) => suggestion.name)} onChoose={(name) => setDraft(greenhouseSuggestions.find((suggestion) => suggestion.name === name) ?? { name, code: draft.code })} /> : null}<div className="space-y-2"><Label htmlFor="greenhouse-code">รหัสโรงเรือน</Label><Input id="greenhouse-code" value={draft.code} onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))} placeholder="เช่น GREENHOUSE 02" /></div>{formError ? <p className="text-sm text-destructive" role="alert">{formError}</p> : null}</div>
         <DialogFooter><Button type="button" variant="outline" onClick={() => setEditing(undefined)}>ยกเลิก</Button><Button type="button" onClick={saveGreenhouse}>บันทึกโรงเรือน</Button></DialogFooter>
       </DialogContent>
     </Dialog>
     <Dialog open={Boolean(zoneGreenhouseId)} onOpenChange={(open) => !open && setZoneGreenhouseId(null)}>
       <DialogContent>
         <DialogHeader><DialogTitle>เพิ่มโซน</DialogTitle><DialogDescription>{zoneGreenhouse ? `เพิ่มพื้นที่ภายใน ${zoneGreenhouse.name}` : "ระบุชื่อพื้นที่"}</DialogDescription></DialogHeader>
-        <div className="space-y-2 py-2"><Label htmlFor="zone-name">ชื่อโซน</Label><Input id="zone-name" value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="เช่น โซน C" />{formError ? <p className="text-sm text-destructive" role="alert">{formError}</p> : null}</div>
+        <div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="zone-name">ชื่อโซน</Label><Input id="zone-name" value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="เช่น โซน C" /></div><NameSuggestions label="เลือกชื่อแนะนำเพื่อเริ่มต้น" suggestions={zoneSuggestions} onChoose={setZoneName} />{formError ? <p className="text-sm text-destructive" role="alert">{formError}</p> : null}</div>
         <DialogFooter><Button type="button" variant="outline" onClick={() => setZoneGreenhouseId(null)}>ยกเลิก</Button><Button type="button" onClick={saveZone}>เพิ่มโซน</Button></DialogFooter>
       </DialogContent>
     </Dialog>
