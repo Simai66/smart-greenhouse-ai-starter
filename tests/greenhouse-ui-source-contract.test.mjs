@@ -89,10 +89,11 @@ test("keeps reusable resource editing and deliberate deletion in settings", asyn
 });
 
 test("keeps truthful configured status and decisions ahead of dashboard detail", async () => {
-  const source = await readFile(
-    new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url),
-    "utf8",
-  );
+  const [source, app, ai] = await Promise.all([
+    readFile(new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/ai-detection-view.tsx", import.meta.url), "utf8"),
+  ]);
 
   const configuredIndex = source.indexOf("ตั้งค่าทรัพยากรแล้ว · รอข้อมูลบันทึก");
   const workIndex = source.indexOf("งานที่ต้องจัดการ");
@@ -109,6 +110,12 @@ test("keeps truthful configured status and decisions ahead of dashboard detail",
   assert.match(source, /const activeCamera = context\.cameras\.find/);
   assert.match(source, /activeCamera \? activeCamera\.name : "ยังไม่มีกล้องในโรงเรือนนี้"/);
   assert.doesNotMatch(source, /ภาพสดจากกล้องจำลอง 01/);
+  assert.match(source, /ยังไม่มีเวลาซิงก์ที่บันทึก/);
+  assert.doesNotMatch(source, /dashboard-device-demo-note|คำสั่งเดโม/);
+  assert.match(app, /!activeGreenhouse && activePage !== "settings"/);
+  assert.match(app, /ระบบจะไม่แสดงข้อมูลจากโรงเรือนอื่นแทน/);
+  assert.doesNotMatch(app, /demoInitialState\.greenhouses\[0\]|07:42|ข้อมูลเดโม|เดโมตอบรับ|รายงาน CSV เดโม/);
+  assert.doesNotMatch(ai, /ระบบเดโม/);
 });
 
 test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", async () => {

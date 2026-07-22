@@ -129,7 +129,7 @@ export function selectDevicePresentation(
   return {
     zoneId: device.zoneId,
     zoneName: zone?.name ?? device.zoneId ?? "ไม่ระบุโซน",
-    lastActive: device.active ? "กำลังทำงานตามสถานะเดโม" : "ยังไม่มีประวัติการทำงาน",
+    lastActive: device.active ? "ตั้งค่าให้ทำงานอยู่" : "ยังไม่มีประวัติการทำงาน",
     rule: defaults[device.icon].rule,
     power: defaults[device.icon].power,
     health: "พร้อมใช้งาน",
@@ -198,7 +198,7 @@ export function updateResource(state: DemoState, input: UpdateResourceInput): De
           cameras: state.settings.cameras.map((item) => {
             if (item.id !== id) return item;
 
-            // Older demo cameras may not yet be assigned to a greenhouse or zone.
+            // Saved cameras created before resource scoping may not yet have a greenhouse or zone.
             // Keep the lookup inputs concrete when a moved camera originates from
             // one of those legacy records.
             const greenhouseId = changes.greenhouseId ?? item.greenhouseId ?? "";

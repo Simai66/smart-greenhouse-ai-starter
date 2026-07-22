@@ -13,7 +13,7 @@ export function AiDetectionView({ plant, cameras, reviewedCameraIds, onSave }: A
   const initialCameraId = useMemo(() => cameras.find((camera) => camera.zone === plant.zone && camera.enabled)?.id ?? cameras.find((camera) => camera.enabled)?.id ?? cameras[0]?.id ?? "", [cameras, plant.zone]);
   const [selectedCameraId, setSelectedCameraId] = useState(initialCameraId);
   const selectedCamera = cameras.find((camera) => camera.id === selectedCameraId) ?? cameras.find((camera) => camera.id === initialCameraId) ?? cameras[0];
-  if (!selectedCamera) return <Card><CardContent className="py-10 text-center text-muted-foreground">ยังไม่มีกล้องในระบบเดโม กรุณาเปิดใช้งานกล้องจากหน้าการตั้งค่า</CardContent></Card>;
+  if (!selectedCamera) return <Card><CardContent className="py-10 text-center text-muted-foreground">ยังไม่มีกล้องในโรงเรือนนี้ กรุณาเพิ่มและเปิดใช้งานกล้องจากหน้าการตั้งค่า</CardContent></Card>;
   const unavailable = !selectedCamera.enabled || selectedCamera.status === "offline";
   const reviewed = reviewedCameraIds.includes(selectedCamera.id);
 

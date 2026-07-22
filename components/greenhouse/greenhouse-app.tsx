@@ -52,7 +52,7 @@ export function GreenhouseApp() {
   const [search, setSearch] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState("07:42 น.");
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [online, setOnline] = useState(true);
   const [dataStale, setDataStale] = useState(false);
@@ -94,7 +94,7 @@ export function GreenhouseApp() {
       }
       setReady(true);
       if (result.recovered) notify("ข้อมูลที่บันทึกไม่สมบูรณ์ จึงกู้คืนค่าเริ่มต้นแล้ว", "info");
-      if (!result.storageAvailable) notify("บันทึกข้อมูลเดโมไม่ได้ การเปลี่ยนแปลงจะอยู่ในหน่วยความจำ", "error");
+      if (!result.storageAvailable) notify("บันทึกการตั้งค่าในเครื่องไม่ได้ การเปลี่ยนแปลงจะอยู่ในหน่วยความจำ", "error");
     });
     return () => {
       active = false;
@@ -113,12 +113,12 @@ export function GreenhouseApp() {
   }, [ready, state]);
 
   const activeGreenhouse = useMemo(
-    () => state.greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId && greenhouse.status === "active") ?? state.greenhouses.find((greenhouse) => greenhouse.status === "active") ?? demoInitialState.greenhouses[0]!,
+    () => state.greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId && greenhouse.status === "active") ?? state.greenhouses.find((greenhouse) => greenhouse.status === "active"),
     [activeGreenhouseId, state.greenhouses],
   );
   const greenhouseContext = useMemo(
-    () => selectGreenhouseContext(state, activeGreenhouse.id),
-    [activeGreenhouse.id, state],
+    () => selectGreenhouseContext(state, activeGreenhouse?.id ?? ""),
+    [activeGreenhouse?.id, state],
   );
   const greenhouseState = useMemo(() => ({
     ...state,
@@ -182,8 +182,8 @@ export function GreenhouseApp() {
     setRefreshing(false);
     notify(
       result.recovered
-        ? "รีเซ็ตข้อมูลเดโมที่ไม่สมบูรณ์แล้ว"
-        : "โหลดข้อมูลเดโมล่าสุดแล้ว",
+        ? "รีเซ็ตข้อมูลที่บันทึกไม่สมบูรณ์แล้ว"
+        : "โหลดการตั้งค่าที่บันทึกล่าสุดแล้ว",
       "info",
     );
   };
@@ -202,10 +202,10 @@ export function GreenhouseApp() {
     );
     const link = document.createElement("a");
     link.href = url;
-    link.download = "smart-greenhouse-demo-report.csv";
+    link.download = "smart-greenhouse-report.csv";
     link.click();
     URL.revokeObjectURL(url);
-    notify("ดาวน์โหลดรายงาน CSV เดโมแล้ว");
+    notify("ดาวน์โหลดรายงาน CSV แล้ว");
   };
 
   const confirmDeviceCommand = async () => {
@@ -227,7 +227,7 @@ export function GreenhouseApp() {
         pendingDevice.device.name +
           ": " +
           (pendingDevice.nextActive ? "เปิดแล้ว" : "ปิดแล้ว") +
-          " (เดโมตอบรับแล้ว)",
+          " (ระบบรับคำขอแล้ว)",
       );
       setPendingDevice(null);
     } catch (error) {
@@ -247,13 +247,15 @@ export function GreenhouseApp() {
     );
     notify(
       resolved
-        ? "บันทึกการดำเนินการเดโมแล้ว"
-        : "เปิดการแจ้งเตือนเดโมอีกครั้งแล้ว",
+        ? "บันทึกการดำเนินการแล้ว"
+        : "เปิดการแจ้งเตือนอีกครั้งแล้ว",
     );
   };
 
   const page = ready ? (
-    activePage === "dashboard" ? (
+    !activeGreenhouse && activePage !== "settings" ? (
+      <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center"><p className="font-semibold">ยังไม่มีโรงเรือนที่ใช้งาน</p><p className="max-w-md text-sm text-muted-foreground">เพิ่มโรงเรือนใหม่หรือเรียกคืนโรงเรือนที่เก็บไว้ก่อน ระบบจะไม่แสดงข้อมูลจากโรงเรือนอื่นแทน</p><Button onClick={() => navigate("settings")}>ไปที่ตั้งค่าโรงเรือน</Button></CardContent></Card>
+    ) : activePage === "dashboard" ? (
       <CommandDeckView
         viewModel={dashboard}
         devices={greenhouseState.devices}
@@ -294,7 +296,7 @@ export function GreenhouseApp() {
               ])),
             },
           }));
-          notify("บันทึกผลตรวจเดโมแล้ว การแจ้งเตือนยังคงเปิดอยู่");
+          notify("บันทึกผลตรวจแล้ว การแจ้งเตือนยังคงเปิดอยู่");
         }}
       />
       ) : <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center"><p className="font-semibold">ยังไม่มีพืชสำหรับตรวจด้วย AI</p><p className="max-w-md text-sm text-muted-foreground">เพิ่มรอบปลูกและข้อมูลพืชของ {activeGreenhouse.name} ก่อน แล้วจึงเริ่มตรวจหลักฐานจากกล้องได้</p><Button variant="outline" onClick={() => navigate("settings")}>ไปที่ตั้งค่า</Button></CardContent></Card>
@@ -315,12 +317,12 @@ export function GreenhouseApp() {
         settings={state.settings}
         greenhouses={state.greenhouses}
         cropBatches={state.cropBatches}
-        activeGreenhouseId={activeGreenhouse.id}
+        activeGreenhouseId={activeGreenhouse?.id ?? ""}
         devices={state.devices}
         sensors={state.sensors}
         onSave={(settings) => {
           setState((current) => ({ ...current, settings }));
-          notify("บันทึกการตั้งค่าเดโมแล้ว");
+          notify("บันทึกการตั้งค่าแล้ว");
         }}
         onSaveGreenhouse={(id, draft) => {
           setState((current) => {
@@ -454,6 +456,7 @@ export function GreenhouseApp() {
           notify("เรียกคืนรอบปลูกแล้ว");
         }}
         onCreateResource={(value) => {
+          if (!activeGreenhouse) { notify("เพิ่มโรงเรือนก่อนจึงจะผูกทรัพยากรได้", "error"); return; }
           const zone = activeGreenhouse.zones.find((item) => item.id === value.zoneId && item.status === "active");
           if (!zone) { notify("กรุณาเลือกโซนที่กำลังใช้งานก่อนเพิ่มทรัพยากร", "error"); return; }
           setState((current) => {
@@ -550,31 +553,31 @@ export function GreenhouseApp() {
       <a className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-3 focus:text-primary-foreground" href="#main-content">
         ข้ามไปยังเนื้อหาหลัก
       </a>
-      <AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={greenhouseState.devices.length} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
-      <SidebarInset>
-        <SiteHeader
-          pageTitle={pageMetadata[activePage].title}
-          openAlerts={openAlerts}
-          search={search}
-          searchIndex={searchIndex}
-          searchResults={searchResults}
-          onSearchChange={setSearch}
-          onSearchIndexChange={setSearchIndex}
-          onChooseSearch={chooseSearch}
-          onOpenMobileSearch={() => setMobileSearchOpen(true)}
-          onOpenAlerts={() => navigate("alerts")}
-          onNotify={(text) => notify(text, "info")}
-          greenhouses={state.greenhouses}
-          activeGreenhouseId={activeGreenhouse.id}
-          onGreenhouseChange={changeGreenhouse}
-        />
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[86rem] space-y-7 p-4 pb-12 sm:p-6 lg:px-8 lg:py-7">
-          <PageHeader metadata={pageMetadata[activePage]} greenhouse={activeGreenhouse} refreshing={refreshing} onExport={exportCsv} onRefresh={refresh} />
-          {!storageAvailable ? <MemoryOnlyNotice /> : null}
-          {!online ? <OfflineNotice lastUpdated={lastUpdated} /> : dataStale ? <StaleDataNotice lastUpdated={lastUpdated} onRefresh={refresh} /> : null}
-          {page}
-        </main>
-      </SidebarInset>
+      {activeGreenhouse ? <><AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={greenhouseState.devices.length} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
+        <SidebarInset>
+          <SiteHeader
+            pageTitle={pageMetadata[activePage].title}
+            openAlerts={openAlerts}
+            search={search}
+            searchIndex={searchIndex}
+            searchResults={searchResults}
+            onSearchChange={setSearch}
+            onSearchIndexChange={setSearchIndex}
+            onChooseSearch={chooseSearch}
+            onOpenMobileSearch={() => setMobileSearchOpen(true)}
+            onOpenAlerts={() => navigate("alerts")}
+            onNotify={(text) => notify(text, "info")}
+            greenhouses={state.greenhouses}
+            activeGreenhouseId={activeGreenhouse.id}
+            onGreenhouseChange={changeGreenhouse}
+          />
+          <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[86rem] space-y-7 p-4 pb-12 sm:p-6 lg:px-8 lg:py-7">
+            <PageHeader metadata={pageMetadata[activePage]} greenhouse={activeGreenhouse} refreshing={refreshing} onExport={exportCsv} onRefresh={refresh} />
+            {!storageAvailable ? <MemoryOnlyNotice /> : null}
+            {!online && lastUpdated ? <OfflineNotice lastUpdated={lastUpdated} /> : dataStale && lastUpdated ? <StaleDataNotice lastUpdated={lastUpdated} onRefresh={refresh} /> : null}
+            {page}
+          </main>
+        </SidebarInset></> : <SidebarInset><main id="main-content" tabIndex={-1} className="mx-auto flex min-h-dvh w-full max-w-3xl items-center p-4 sm:p-6">{page}</main></SidebarInset>}
 
       <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
         <DialogContent className="top-4 translate-y-0 sm:top-1/2 sm:-translate-y-1/2">
