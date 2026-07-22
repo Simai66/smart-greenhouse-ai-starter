@@ -53,9 +53,10 @@ test("keeps safe controls and persisted operational page contracts", async () =>
 });
 
 test("keeps reusable resource editing and deliberate deletion in settings", async () => {
-  const [settings, app] = await Promise.all([
+  const [settings, app, editor] = await Promise.all([
     readFile(new URL("../components/greenhouse/views/settings-view.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/settings/resource-editor-dialog.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(settings, /ResourceEditorDialog/);
@@ -65,11 +66,19 @@ test("keeps reusable resource editing and deliberate deletion in settings", asyn
   assert.match(settings, /onUpdateResourceStatus\(editing\.kind, editing\.id, value\)/);
   assert.match(settings, /onDeleteResource=\{onDeleteResource\}/);
   assert.match(settings, /ลบทรัพยากร\?/);
+  assert.match(settings, /hasUnsavedSettingsChanges/);
+  assert.match(settings, /cameras: settings\.cameras/);
+  assert.match(settings, /<ResourceList key=\{kind\}/);
+  assert.match(editor, /ยังไม่มีโซนที่ใช้งานอยู่ กรุณาเพิ่มโซนก่อนผูกทรัพยากร/);
+  assert.match(editor, /disabled=\{!canBind\}/);
   assert.doesNotMatch(settings, /pendingCreate|knownIds/);
   assert.match(app, /onCreateResource=\{\(value\) => \{/);
   assert.match(app, /return createResource\(current,/);
   assert.match(app, /onUpdateResourceStatus=\{\(kind, id, \{ enabled, status \}\) => \{/);
   assert.match(app, /item\.greenhouseId === activeGreenhouse\.id/);
+  assert.match(app, /item\.id === id && item\.greenhouseId === activeGreenhouse\.id \? \{ \.\.\.item, zoneId/);
+  assert.match(app, /item\.id === id && item\.greenhouseId === activeGreenhouse\.id \? \{ \.\.\.item, name \}/);
+  assert.match(app, /item\.id !== id \|\| item\.greenhouseId !== activeGreenhouse\.id/);
   assert.match(app, /active: enabled/);
   assert.match(app, /enabled, status: status === "online" \? "online" : "offline"/);
 });

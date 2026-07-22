@@ -215,7 +215,8 @@ function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cam
   };
 
   return <><SettingSection icon={<Cpu className="size-5" aria-hidden="true" />} title="ทรัพยากรในโรงเรือน" description="ผูกอุปกรณ์ กล้อง และเซ็นเซอร์กับโซนของโรงเรือนที่กำลังเลือกอยู่">
-    {!zones.length ? <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">เพิ่มโซนก่อน แล้วจึงผูกอุปกรณ์ กล้อง หรือเซ็นเซอร์ได้</p> : <div className="grid gap-4 xl:grid-cols-3">{(["device", "camera", "sensor"] as ResourceKind[]).map((kind) => <ResourceList key={kind} kind={kind} resources={resourceGroups[kind]} zones={zones} onCreate={setCreatingKind} onEdit={setEditing} onDelete={setDeleting} />)}</div>}
+    {!zones.length ? <p className="mb-4 rounded-lg bg-muted p-4 text-sm text-muted-foreground">เพิ่มโซนก่อน แล้วจึงผูกอุปกรณ์ กล้อง หรือเซ็นเซอร์ได้</p> : null}
+    <div className="grid gap-4 xl:grid-cols-3">{(["device", "camera", "sensor"] as ResourceKind[]).map((kind) => <ResourceList key={kind} kind={kind} resources={resourceGroups[kind]} zones={zones} onCreate={setCreatingKind} onEdit={setEditing} onDelete={setDeleting} />)}</div>
   </SettingSection>
   <ResourceEditorDialog open={Boolean(editing || creatingKind)} mode={editing ? "edit" : "create"} zones={zones} initialValue={editorValue} onOpenChange={(open) => { if (!open) { setEditing(null); setCreatingKind(null); } }} onSubmit={submitEditor} />
   <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}><DialogContent><DialogHeader><DialogTitle>ลบทรัพยากร?</DialogTitle><DialogDescription>{deleting ? `จะลบ “${deleting.name}” ออกจากโรงเรือน ข้อมูลนี้เรียกคืนจากหน้านี้ไม่ได้` : ""}</DialogDescription></DialogHeader><DialogFooter><Button type="button" variant="outline" onClick={() => setDeleting(null)}>ยกเลิก</Button><Button type="button" variant="destructive" onClick={() => { if (!deleting) return; onDeleteResource(deleting.kind, deleting.id); setDeleting(null); }}>ลบถาวร</Button></DialogFooter></DialogContent></Dialog>
@@ -226,7 +227,11 @@ export function SettingsView({ settings, greenhouses, cropBatches, activeGreenho
   const [draft, setDraft] = useState(settings);
   const [error, setError] = useState("");
   const [prevSettings, setPrevSettings] = useState(settings);
-  if (settings !== prevSettings) { setDraft(settings); setPrevSettings(settings); }
+  if (settings !== prevSettings) {
+    const hasUnsavedSettingsChanges = JSON.stringify(draft) !== JSON.stringify(prevSettings);
+    setDraft(hasUnsavedSettingsChanges ? { ...draft, cameras: settings.cameras } : settings);
+    setPrevSettings(settings);
+  }
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(settings), [draft, settings]);
   const update = <K extends keyof DemoSettings>(key: K, value: DemoSettings[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const save = () => { const message = validateDemoSettings(draft); if (message) { setError(message); return; } setError(""); onSave(draft); };

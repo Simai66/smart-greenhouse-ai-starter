@@ -495,17 +495,17 @@ export function GreenhouseApp() {
         onMoveResource={(kind, id, zoneId) => {
           const zoneName = activeGreenhouse.zones.find((zone) => zone.id === zoneId)?.name ?? "ไม่ระบุโซน";
           setState((current) => {
-            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id ? { ...item, greenhouseId: activeGreenhouse.id, zoneId, detail: `ผูกกับ ${zoneName}` } : item) };
-            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id ? { ...item, greenhouseId: activeGreenhouse.id, zoneId } : item) };
-            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id ? { ...item, greenhouseId: activeGreenhouse.id, zoneId, zone: zoneName } : item) } };
+            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, zoneId, detail: `ผูกกับ ${zoneName}` } : item) };
+            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, zoneId } : item) };
+            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, zoneId, zone: zoneName } : item) } };
           });
           notify(`ย้ายทรัพยากรไป${zoneName}แล้ว`);
         }}
         onRenameResource={(kind, id, name) => {
           setState((current) => {
-            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id ? { ...item, name } : item) };
-            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id ? { ...item, name } : item) };
-            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id ? { ...item, name } : item) } };
+            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, name } : item) };
+            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, name } : item) };
+            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, name } : item) } };
           });
           notify("แก้ไขชื่อทรัพยากรแล้ว");
         }}
@@ -533,9 +533,9 @@ export function GreenhouseApp() {
         }}
         onDeleteResource={(kind, id) => {
           setState((current) => {
-            if (kind === "device") return { ...current, devices: current.devices.filter((item) => item.id !== id) };
-            if (kind === "sensor") return { ...current, sensors: current.sensors.filter((item) => item.id !== id) };
-            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.filter((item) => item.id !== id) } };
+            if (kind === "device") return { ...current, devices: current.devices.filter((item) => item.id !== id || item.greenhouseId !== activeGreenhouse.id) };
+            if (kind === "sensor") return { ...current, sensors: current.sensors.filter((item) => item.id !== id || item.greenhouseId !== activeGreenhouse.id) };
+            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.filter((item) => item.id !== id || item.greenhouseId !== activeGreenhouse.id) } };
           });
           if (pendingDevice?.device.id === id) setPendingDevice(null);
           notify("ลบทรัพยากรแล้ว", "info");
