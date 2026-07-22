@@ -474,6 +474,23 @@ export function GreenhouseApp() {
           });
           notify(`ย้ายทรัพยากรไป${zoneName}แล้ว`);
         }}
+        onRenameResource={(kind, id, name) => {
+          setState((current) => {
+            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id ? { ...item, name } : item) };
+            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id ? { ...item, name } : item) };
+            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id ? { ...item, name } : item) } };
+          });
+          notify("แก้ไขชื่อทรัพยากรแล้ว");
+        }}
+        onDeleteResource={(kind, id) => {
+          setState((current) => {
+            if (kind === "device") return { ...current, devices: current.devices.filter((item) => item.id !== id) };
+            if (kind === "sensor") return { ...current, sensors: current.sensors.filter((item) => item.id !== id) };
+            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.filter((item) => item.id !== id) } };
+          });
+          if (pendingDevice?.device.id === id) setPendingDevice(null);
+          notify("ลบทรัพยากรแล้ว", "info");
+        }}
       />
     )
   ) : (
