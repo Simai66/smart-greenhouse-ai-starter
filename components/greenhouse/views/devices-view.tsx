@@ -1,23 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Activity,
-  BadgeCheck,
-  Clock3,
   CloudSun,
   Droplets,
   Fan,
   Gauge,
   Lightbulb,
+  MapPin,
   PlugZap,
-  ShieldCheck,
   SlidersHorizontal,
-  TimerReset,
-  Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -28,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { DemoDevice } from "@/lib/greenhouse-demo-store";
-import { selectDevicePresentation, type GreenhouseContext } from "@/lib/greenhouse-domain";
+import type { GreenhouseContext } from "@/lib/greenhouse-domain";
 
 const icons = {
   pump: Droplets,
@@ -39,7 +34,6 @@ const icons = {
 
 type FilterStatus = "all" | "running" | "stopped";
 type DeviceKind = "all" | DemoDevice["icon"];
-type Override = { deviceId: string; minutes: string } | null;
 
 const typeLabels: Record<DemoDevice["icon"], string> = {
   pump: "ปั๊มน้ำ",
@@ -52,26 +46,21 @@ export function DevicesView({
   devices,
   context,
   pendingDeviceId,
-  online,
   onRequest,
 }: {
   devices: DemoDevice[];
   context: GreenhouseContext;
   pendingDeviceId: string | null;
+  /** Kept for the command-dialog integration; not a device connectivity signal. */
   online: boolean;
   onRequest: (device: DemoDevice) => void;
 }) {
   const [zone, setZone] = useState("all");
   const [kind, setKind] = useState<DeviceKind>("all");
   const [status, setStatus] = useState<FilterStatus>("all");
-  const [override, setOverride] = useState<Override>(null);
-  const [overrideExpiresAt, setOverrideExpiresAt] = useState<number | null>(null);
-  const [overrideMinutes, setOverrideMinutes] = useState("30");
-
   const visibleDevices = useMemo(
     () => devices.filter((device) => {
-      const presentation = selectDevicePresentation(device, context);
-      return (zone === "all" || presentation.zoneId === zone) &&
+      return (zone === "all" || device.zoneId === zone) &&
         (kind === "all" || device.icon === kind) &&
         (status === "all" || (status === "running" ? device.active : !device.active));
     }),
@@ -85,42 +74,8 @@ export function DevicesView({
     });
     return [...names.entries()].map(([id, name]) => ({ id, name }));
   }, [context.greenhouse?.zones, devices]);
-  const recentActivity = useMemo(
-    () => devices.slice(0, 3).map((device, index) => {
-      const presentation = selectDevicePresentation(device, context);
-      const verb = device.active ? "กำลังทำงาน" : "อยู่ในโหมด Auto";
-
-      return {
-        time: ["07:42", "07:30", "07:00"][index] ?? "ล่าสุด",
-        title: `${device.name}${verb}`,
-        detail: `${presentation.zoneName} · ${presentation.lastActive}`,
-        icon: icons[device.icon],
-      };
-    }),
-    [context, devices],
-  );
   const activeDevices = devices.filter((device) => device.active).length;
-  const manualDevice = override ? devices.find((device) => device.id === override.deviceId) : null;
-
-  useEffect(() => {
-    if (!override || !overrideExpiresAt) return;
-    const remaining = Math.max(0, overrideExpiresAt - Date.now());
-    const timer = window.setTimeout(() => {
-      setOverride(null);
-      setOverrideExpiresAt(null);
-    }, remaining);
-    return () => window.clearTimeout(timer);
-  }, [override, overrideExpiresAt]);
-
-  const beginOverride = (device: DemoDevice) => {
-    setOverride({ deviceId: device.id, minutes: overrideMinutes });
-    setOverrideExpiresAt(Date.now() + Number(overrideMinutes) * 60_000);
-  };
-
-  const clearOverride = () => {
-    setOverride(null);
-    setOverrideExpiresAt(null);
-  };
+  const configuredZones = new Set(devices.map((device) => device.zoneId).filter(Boolean)).size;
 
   return (
     <section className="space-y-6" aria-labelledby="device-operations-title">
@@ -129,25 +84,18 @@ export function DevicesView({
           <div>
             <p className="flex items-center gap-2 text-sm font-medium text-primary"><SlidersHorizontal className="size-4" aria-hidden="true" />Operations board</p>
             <h2 id="device-operations-title" className="mt-1 text-2xl font-semibold tracking-tight">ควบคุมอุปกรณ์โรงเรือน</h2>
-            <p id="device-demo-note" role="note" className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              {online
-                ? "โหมดสาธิต: การเปิด–ปิดทุกครั้งต้องยืนยันก่อน และยังไม่มีคำสั่งส่งไปยังอุปกรณ์จริง"
-                : "ออฟไลน์: แสดงข้อมูลล่าสุดที่บันทึกไว้และปิดคำสั่งอุปกรณ์ชั่วคราว"}
-            </p>
+            <p id="device-command-note" role="note" className="mt-2 max-w-2xl text-sm text-muted-foreground">รายการอุปกรณ์ที่ตั้งค่าไว้ในโรงเรือนนี้ การเปิด–ปิดทุกครั้งต้องยืนยันก่อน</p>
           </div>
-          <Badge variant={online ? "secondary" : "outline"} className="w-fit gap-1.5 px-3 py-1.5">
-            <span className={`size-2 rounded-full ${online ? "bg-emerald-500" : "bg-muted-foreground"}`} aria-hidden="true" />
-            {online ? "ระบบเดโมออนไลน์" : "ออฟไลน์ · ข้อมูลล่าสุด"}
-          </Badge>
+          <Badge variant="outline" className="w-fit px-3 py-1.5">{devices.length} รายการที่ตั้งค่า</Badge>
         </div>
       </header>
 
       <div className="quiet-surface grid divide-y divide-border/70 overflow-hidden sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4" aria-label="สรุปการทำงานของอุปกรณ์">
         {[
-          { label: "อุปกรณ์พร้อมใช้งาน", value: `${online ? devices.length : 0}/${devices.length}`, note: online ? "สถานะเดโมปัจจุบัน" : "คำสั่งถูกพักไว้", icon: PlugZap },
-          { label: "กำลังทำงาน", value: `${activeDevices} เครื่อง`, note: "ตามสถานะที่แสดง", icon: Activity },
-          { label: "Manual override", value: manualDevice ? "1 รายการ" : "ไม่มี", note: manualDevice ? `หมดอายุใน ${override?.minutes} นาที` : "ทุกเครื่องอยู่โหมด Auto", icon: TimerReset },
-          { label: "ต้องตรวจสอบ", value: "0 รายการ", note: "จากข้อมูลตัวอย่าง", icon: BadgeCheck },
+          { label: "อุปกรณ์ที่ลงทะเบียน", value: `${devices.length} เครื่อง`, note: "ในโรงเรือนที่เลือก", icon: PlugZap },
+          { label: "ตั้งค่าให้เปิด", value: `${activeDevices} เครื่อง`, note: "สถานะที่บันทึกไว้", icon: Activity },
+          { label: "ตั้งค่าให้ปิด", value: `${devices.length - activeDevices} เครื่อง`, note: "สถานะที่บันทึกไว้", icon: SlidersHorizontal },
+          { label: "โซนที่มีอุปกรณ์", value: `${configuredZones} โซน`, note: "จากการผูกอุปกรณ์", icon: MapPin },
         ].map(({ label, value, note, icon: Icon }) => (
           <article key={label} className="flex items-start gap-3 p-4 sm:p-5">
               <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" aria-hidden="true" /></span>
@@ -180,32 +128,25 @@ export function DevicesView({
         <section className="grid gap-4 md:grid-cols-2 xl:col-span-2" aria-label="รายการอุปกรณ์">
           {visibleDevices.map((device) => {
             const Icon = icons[device.icon];
-            const presentation = selectDevicePresentation(device, context);
             const pending = pendingDeviceId === device.id;
-            const isManual = override?.deviceId === device.id;
+            const zoneName = context.greenhouse?.zones.find((item) => item.id === device.zoneId)?.name ?? device.zoneId ?? "ไม่ระบุโซน";
             return (
               <Card key={device.id} className="group overflow-hidden shadow-none transition-colors hover:border-primary/30">
                 <CardHeader className="flex-row items-start justify-between gap-3 pb-3">
                   <div className="flex min-w-0 gap-3">
                     <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Icon className="size-6" aria-hidden="true" /></span>
-                    <div className="min-w-0"><CardTitle className="truncate text-base">{device.name}</CardTitle><CardDescription className="mt-1">{presentation.zoneName} · {typeLabels[device.icon]}</CardDescription></div>
+                    <div className="min-w-0"><CardTitle className="truncate text-base">{device.name}</CardTitle><CardDescription className="mt-1">{zoneName} · {typeLabels[device.icon]}</CardDescription></div>
                   </div>
-                  <Switch aria-label={(device.active ? "ปิด " : "เปิด ") + device.name} aria-describedby="device-demo-note" checked={device.active} disabled={!online || Boolean(pendingDeviceId)} onCheckedChange={() => onRequest(device)} />
+                  <Switch aria-label={(device.active ? "ปิด " : "เปิด ") + device.name} aria-describedby="device-command-note" checked={device.active} disabled={Boolean(pendingDeviceId)} onCheckedChange={() => onRequest(device)} />
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={device.active && online ? "secondary" : "outline"}>{!online ? "ออฟไลน์ · ข้อมูลล่าสุด" : pending ? "กำลังส่งคำสั่ง" : device.active ? "กำลังทำงาน" : "ออนไลน์ · ปิดอยู่"}</Badge>
-                    <Badge variant="outline" className={isManual ? "border-amber-300 bg-amber-50 text-amber-900" : ""}>{isManual ? `Manual · อีก ${override?.minutes} นาที` : "Auto"}</Badge>
+                    <Badge variant={device.active ? "secondary" : "outline"}>{pending ? "รอยืนยันการเปลี่ยนแปลง" : device.active ? "ตั้งค่าให้เปิด" : "ตั้งค่าให้ปิด"}</Badge>
                   </div>
                   <dl className="grid gap-3 border-y py-3 text-sm">
-                    <div className="flex items-start gap-2"><Clock3 className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><div><dt className="text-xs text-muted-foreground">กิจกรรมล่าสุด</dt><dd className="font-medium">{presentation.lastActive}</dd></div></div>
-                    <div className="flex items-start gap-2"><Zap className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><div><dt className="text-xs text-muted-foreground">พลังงาน</dt><dd className="font-medium">{presentation.power}</dd></div></div>
-                    <div className="flex items-start gap-2"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-hidden="true" /><div><dt className="text-xs text-muted-foreground">สุขภาพอุปกรณ์</dt><dd className="font-medium">{presentation.health} <span className="font-normal text-muted-foreground">· ข้อมูลตัวอย่าง</span></dd></div></div>
+                    <div><dt className="text-xs text-muted-foreground">โซนที่ผูกไว้</dt><dd className="mt-1 font-medium">{zoneName}</dd></div>
+                    <div><dt className="text-xs text-muted-foreground">รายละเอียดการตั้งค่า</dt><dd className="mt-1 font-medium">{device.detail || "ยังไม่ได้ระบุรายละเอียด"}</dd></div>
                   </dl>
-                  <div className="rounded-xl bg-muted/55 p-3"><span className="text-xs text-muted-foreground">กฎอัตโนมัติ</span><p className="mt-1 text-sm font-medium">{presentation.rule}</p></div>
-                  <Button variant="outline" className="w-full" disabled={!online || Boolean(pendingDeviceId)} onClick={() => beginOverride(device)}>
-                    <TimerReset className="size-4" aria-hidden="true" />สั่งงานชั่วคราว (เดโม)
-                  </Button>
                 </CardContent>
               </Card>
             );
@@ -213,26 +154,17 @@ export function DevicesView({
           {visibleDevices.length === 0 ? <Card className="md:col-span-2"><CardContent className="py-12 text-center"><Gauge className="mx-auto mb-3 size-7 text-muted-foreground" aria-hidden="true" /><h3 className="font-semibold">ไม่พบอุปกรณ์ตามตัวกรอง</h3><p className="mt-1 text-sm text-muted-foreground">ลองเปลี่ยนโซน ประเภท หรือสถานะที่เลือก</p></CardContent></Card> : null}
         </section>
 
-        <aside className="space-y-5" aria-label="การทำงานอัตโนมัติและประวัติล่าสุด">
-          <Card className="border-primary/15 bg-primary/[0.025] shadow-none">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><TimerReset className="size-4 text-primary" aria-hidden="true" />Manual override</CardTitle><CardDescription>ตั้งค่าเพื่อทดสอบหน้าจอเท่านั้น ยังไม่สั่งงานจริง</CardDescription></CardHeader>
+        <aside className="space-y-5" aria-label="ข้อมูลการตั้งค่าอุปกรณ์">
+          <Card className="shadow-none">
+            <CardHeader><CardTitle className="text-base">รายการที่ตั้งค่า</CardTitle><CardDescription>ชื่อ โซน และรายละเอียดที่บันทึกไว้</CardDescription></CardHeader>
             <CardContent className="space-y-3">
-              {manualDevice ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><strong className="block">{manualDevice.name} อยู่ใน Manual</strong><span className="mt-1 block text-amber-800">จะกลับสู่ Auto อัตโนมัติใน {override?.minutes} นาที · สถานะอุปกรณ์จริงไม่เปลี่ยน</span></div> : <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">เลือก “สั่งงานชั่วคราว” จากการ์ดอุปกรณ์เพื่อทดลองกำหนดเวลา</p>}
-              <label className="block text-sm font-medium" htmlFor="override-duration">ระยะเวลาเดโม</label>
-              <Select value={overrideMinutes} onValueChange={setOverrideMinutes}><SelectTrigger id="override-duration"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="10">10 นาที</SelectItem><SelectItem value="30">30 นาที</SelectItem><SelectItem value="60">60 นาที</SelectItem></SelectContent></Select>
-              {manualDevice ? <Button variant="outline" className="w-full" onClick={clearOverride}>กลับสู่ Auto ตอนนี้</Button> : null}
+              {devices.length ? devices.map((device) => <div key={device.id} className="flex gap-2 border-b pb-3 last:border-0 last:pb-0"><span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-primary">{(() => { const Icon = icons[device.icon]; return <Icon className="size-3.5" aria-hidden="true" />; })()}</span><span><strong className="block text-sm">{device.name}</strong><span className="block text-xs text-muted-foreground">{device.detail || "ยังไม่ได้ระบุรายละเอียด"}</span></span></div>) : <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">ยังไม่มีอุปกรณ์ที่บันทึกไว้ในโรงเรือนนี้</p>}
             </CardContent>
           </Card>
           <Card className="shadow-none">
-            <CardHeader><CardTitle className="text-base">กฎอัตโนมัติที่ใช้งาน</CardTitle><CardDescription>เงื่อนไขสำหรับข้อมูลเดโม</CardDescription></CardHeader>
+            <CardHeader><CardTitle className="text-base">ประวัติการสั่งงาน</CardTitle><CardDescription>จะปรากฏเมื่อมีระบบบันทึกคำสั่งเชื่อมต่อเข้ามา</CardDescription></CardHeader>
             <CardContent className="space-y-3">
-              {devices.map((device) => <div key={device.id} className="flex gap-2 border-b pb-3 last:border-0 last:pb-0"><span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-primary">{(() => { const Icon = icons[device.icon]; return <Icon className="size-3.5" aria-hidden="true" />; })()}</span><span><strong className="block text-sm">{device.name}</strong><span className="block text-xs text-muted-foreground">{selectDevicePresentation(device, context).rule}</span></span></div>)}
-            </CardContent>
-          </Card>
-          <Card className="shadow-none">
-            <CardHeader><CardTitle className="text-base">กิจกรรมล่าสุด</CardTitle><CardDescription>บันทึกตัวอย่าง ไม่ใช่ประวัติคำสั่งจริง</CardDescription></CardHeader>
-            <CardContent className="space-y-3">
-              {recentActivity.length > 0 ? recentActivity.map(({ time, title, detail, icon: Icon }) => <div key={title} className="flex gap-2.5"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="size-3.5" aria-hidden="true" /></span><span className="min-w-0"><span className="flex items-baseline justify-between gap-2"><strong className="text-sm">{title}</strong><time className="shrink-0 text-xs text-muted-foreground">{time}</time></span><span className="block text-xs text-muted-foreground">{detail}</span></span></div>) : <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">ยังไม่มีอุปกรณ์ในโรงเรือนนี้สำหรับแสดงกิจกรรมตัวอย่าง</p>}
+              <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">ยังไม่มีประวัติคำสั่งที่บันทึกไว้</p>
             </CardContent>
           </Card>
         </aside>

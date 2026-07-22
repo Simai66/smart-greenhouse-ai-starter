@@ -44,9 +44,13 @@ test("keeps safe controls and persisted operational page contracts", async () =>
     readFile(new URL("../components/greenhouse/views/settings-view.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(devices, /aria-describedby="device-demo-note"/);
+  assert.match(devices, /aria-describedby="device-command-note"/);
   assert.match(devices, /pendingDeviceId/);
-  assert.match(devices, /disabled=\{!online \|\| Boolean\(pendingDeviceId\)\}/);
+  assert.match(devices, /disabled=\{Boolean\(pendingDeviceId\)\}/);
+  assert.match(devices, /ยังไม่มีประวัติคำสั่งที่บันทึกไว้/);
+  assert.doesNotMatch(devices, /\["07:42", "07:30", "07:00"\]/);
+  assert.doesNotMatch(devices, /ข้อมูลตัวอย่าง/);
+  assert.doesNotMatch(devices, /สุขภาพอุปกรณ์/);
   assert.match(alerts, /filterAlerts/);
   assert.match(alerts, /รับทราบ|ดำเนินการแล้ว/);
   assert.match(settings, /validateDemoSettings/);
