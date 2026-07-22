@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Archive, BellRing, Bot, Camera, Clock3, Cpu, Droplets, MapPin, Pencil, Plus, Radio, RotateCcw, Settings2, Sparkles, Trash2, Warehouse } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Archive, BellRing, Bot, Camera, Clock3, Cpu, Droplets, MapPin, Pencil, Plus, RotateCcw, Settings2, Sparkles, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ResourceEditorDialog, type ResourceEditorValue, type ResourceKind } from "@/components/greenhouse/settings/resource-editor-dialog";
+import { ResourceList, type ResourceListItem } from "@/components/greenhouse/settings/resource-list";
 import { validateDemoSettings } from "@/lib/dashboard-interactions";
 import type { DemoCamera, DemoCropBatch, DemoDevice, DemoGreenhouse, DemoSensor, DemoSettings } from "@/lib/greenhouse-demo-store";
 
@@ -182,21 +184,60 @@ function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cam
   devices: DemoDevice[];
   cameras: DemoCamera[];
   sensors: DemoSensor[];
-  onAddResource: (kind: "device" | "camera" | "sensor") => void;
-  onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void;
-  onRenameResource: (kind: "device" | "camera" | "sensor", id: string, name: string) => void;
-  onDeleteResource: (kind: "device" | "camera" | "sensor", id: string) => void;
+  onAddResource: (kind: ResourceKind) => void;
+  onMoveResource: (kind: ResourceKind, id: string, zoneId: string) => void;
+  onRenameResource: (kind: ResourceKind, id: string, name: string) => void;
+  onDeleteResource: (kind: ResourceKind, id: string) => void;
 }) {
-  const [editing, setEditing] = useState<{ kind: "device" | "camera" | "sensor"; id: string; name: string } | null>(null);
-  const [deleting, setDeleting] = useState<{ kind: "device" | "camera" | "sensor"; id: string; name: string } | null>(null);
-  const [name, setName] = useState("");
+  const [editing, setEditing] = useState<ResourceListItem | null>(null);
+  const [creatingKind, setCreatingKind] = useState<ResourceKind | null>(null);
+  const [deleting, setDeleting] = useState<ResourceListItem | null>(null);
+  const [pendingCreate, setPendingCreate] = useState<Pick<ResourceEditorValue, "kind" | "name" | "zoneId"> | null>(null);
   const greenhouse = greenhouses.find((item) => item.id === activeGreenhouseId);
   const zones = greenhouse?.zones.filter((zone) => zone.status === "active") ?? [];
-  const zoneName = (zoneId?: string) => zones.find((zone) => zone.id === zoneId)?.name ?? "ยังไม่กำหนด";
-  const ResourceList = ({ title, icon, kind, items }: { title: string; icon: React.ReactNode; kind: "device" | "camera" | "sensor"; items: Array<{ id: string; name: string; zoneId?: string }> }) => <div className="rounded-xl border border-border/70"><div className="flex items-center justify-between gap-3 border-b border-border/70 p-3"><p className="flex items-center gap-2 text-sm font-medium">{icon}{title}</p><Button type="button" size="sm" variant="outline" onClick={() => onAddResource(kind)}><Plus className="size-3.5" aria-hidden="true" />เพิ่ม</Button></div><div className="divide-y">{items.length ? items.map((item) => <div key={item.id} className="flex flex-col gap-2 p-3"><div className="flex items-center justify-between gap-2"><div><p className="text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.id} · {zoneName(item.zoneId)}</p></div><div className="flex gap-1"><Button type="button" variant="ghost" size="icon" aria-label={`แก้ไข ${item.name}`} onClick={() => { setEditing({ kind, id: item.id, name: item.name }); setName(item.name); }}><Pencil className="size-3.5" aria-hidden="true" /></Button><Button type="button" variant="ghost" size="icon" className="text-destructive hover:text-destructive" aria-label={`ลบ ${item.name}`} onClick={() => setDeleting({ kind, id: item.id, name: item.name })}><Trash2 className="size-3.5" aria-hidden="true" /></Button></div></div><Select value={item.zoneId ?? zones[0]?.id} onValueChange={(zoneId) => onMoveResource(kind, item.id, zoneId)}><SelectTrigger aria-label={`เลือกโซนของ ${item.name}`} className="h-9 w-full"><SelectValue placeholder="เลือกโซน" /></SelectTrigger><SelectContent>{zones.map((zone) => <SelectItem key={zone.id} value={zone.id}>{zone.name}</SelectItem>)}</SelectContent></Select></div>) : <p className="p-4 text-center text-sm text-muted-foreground">ยังไม่มีรายการ</p>}</div></div>;
+  const resourceGroups = useMemo(() => ({
+    device: devices.filter((item) => item.greenhouseId === activeGreenhouseId).map((item): ResourceListItem => ({ id: item.id, name: item.name, kind: "device", zoneId: item.zoneId, enabled: item.active, status: item.active ? "enabled" : "disabled" })),
+    camera: cameras.filter((item) => item.greenhouseId === activeGreenhouseId).map((item): ResourceListItem => ({ id: item.id, name: item.name, kind: "camera", zoneId: item.zoneId, enabled: item.enabled, status: item.status })),
+    sensor: sensors.filter((item) => item.greenhouseId === activeGreenhouseId).map((item): ResourceListItem => ({ id: item.id, name: item.name, kind: "sensor", zoneId: item.zoneId, enabled: item.status === "online", status: item.status })),
+  }), [activeGreenhouseId, cameras, devices, sensors]);
+  const knownIds = useRef<Record<ResourceKind, Set<string>>>({ device: new Set(), camera: new Set(), sensor: new Set() });
+
+  useEffect(() => {
+    if (pendingCreate) {
+      const created = resourceGroups[pendingCreate.kind].find((resource) => !knownIds.current[pendingCreate.kind].has(resource.id));
+      if (created) {
+        if (created.name !== pendingCreate.name) onRenameResource(created.kind, created.id, pendingCreate.name);
+        if (created.zoneId !== pendingCreate.zoneId) onMoveResource(created.kind, created.id, pendingCreate.zoneId);
+        setPendingCreate(null);
+      }
+    }
+    knownIds.current = {
+      device: new Set(resourceGroups.device.map((resource) => resource.id)),
+      camera: new Set(resourceGroups.camera.map((resource) => resource.id)),
+      sensor: new Set(resourceGroups.sensor.map((resource) => resource.id)),
+    };
+  }, [onMoveResource, onRenameResource, pendingCreate, resourceGroups]);
+
+  const defaultEditorValue = (kind: ResourceKind): ResourceEditorValue => ({ kind, name: "", zoneId: zones[0]?.id ?? "", enabled: kind !== "device", status: kind === "sensor" || kind === "camera" ? "online" : "disabled" });
+  const editorValue = editing ? { kind: editing.kind, name: editing.name, zoneId: editing.zoneId ?? zones[0]?.id ?? "", enabled: editing.enabled, status: editing.status } : defaultEditorValue(creatingKind ?? "device");
+  const submitEditor = (value: ResourceEditorValue) => {
+    if (editing) {
+      if (editing.name !== value.name) onRenameResource(editing.kind, editing.id, value.name);
+      if (editing.zoneId !== value.zoneId) onMoveResource(editing.kind, editing.id, value.zoneId);
+      setEditing(null);
+      return;
+    }
+    setPendingCreate({ kind: value.kind, name: value.name, zoneId: value.zoneId });
+    onAddResource(value.kind);
+    setCreatingKind(null);
+  };
+
   return <><SettingSection icon={<Cpu className="size-5" aria-hidden="true" />} title="ทรัพยากรในโรงเรือน" description="ผูกอุปกรณ์ กล้อง และเซ็นเซอร์กับโซนของโรงเรือนที่กำลังเลือกอยู่">
-    {!zones.length ? <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">เพิ่มโซนก่อน แล้วจึงผูกอุปกรณ์ กล้อง หรือเซ็นเซอร์ได้</p> : <div className="grid gap-4 xl:grid-cols-3"><ResourceList title="อุปกรณ์" icon={<Cpu className="size-4 text-primary" />} kind="device" items={devices.filter((item) => item.greenhouseId === activeGreenhouseId)} /><ResourceList title="กล้อง" icon={<Camera className="size-4 text-primary" />} kind="camera" items={cameras.filter((item) => item.greenhouseId === activeGreenhouseId)} /><ResourceList title="เซ็นเซอร์" icon={<Radio className="size-4 text-primary" />} kind="sensor" items={sensors.filter((item) => item.greenhouseId === activeGreenhouseId)} /></div>}
-  </SettingSection><Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}><DialogContent><DialogHeader><DialogTitle>แก้ไขชื่อทรัพยากร</DialogTitle><DialogDescription>ชื่อนี้ใช้แสดงในหน้าควบคุมและการตั้งค่าของโรงเรือน</DialogDescription></DialogHeader><div className="space-y-2 py-2"><Label htmlFor="resource-name">ชื่อ</Label><Input id="resource-name" value={name} onChange={(event) => setName(event.target.value)} autoFocus /></div><DialogFooter><Button type="button" variant="outline" onClick={() => setEditing(null)}>ยกเลิก</Button><Button type="button" disabled={!name.trim()} onClick={() => { if (!editing) return; onRenameResource(editing.kind, editing.id, name.trim()); setEditing(null); }}>บันทึกชื่อ</Button></DialogFooter></DialogContent></Dialog><Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}><DialogContent><DialogHeader><DialogTitle>ลบทรัพยากร?</DialogTitle><DialogDescription>{deleting ? `จะลบ “${deleting.name}” ออกจากโรงเรือน ข้อมูลนี้เรียกคืนจากหน้านี้ไม่ได้` : ""}</DialogDescription></DialogHeader><DialogFooter><Button type="button" variant="outline" onClick={() => setDeleting(null)}>ยกเลิก</Button><Button type="button" variant="destructive" onClick={() => { if (!deleting) return; onDeleteResource(deleting.kind, deleting.id); setDeleting(null); }}>ลบถาวร</Button></DialogFooter></DialogContent></Dialog></>;
+    {!zones.length ? <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">เพิ่มโซนก่อน แล้วจึงผูกอุปกรณ์ กล้อง หรือเซ็นเซอร์ได้</p> : <div className="grid gap-4 xl:grid-cols-3">{(["device", "camera", "sensor"] as ResourceKind[]).map((kind) => <ResourceList key={kind} kind={kind} resources={resourceGroups[kind]} zones={zones} onCreate={setCreatingKind} onEdit={setEditing} onDelete={setDeleting} />)}</div>}
+  </SettingSection>
+  <ResourceEditorDialog open={Boolean(editing || creatingKind)} mode={editing ? "edit" : "create"} zones={zones} initialValue={editorValue} onOpenChange={(open) => { if (!open) { setEditing(null); setCreatingKind(null); } }} onSubmit={submitEditor} />
+  <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}><DialogContent><DialogHeader><DialogTitle>ลบทรัพยากร?</DialogTitle><DialogDescription>{deleting ? `จะลบ “${deleting.name}” ออกจากโรงเรือน ข้อมูลนี้เรียกคืนจากหน้านี้ไม่ได้` : ""}</DialogDescription></DialogHeader><DialogFooter><Button type="button" variant="outline" onClick={() => setDeleting(null)}>ยกเลิก</Button><Button type="button" variant="destructive" onClick={() => { if (!deleting) return; onDeleteResource(deleting.kind, deleting.id); setDeleting(null); }}>ลบถาวร</Button></DialogFooter></DialogContent></Dialog>
+  </>;
 }
 
 export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, devices, sensors, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch, onAddResource, onMoveResource, onRenameResource, onDeleteResource }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; devices: DemoDevice[]; sensors: DemoSensor[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void; onAddResource: (kind: "device" | "camera" | "sensor") => void; onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void; onRenameResource: (kind: "device" | "camera" | "sensor", id: string, name: string) => void; onDeleteResource: (kind: "device" | "camera" | "sensor", id: string) => void }) {
