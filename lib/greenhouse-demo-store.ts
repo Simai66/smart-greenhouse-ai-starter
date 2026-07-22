@@ -1,6 +1,6 @@
 import type { DeviceCommandAction, DeviceCommandResult } from "@/types/greenhouse";
 
-export type DemoDevice = { id: string; name: string; detail: string; icon: "pump" | "fan" | "light" | "mist"; active: boolean; greenhouseId?: string };
+export type DemoDevice = { id: string; name: string; detail: string; icon: "pump" | "fan" | "light" | "mist"; active: boolean; greenhouseId?: string; zoneId?: string };
 export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number; health: "ปกติ" | "ควรตรวจสอบ"; confidence: number; greenhouseId?: string; batchId?: string };
 export type DemoAlert = { id: string; type: "critical" | "warning" | "info"; title: string; detail: string; time: string; resolved: boolean; greenhouseId?: string };
 export type DemoCamera = {
@@ -12,7 +12,9 @@ export type DemoCamera = {
   captureInterval: string;
   enabled: boolean;
   greenhouseId?: string;
+  zoneId?: string;
 };
+export type DemoSensor = { id: string; name: string; metric: "soilMoisture" | "temperature" | "humidity"; greenhouseId: string; zoneId: string; status: "online" | "offline" };
 export type DemoZone = {
   id: string;
   name: string;
@@ -46,7 +48,7 @@ export type DemoSettings = {
   ai: { minConfidence: string; scanInterval: string; retainDays: string; detectLeafSpot: boolean; detectPests: boolean };
   cameras: DemoCamera[];
 };
-export type DemoState = { version: 1; devices: DemoDevice[]; plants: DemoPlant[]; alerts: DemoAlert[]; settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; aiReviewedPlantId?: string; aiReviewedEvidence?: Record<string, string[]> };
+export type DemoState = { version: 1; devices: DemoDevice[]; plants: DemoPlant[]; alerts: DemoAlert[]; sensors: DemoSensor[]; settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; aiReviewedPlantId?: string; aiReviewedEvidence?: Record<string, string[]> };
 export type DemoLoadResult = { state: DemoState; recovered: boolean; storageAvailable: boolean };
 export type DemoSaveResult = { persisted: boolean };
 
@@ -70,11 +72,16 @@ export const demoInitialState: DemoState = {
     { id: "BATCH-TOM-A", greenhouseId: "GH-01", zoneId: "ZONE-A", cropName: "มะเขือเทศเชอร์รี", cultivar: "Sweet 100", plantCount: 2, plantedAt: "2026-06-10", status: "active" },
     { id: "BATCH-TOM-B", greenhouseId: "GH-01", zoneId: "ZONE-B", cropName: "มะเขือเทศเชอร์รี", cultivar: "Sweet 100", plantCount: 2, plantedAt: "2026-06-14", status: "active" },
   ],
+  sensors: [
+    { id: "SOIL-A-02", name: "เซ็นเซอร์ดิน A-02", metric: "soilMoisture", greenhouseId: "GH-01", zoneId: "ZONE-A", status: "online" },
+    { id: "SOIL-B-02", name: "เซ็นเซอร์ดิน B-02", metric: "soilMoisture", greenhouseId: "GH-01", zoneId: "ZONE-B", status: "online" },
+    { id: "CLIMATE-01", name: "เซ็นเซอร์สภาพอากาศ", metric: "temperature", greenhouseId: "GH-01", zoneId: "ZONE-A", status: "online" },
+  ],
   devices: [
-    { id: "pump", name: "ปั๊มน้ำ", detail: "รอบถัดไป 10:30 น.", icon: "pump", active: false, greenhouseId: "GH-01" },
-    { id: "fan", name: "พัดลมระบายอากาศ", detail: "โหมดอัตโนมัติ · มากกว่า 30°C", icon: "fan", active: true, greenhouseId: "GH-01" },
-    { id: "light", name: "ไฟปลูกพืช", detail: "รอบถัดไป 18:00 น.", icon: "light", active: false, greenhouseId: "GH-01" },
-    { id: "mist", name: "เครื่องพ่นหมอก", detail: "โหมดอัตโนมัติ · ต่ำกว่า 60% RH", icon: "mist", active: true, greenhouseId: "GH-01" },
+    { id: "pump", name: "ปั๊มน้ำ", detail: "รอบถัดไป 10:30 น.", icon: "pump", active: false, greenhouseId: "GH-01", zoneId: "ZONE-A" },
+    { id: "fan", name: "พัดลมระบายอากาศ", detail: "โหมดอัตโนมัติ · มากกว่า 30°C", icon: "fan", active: true, greenhouseId: "GH-01", zoneId: "ZONE-A" },
+    { id: "light", name: "ไฟปลูกพืช", detail: "รอบถัดไป 18:00 น.", icon: "light", active: false, greenhouseId: "GH-01", zoneId: "ZONE-B" },
+    { id: "mist", name: "เครื่องพ่นหมอก", detail: "โหมดอัตโนมัติ · ต่ำกว่า 60% RH", icon: "mist", active: true, greenhouseId: "GH-01", zoneId: "ZONE-B" },
   ],
   plants: [
     { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: 46, health: "ปกติ", confidence: 98, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
@@ -94,9 +101,9 @@ export const demoInitialState: DemoState = {
     notifications: { critical: true, dailySummary: true, quietStart: "21:00", quietEnd: "06:00" },
     ai: { minConfidence: "75", scanInterval: "30", retainDays: "14", detectLeafSpot: true, detectPests: true },
     cameras: [
-      { id: "CAM-A-01", name: "กล้องโซน A · แปลงเหนือ", zone: "โซน A", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01" },
-      { id: "CAM-B-01", name: "กล้องโซน B · แปลงใต้", zone: "โซน B", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01" },
-      { id: "CAM-ENTRY-01", name: "กล้องทางเข้าโรงเรือน", zone: "ทางเข้า", source: "USB gateway", status: "offline", captureInterval: "30 นาที", enabled: false, greenhouseId: "GH-01" },
+      { id: "CAM-A-01", name: "กล้องโซน A · แปลงเหนือ", zone: "โซน A", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01", zoneId: "ZONE-A" },
+      { id: "CAM-B-01", name: "กล้องโซน B · แปลงใต้", zone: "โซน B", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01", zoneId: "ZONE-B" },
+      { id: "CAM-ENTRY-01", name: "กล้องทางเข้าโรงเรือน", zone: "ทางเข้า", source: "USB gateway", status: "offline", captureInterval: "30 นาที", enabled: false, greenhouseId: "GH-01", zoneId: "ZONE-A" },
     ],
   },
 };
@@ -174,6 +181,7 @@ function upgradeState(state: DemoState): DemoState {
     !!item && typeof item === "object";
   const savedGreenhouses = (state as Partial<DemoState>).greenhouses;
   const savedCropBatches = (state as Partial<DemoState>).cropBatches;
+  const savedSensors = (state as Partial<DemoState>).sensors;
   const greenhouses = Array.isArray(savedGreenhouses) && savedGreenhouses.length > 0
     ? savedGreenhouses.filter((greenhouse): greenhouse is DemoGreenhouse =>
       isRecord(greenhouse) &&
@@ -198,13 +206,17 @@ function upgradeState(state: DemoState): DemoState {
       ["active", "harvested", "archived"].includes(String(batch.status)),
     )
     : cloneInitial().cropBatches;
+  const sensors = Array.isArray(savedSensors)
+    ? savedSensors.filter((sensor): sensor is DemoSensor => isRecord(sensor) && typeof sensor.id === "string" && typeof sensor.name === "string" && typeof sensor.greenhouseId === "string" && typeof sensor.zoneId === "string" && ["soilMoisture", "temperature", "humidity"].includes(String(sensor.metric)) && ["online", "offline"].includes(String(sensor.status)))
+    : cloneInitial().sensors;
   return {
     ...state,
-    devices: state.devices.map((device) => ({ ...device, greenhouseId: device.greenhouseId ?? "GH-01" })),
+    devices: state.devices.map((device) => ({ ...device, greenhouseId: device.greenhouseId ?? "GH-01", zoneId: device.zoneId ?? "ZONE-A" })),
     plants: state.plants.map((plant) => ({ ...plant, greenhouseId: plant.greenhouseId ?? "GH-01" })),
     alerts: state.alerts.map((alert) => ({ ...alert, greenhouseId: alert.greenhouseId ?? "GH-01" })),
     greenhouses: greenhouses.length > 0 ? greenhouses : defaultGreenhouses,
     cropBatches,
+    sensors,
     aiReviewedEvidence: state.aiReviewedEvidence ?? {},
     settings: {
       ...defaults,
@@ -219,7 +231,7 @@ function upgradeState(state: DemoState): DemoState {
           typeof camera.zone === "string" && ["IP camera", "USB gateway"].includes(String(camera.source)) &&
           ["online", "offline"].includes(String(camera.status)) && typeof camera.captureInterval === "string" &&
           typeof camera.enabled === "boolean",
-        ).map((camera) => ({ ...camera, greenhouseId: camera.greenhouseId ?? "GH-01" }))
+        ).map((camera) => ({ ...camera, greenhouseId: camera.greenhouseId ?? "GH-01", zoneId: camera.zoneId ?? "ZONE-A" }))
         : defaults.cameras,
     },
   };

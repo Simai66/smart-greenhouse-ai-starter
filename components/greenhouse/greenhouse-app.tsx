@@ -312,6 +312,8 @@ export function GreenhouseApp() {
         greenhouses={state.greenhouses}
         cropBatches={state.cropBatches}
         activeGreenhouseId={activeGreenhouse.id}
+        devices={state.devices}
+        sensors={state.sensors}
         onSave={(settings) => {
           setState((current) => ({ ...current, settings }));
           notify("บันทึกการตั้งค่าเดโมแล้ว");
@@ -450,6 +452,27 @@ export function GreenhouseApp() {
         onRestoreBatch={(id) => {
           setState((current) => ({ ...current, cropBatches: current.cropBatches.map((batch) => batch.id === id ? { ...batch, status: "active" } : batch) }));
           notify("เรียกคืนรอบปลูกแล้ว");
+        }}
+        onAddResource={(kind) => {
+          const zoneId = activeGreenhouse.zones.find((zone) => zone.status === "active")?.id;
+          const zoneName = activeGreenhouse.zones.find((zone) => zone.id === zoneId)?.name ?? "โซนใหม่";
+          if (!zoneId) { notify("กรุณาเพิ่มโซนก่อนเพิ่มทรัพยากร", "error"); return; }
+          const suffix = crypto.randomUUID().slice(0, 5).toUpperCase();
+          setState((current) => {
+            if (kind === "device") return { ...current, devices: [...current.devices, { id: `DEVICE-${suffix}`, name: "อุปกรณ์ใหม่", detail: `ผูกกับ ${zoneName}`, icon: "pump", active: false, greenhouseId: activeGreenhouse.id, zoneId }] };
+            if (kind === "sensor") return { ...current, sensors: [...current.sensors, { id: `SENSOR-${suffix}`, name: "เซ็นเซอร์ดินใหม่", metric: "soilMoisture", greenhouseId: activeGreenhouse.id, zoneId, status: "online" }] };
+            return { ...current, settings: { ...current.settings, cameras: [...current.settings.cameras, { id: `CAM-${suffix}`, name: "กล้องใหม่", zone: zoneName, source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: activeGreenhouse.id, zoneId }] } };
+          });
+          notify(kind === "device" ? "เพิ่มอุปกรณ์ใหม่แล้ว" : kind === "sensor" ? "เพิ่มเซ็นเซอร์ใหม่แล้ว" : "เพิ่มกล้องใหม่แล้ว");
+        }}
+        onMoveResource={(kind, id, zoneId) => {
+          const zoneName = activeGreenhouse.zones.find((zone) => zone.id === zoneId)?.name ?? "ไม่ระบุโซน";
+          setState((current) => {
+            if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id ? { ...item, greenhouseId: activeGreenhouse.id, zoneId, detail: `ผูกกับ ${zoneName}` } : item) };
+            if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id ? { ...item, greenhouseId: activeGreenhouse.id, zoneId } : item) };
+            return { ...current, settings: { ...current.settings, cameras: current.settings.cameras.map((item) => item.id === id ? { ...item, greenhouseId: activeGreenhouse.id, zoneId, zone: zoneName } : item) } };
+          });
+          notify(`ย้ายทรัพยากรไป${zoneName}แล้ว`);
         }}
       />
     )

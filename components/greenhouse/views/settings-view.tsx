@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Archive, BellRing, Bot, Camera, Clock3, Droplets, MapPin, Pencil, Plus, RotateCcw, Settings2, Sparkles, Warehouse } from "lucide-react";
+import { Archive, BellRing, Bot, Camera, Clock3, Cpu, Droplets, MapPin, Pencil, Plus, Radio, RotateCcw, Settings2, Sparkles, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { validateDemoSettings } from "@/lib/dashboard-interactions";
-import type { DemoCamera, DemoCropBatch, DemoGreenhouse, DemoSettings } from "@/lib/greenhouse-demo-store";
+import type { DemoCamera, DemoCropBatch, DemoDevice, DemoGreenhouse, DemoSensor, DemoSettings } from "@/lib/greenhouse-demo-store";
 
 const automationItems = [
   { key: "water", label: "รดน้ำเมื่อความชื้นในดินต่ำ", detail: "อ้างอิงเกณฑ์ความชื้นดินด้านบน" },
@@ -176,7 +176,25 @@ function CropBatchesSection({ greenhouses, cropBatches, activeGreenhouseId, onSa
   </>;
 }
 
-export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void }) {
+function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cameras, sensors, onAddResource, onMoveResource }: {
+  greenhouses: DemoGreenhouse[];
+  activeGreenhouseId: string;
+  devices: DemoDevice[];
+  cameras: DemoCamera[];
+  sensors: DemoSensor[];
+  onAddResource: (kind: "device" | "camera" | "sensor") => void;
+  onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void;
+}) {
+  const greenhouse = greenhouses.find((item) => item.id === activeGreenhouseId);
+  const zones = greenhouse?.zones.filter((zone) => zone.status === "active") ?? [];
+  const zoneName = (zoneId?: string) => zones.find((zone) => zone.id === zoneId)?.name ?? "ยังไม่กำหนด";
+  const ResourceList = ({ title, icon, kind, items }: { title: string; icon: React.ReactNode; kind: "device" | "camera" | "sensor"; items: Array<{ id: string; name: string; zoneId?: string }> }) => <div className="rounded-xl border border-border/70"><div className="flex items-center justify-between gap-3 border-b border-border/70 p-3"><p className="flex items-center gap-2 text-sm font-medium">{icon}{title}</p><Button type="button" size="sm" variant="outline" onClick={() => onAddResource(kind)}><Plus className="size-3.5" aria-hidden="true" />เพิ่ม</Button></div><div className="divide-y">{items.length ? items.map((item) => <div key={item.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.id} · {zoneName(item.zoneId)}</p></div><Select value={item.zoneId ?? zones[0]?.id} onValueChange={(zoneId) => onMoveResource(kind, item.id, zoneId)}><SelectTrigger aria-label={`เลือกโซนของ ${item.name}`} className="h-9 w-full sm:w-36"><SelectValue placeholder="เลือกโซน" /></SelectTrigger><SelectContent>{zones.map((zone) => <SelectItem key={zone.id} value={zone.id}>{zone.name}</SelectItem>)}</SelectContent></Select></div>) : <p className="p-4 text-center text-sm text-muted-foreground">ยังไม่มีรายการ</p>}</div></div>;
+  return <SettingSection icon={<Cpu className="size-5" aria-hidden="true" />} title="ทรัพยากรในโรงเรือน" description="ผูกอุปกรณ์ กล้อง และเซ็นเซอร์กับโซนของโรงเรือนที่กำลังเลือกอยู่">
+    {!zones.length ? <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">เพิ่มโซนก่อน แล้วจึงผูกอุปกรณ์ กล้อง หรือเซ็นเซอร์ได้</p> : <div className="grid gap-4 xl:grid-cols-3"><ResourceList title="อุปกรณ์" icon={<Cpu className="size-4 text-primary" />} kind="device" items={devices.filter((item) => item.greenhouseId === activeGreenhouseId)} /><ResourceList title="กล้อง" icon={<Camera className="size-4 text-primary" />} kind="camera" items={cameras.filter((item) => item.greenhouseId === activeGreenhouseId)} /><ResourceList title="เซ็นเซอร์" icon={<Radio className="size-4 text-primary" />} kind="sensor" items={sensors.filter((item) => item.greenhouseId === activeGreenhouseId)} /></div>}
+  </SettingSection>;
+}
+
+export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, devices, sensors, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch, onAddResource, onMoveResource }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; devices: DemoDevice[]; sensors: DemoSensor[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void; onAddResource: (kind: "device" | "camera" | "sensor") => void; onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void }) {
   const [draft, setDraft] = useState(settings);
   const [error, setError] = useState("");
   const [prevSettings, setPrevSettings] = useState(settings);
@@ -188,6 +206,7 @@ export function SettingsView({ settings, greenhouses, cropBatches, activeGreenho
   return <div className="space-y-6">
     <FarmStructureSection greenhouses={greenhouses} onSaveGreenhouse={onSaveGreenhouse} onArchiveGreenhouse={onArchiveGreenhouse} onRestoreGreenhouse={onRestoreGreenhouse} onAddZone={onAddZone} onArchiveZone={onArchiveZone} onRestoreZone={onRestoreZone} />
     <CropBatchesSection greenhouses={greenhouses} cropBatches={cropBatches} activeGreenhouseId={activeGreenhouseId} onSaveBatch={onSaveBatch} onArchiveBatch={onArchiveBatch} onRestoreBatch={onRestoreBatch} />
+    <ResourceBindingsSection greenhouses={greenhouses} activeGreenhouseId={activeGreenhouseId} devices={devices} cameras={settings.cameras} sensors={sensors} onAddResource={onAddResource} onMoveResource={onMoveResource} />
     <SettingSection icon={<Settings2 className="size-5" aria-hidden="true" />} title="ค่าเป้าหมายสภาพแวดล้อม" description="ใช้กับการควบคุมอัตโนมัติและคำเตือนในเดโม">
       <div className="grid gap-4 md:grid-cols-2"><NumberField id="minTemperature" label="อุณหภูมิต่ำสุด" unit="°C" value={draft.minTemperature} onChange={(value) => update("minTemperature", value)} /><NumberField id="maxTemperature" label="อุณหภูมิสูงสุด" unit="°C" value={draft.maxTemperature} onChange={(value) => update("maxTemperature", value)} /><NumberField id="minHumidity" label="ความชื้นอากาศต่ำสุด" unit="%" value={draft.minHumidity} onChange={(value) => update("minHumidity", value)} /><NumberField id="minSoilMoisture" label="ความชื้นดินต่ำสุด" unit="%" value={draft.minSoilMoisture} onChange={(value) => update("minSoilMoisture", value)} /></div>
     </SettingSection>

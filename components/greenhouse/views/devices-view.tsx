@@ -54,6 +54,14 @@ const deviceMeta: Record<DemoDevice["id"], {
   mist: { zone: "โซน B", lastActive: "อัปเดตเมื่อ 4 นาทีที่แล้ว", rule: "เปิดเมื่อความชื้นอากาศต่ำกว่า 60%", power: "0.08 kWh/ชม. โดยประมาณ", health: "พร้อมใช้งาน" },
 };
 
+const fallbackDeviceMeta = (device: DemoDevice) => ({
+  zone: device.zoneId ?? "ไม่ระบุโซน",
+  lastActive: "ยังไม่มีประวัติการทำงาน",
+  rule: "ยังไม่ได้กำหนดกฎอัตโนมัติ",
+  power: "ยังไม่มีข้อมูลพลังงาน",
+  health: "รอตรวจสอบ",
+});
+
 const typeLabels: Record<DemoDevice["icon"], string> = {
   pump: "ปั๊มน้ำ",
   fan: "ระบายอากาศ",
@@ -87,7 +95,7 @@ export function DevicesView({
 
   const visibleDevices = useMemo(
     () => devices.filter((device) => {
-      const meta = deviceMeta[device.id];
+      const meta = deviceMeta[device.id] ?? fallbackDeviceMeta(device);
       return (zone === "all" || meta.zone === zone) &&
         (kind === "all" || device.icon === kind) &&
         (status === "all" || (status === "running" ? device.active : !device.active));
@@ -175,7 +183,7 @@ export function DevicesView({
         <section className="grid gap-4 md:grid-cols-2 xl:col-span-2" aria-label="รายการอุปกรณ์">
           {visibleDevices.map((device) => {
             const Icon = icons[device.icon];
-            const meta = deviceMeta[device.id];
+            const meta = deviceMeta[device.id] ?? fallbackDeviceMeta(device);
             const pending = pendingDeviceId === device.id;
             const isManual = override?.deviceId === device.id;
             return (
