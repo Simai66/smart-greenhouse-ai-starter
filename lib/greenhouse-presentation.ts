@@ -49,14 +49,16 @@ export type WorkItem = {
 export type ResourceRow = {
   id: string;
   label: string;
-  kind: "พืช" | "อุปกรณ์" | "เซ็นเซอร์";
+  kind: "เหตุการณ์";
   status: string;
   tone: StatusTone;
   updated: string;
+  targetPage: GreenhousePageId;
 };
 
 export type DashboardViewModel = {
   hasOperationalData: boolean;
+  hasRecordedActivity: boolean;
   healthScore: number;
   activeDevices: number;
   deviceCount: number;
@@ -117,19 +119,16 @@ export function buildDashboardViewModel(
   const hasPlantData = state.plants.length > 0;
   const hasTemperatureSensor = state.sensors.some((sensor) => sensor.metric === "temperature" && sensor.status === "online");
   const hasHumiditySensor = state.sensors.some((sensor) => sensor.metric === "humidity" && sensor.status === "online");
-  const firstDevice = state.devices[0];
-  const firstSensor = state.sensors[0];
   const healthScore = hasPlantData
     ? Math.round(state.plants.reduce((total, plant) => total + plant.confidence, 0) / state.plants.length)
     : 0;
   const activeDevices = state.devices.filter((device) => device.active).length;
   const openAlerts = state.alerts.filter((alert) => !alert.resolved);
-  const warningPlant = state.plants.find(
-    (plant) => plant.health === "ควรตรวจสอบ",
-  );
+  const hasRecordedActivity = state.alerts.length > 0;
 
   return {
     hasOperationalData: Boolean(state.devices.length || state.sensors.length || state.plants.length || state.settings.cameras.length),
+    hasRecordedActivity,
     healthScore,
     activeDevices,
     deviceCount: state.devices.length,
@@ -160,8 +159,8 @@ export function buildDashboardViewModel(
         id: "alerts",
         label: "ต้องตรวจสอบ",
         value: String(openAlerts.length),
-        note: openAlerts.length ? "ยังเปิดอยู่" : "ไม่มีรายการเปิด",
-        tone: openAlerts.length ? "warning" : "healthy",
+        note: openAlerts.length ? "ยังเปิดอยู่" : "ยังไม่มีเหตุการณ์ที่บันทึก",
+        tone: openAlerts.length ? "warning" : "neutral",
       },
     ],
     workItems: openAlerts.map((alert) => ({
@@ -172,36 +171,15 @@ export function buildDashboardViewModel(
       severity: alert.type,
       targetPage: "alerts",
     })),
-    resourceRows: [
-      ...(warningPlant
-        ? [{
-            id: warningPlant.id,
-            label: warningPlant.name,
-            kind: "พืช" as const,
-            status: "ควรตรวจสอบ",
-            tone: "warning" as const,
-            updated: "8 นาทีที่แล้ว",
-          }]
-        : []),
-      ...(firstDevice ? [{
-        id: firstDevice.id,
-        label: firstDevice.name,
-        kind: "อุปกรณ์",
-        status: firstDevice.active
-          ? "กำลังทำงาน"
-          : "ออนไลน์",
-        tone: "healthy",
-        updated: "เมื่อครู่",
-      }] : []),
-      ...(firstSensor ? [{
-        id: firstSensor.id,
-        label: firstSensor.name,
-        kind: "เซ็นเซอร์",
-        status: firstSensor.status === "online" ? "ออนไลน์" : "ออฟไลน์",
-        tone: firstSensor.status === "online" ? "healthy" : "neutral",
-        updated: "เมื่อครู่",
-      }] : []),
-    ],
+    resourceRows: state.alerts.map((alert) => ({
+      id: alert.id,
+      label: alert.title,
+      kind: "เหตุการณ์" as const,
+      status: alert.resolved ? "ปิดเหตุการณ์แล้ว" : "ต้องตรวจสอบ",
+      tone: alert.resolved ? "neutral" as const : "warning" as const,
+      updated: alert.time || "ไม่มีเวลาที่บันทึก",
+      targetPage: "alerts" as const,
+    })),
   };
 }
 

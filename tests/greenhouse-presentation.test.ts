@@ -26,7 +26,8 @@ test("derives the command-deck summary from demo state", () => {
   assert.equal(view.openAlerts, 2);
   assert.equal(view.workItems.length, 2);
   assert.equal(view.workItems[0]?.severity, "critical");
-  assert.equal(view.resourceRows.some((row) => row.id === "TOM-003"), true);
+  assert.equal(view.hasRecordedActivity, true);
+  assert.equal(view.resourceRows.some((row) => row.id === "leaf-spot"), true);
 });
 
 test("keeps dashboard metrics honest for a selected greenhouse with no operational data", () => {
@@ -43,6 +44,20 @@ test("keeps dashboard metrics honest for a selected greenhouse with no operation
   assert.equal(view.hasOperationalData, false);
   assert.equal(view.metrics.find((metric) => metric.id === "temperature")?.value, "—");
   assert.equal(view.metrics.find((metric) => metric.id === "humidity")?.value, "—");
+  assert.deepEqual(view.resourceRows, []);
+});
+
+test("uses neutral setup state instead of fabricated device activity without recorded events", () => {
+  const configuredWithoutRecords = {
+    ...structuredClone(demoInitialState),
+    alerts: [],
+  };
+  const view = buildDashboardViewModel(configuredWithoutRecords);
+
+  assert.equal(view.hasOperationalData, true);
+  assert.equal(view.hasRecordedActivity, false);
+  assert.equal(view.metrics.find((metric) => metric.id === "alerts")?.tone, "neutral");
+  assert.equal(view.metrics.find((metric) => metric.id === "alerts")?.note, "ยังไม่มีเหตุการณ์ที่บันทึก");
   assert.deepEqual(view.resourceRows, []);
 });
 

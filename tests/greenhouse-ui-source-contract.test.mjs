@@ -84,18 +84,22 @@ test("keeps reusable resource editing and deliberate deletion in settings", asyn
   assert.match(app, /enabled, status: status === "online" \? "online" : "offline"/);
 });
 
-test("keeps live status and decisions ahead of dashboard detail", async () => {
+test("keeps truthful configured status and decisions ahead of dashboard detail", async () => {
   const source = await readFile(
     new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url),
     "utf8",
   );
 
-  const liveIndex = source.indexOf("ระบบทำงานปกติ");
+  const configuredIndex = source.indexOf("ตั้งค่าทรัพยากรแล้ว · รอข้อมูลบันทึก");
   const workIndex = source.indexOf("งานที่ต้องจัดการ");
   const noReadingsIndex = source.lastIndexOf("ยังไม่มีค่าความชื้นดินที่บันทึก");
-  assert.ok(liveIndex >= 0);
-  assert.ok(workIndex > liveIndex);
-  assert.ok(noReadingsIndex > liveIndex);
+  assert.ok(configuredIndex >= 0);
+  assert.ok(workIndex > configuredIndex);
+  assert.ok(noReadingsIndex > configuredIndex);
+  assert.match(source, /ยังไม่มีเหตุการณ์หรือค่าที่บันทึกไว้/);
+  assert.match(source, /ตั้งค่าให้เปิด/);
+  assert.doesNotMatch(source, /อุปกรณ์ออนไลน์/);
+  assert.doesNotMatch(source, /LIVE/);
   assert.match(source, /สถานะทรัพยากรสำคัญ/);
   assert.match(source, /context: GreenhouseContext/);
   assert.match(source, /const activeCamera = context\.cameras\.find/);
