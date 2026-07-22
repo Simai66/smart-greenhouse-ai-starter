@@ -34,7 +34,7 @@ import {
   type DemoGreenhouse,
   type DemoState,
 } from "@/lib/greenhouse-demo-store";
-import { createResource } from "@/lib/greenhouse-domain";
+import { createResource, deleteZone } from "@/lib/greenhouse-domain";
 import {
   buildDashboardViewModel,
   pageMetadata,
@@ -376,20 +376,16 @@ export function GreenhouseApp() {
           notify(`เพิ่ม ${name} แล้ว`);
         }}
         onArchiveZone={(greenhouseId, zoneId) => {
-          setState((current) => ({
-            ...current,
-            greenhouses: current.greenhouses.map((greenhouse) =>
-              greenhouse.id === greenhouseId
-                ? {
-                    ...greenhouse,
-                    zones: greenhouse.zones.map((zone) =>
-                      zone.id === zoneId ? { ...zone, status: "archived" } : zone,
-                    ),
-                  }
-                : greenhouse,
-            ),
-          }));
-          notify("เก็บโซนถาวรแล้ว", "info");
+          try {
+            const nextState = deleteZone(state, { greenhouseId, zoneId });
+            setState(nextState);
+            notify("เก็บโซนถาวรแล้ว", "info");
+          } catch (error) {
+            notify(
+              error instanceof Error ? error.message : "ไม่สามารถเก็บโซนได้",
+              "error",
+            );
+          }
         }}
         onRestoreZone={(greenhouseId, zoneId) => {
           setState((current) => ({

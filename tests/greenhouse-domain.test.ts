@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createResource,
+  deleteZone,
   deleteResource,
   selectResourcesForGreenhouse,
   updateResource,
@@ -57,4 +58,35 @@ test("selects devices, cameras, and sensors for one greenhouse", () => {
   assert.deepEqual(selectResourcesForGreenhouse(demoInitialState, "missing"), {
     devices: [], cameras: [], sensors: [],
   });
+});
+
+test("refuses to archive a zone with an active crop batch without mutating state", () => {
+  const before = structuredClone(demoInitialState);
+
+  assert.throws(
+    () => deleteZone(before, { greenhouseId: "GH-01", zoneId: "ZONE-A" }),
+    { message: "ยังมีรอบปลูกที่ใช้งานอยู่ในโซนนี้" },
+  );
+  assert.deepEqual(before, demoInitialState);
+});
+
+test("archives an inactive batch zone without changing other greenhouse zones", () => {
+  const state = structuredClone(demoInitialState);
+  state.cropBatches = state.cropBatches.map((batch) =>
+    batch.zoneId === "ZONE-A" ? { ...batch, status: "archived" } : batch,
+  );
+  state.greenhouses.push({
+    id: "GH-02",
+    name: "โรงเรือนที่สอง",
+    code: "GREENHOUSE 02",
+    status: "active",
+    zones: [{ id: "ZONE-A", name: "โซน A", status: "active" }],
+  });
+  const before = structuredClone(state);
+
+  const next = deleteZone(state, { greenhouseId: "GH-01", zoneId: "ZONE-A" });
+
+  assert.equal(next.greenhouses.find((greenhouse) => greenhouse.id === "GH-01")?.zones[0]?.status, "archived");
+  assert.equal(next.greenhouses.find((greenhouse) => greenhouse.id === "GH-02")?.zones[0]?.status, "active");
+  assert.deepEqual(state, before);
 });

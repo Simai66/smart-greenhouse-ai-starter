@@ -25,6 +25,8 @@ export type UpdateResourceInput =
 
 export type DeleteResourceInput = { kind: ResourceKind; id: string };
 
+export type DeleteZoneInput = { greenhouseId: string; zoneId: string };
+
 function nextResourceId(kind: ResourceKind, existingIds: string[]): string {
   const prefix = kind.toUpperCase();
   const matches = existingIds
@@ -144,4 +146,30 @@ export function deleteResource(state: DemoState, input: DeleteResourceInput): De
     case "sensor":
       return { ...state, sensors: state.sensors.filter((item) => item.id !== input.id) };
   }
+}
+
+export function deleteZone(state: DemoState, input: DeleteZoneInput): DemoState {
+  const hasActiveBatch = state.cropBatches.some(
+    (batch) =>
+      batch.greenhouseId === input.greenhouseId &&
+      batch.zoneId === input.zoneId &&
+      batch.status === "active",
+  );
+  if (hasActiveBatch) {
+    throw new Error("ยังมีรอบปลูกที่ใช้งานอยู่ในโซนนี้");
+  }
+
+  return {
+    ...state,
+    greenhouses: state.greenhouses.map((greenhouse) =>
+      greenhouse.id === input.greenhouseId
+        ? {
+            ...greenhouse,
+            zones: greenhouse.zones.map((zone) =>
+              zone.id === input.zoneId ? { ...zone, status: "archived" } : zone,
+            ),
+          }
+        : greenhouse,
+    ),
+  };
 }
