@@ -50,8 +50,9 @@ export function ResourceEditorDialog({ open, mode, zones, initialValue, onOpenCh
 
   const submit = () => {
     const name = draft.name.trim();
-    if (!name || !draft.zoneId || !canBind) {
-      setError("กรุณาระบุชื่อและโซนที่ใช้งานก่อนบันทึก");
+    const selectedZoneIsActive = zones.some((zone) => zone.id === draft.zoneId);
+    if (!name || !canBind || !selectedZoneIsActive) {
+      setError("กรุณาระบุชื่อและเลือกโซนที่กำลังใช้งานก่อนบันทึก");
       return;
     }
     onSubmit({ ...draft, name });
@@ -72,7 +73,7 @@ export function ResourceEditorDialog({ open, mode, zones, initialValue, onOpenCh
         </div>
         <div className="space-y-2">
           <Label htmlFor="resource-kind">ประเภททรัพยากร</Label>
-          <Select value={draft.kind} disabled={mode === "edit"} onValueChange={(kind: ResourceKind) => setDraft((current) => ({ ...current, kind }))}>
+          <Select value={draft.kind} disabled={mode === "edit"} onValueChange={(kind: ResourceKind) => setDraft((current) => ({ ...current, kind, status: kind === "device" ? (current.enabled ? "enabled" : "disabled") : (current.enabled ? "online" : "offline") }))}>
             <SelectTrigger id="resource-kind" className="h-11 w-full"><SelectValue /></SelectTrigger>
             <SelectContent>{(Object.keys(kindLabels) as ResourceKind[]).map((kind) => <SelectItem key={kind} value={kind}>{kindLabels[kind]}</SelectItem>)}</SelectContent>
           </Select>
@@ -86,7 +87,7 @@ export function ResourceEditorDialog({ open, mode, zones, initialValue, onOpenCh
         </div>
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/30 p-3">
           <div><Label htmlFor="resource-enabled">สถานะการใช้งาน</Label><p className="mt-1 text-xs text-muted-foreground">สถานะปัจจุบันของ{kindLabels[draft.kind]}จะแสดงจากการตั้งค่าเดโม</p></div>
-          <div className="flex items-center gap-2"><Badge variant={online ? "secondary" : "outline"} className={online ? "text-primary" : "text-muted-foreground"}>{online ? "พร้อมใช้งาน" : "ปิดหรือออฟไลน์"}</Badge><Switch id="resource-enabled" checked={draft.enabled} disabled aria-label={`สถานะ ${draft.name || kindLabels[draft.kind]}`} /></div>
+          <div className="flex items-center gap-2"><Badge variant={online ? "secondary" : "outline"} className={online ? "text-primary" : "text-muted-foreground"}>{online ? "พร้อมใช้งาน" : "ปิดหรือออฟไลน์"}</Badge><Switch id="resource-enabled" checked={draft.enabled} onCheckedChange={(enabled) => setDraft((current) => ({ ...current, enabled, status: current.kind === "device" ? (enabled ? "enabled" : "disabled") : (enabled ? "online" : "offline") }))} aria-label={`สถานะ ${draft.name || kindLabels[draft.kind]}`} /></div>
         </div>
         {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
       </div>

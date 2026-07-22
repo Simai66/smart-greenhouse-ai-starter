@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Archive, BellRing, Bot, Camera, Clock3, Cpu, Droplets, MapPin, Pencil, Plus, RotateCcw, Settings2, Sparkles, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -178,13 +178,13 @@ function CropBatchesSection({ greenhouses, cropBatches, activeGreenhouseId, onSa
   </>;
 }
 
-function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cameras, sensors, onAddResource, onMoveResource, onRenameResource, onDeleteResource }: {
+function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cameras, sensors, onCreateResource, onMoveResource, onRenameResource, onDeleteResource }: {
   greenhouses: DemoGreenhouse[];
   activeGreenhouseId: string;
   devices: DemoDevice[];
   cameras: DemoCamera[];
   sensors: DemoSensor[];
-  onAddResource: (kind: ResourceKind) => void;
+  onCreateResource: (value: ResourceEditorValue) => void;
   onMoveResource: (kind: ResourceKind, id: string, zoneId: string) => void;
   onRenameResource: (kind: ResourceKind, id: string, name: string) => void;
   onDeleteResource: (kind: ResourceKind, id: string) => void;
@@ -192,7 +192,6 @@ function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cam
   const [editing, setEditing] = useState<ResourceListItem | null>(null);
   const [creatingKind, setCreatingKind] = useState<ResourceKind | null>(null);
   const [deleting, setDeleting] = useState<ResourceListItem | null>(null);
-  const [pendingCreate, setPendingCreate] = useState<Pick<ResourceEditorValue, "kind" | "name" | "zoneId"> | null>(null);
   const greenhouse = greenhouses.find((item) => item.id === activeGreenhouseId);
   const zones = greenhouse?.zones.filter((zone) => zone.status === "active") ?? [];
   const resourceGroups = useMemo(() => ({
@@ -200,24 +199,6 @@ function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cam
     camera: cameras.filter((item) => item.greenhouseId === activeGreenhouseId).map((item): ResourceListItem => ({ id: item.id, name: item.name, kind: "camera", zoneId: item.zoneId, enabled: item.enabled, status: item.status })),
     sensor: sensors.filter((item) => item.greenhouseId === activeGreenhouseId).map((item): ResourceListItem => ({ id: item.id, name: item.name, kind: "sensor", zoneId: item.zoneId, enabled: item.status === "online", status: item.status })),
   }), [activeGreenhouseId, cameras, devices, sensors]);
-  const knownIds = useRef<Record<ResourceKind, Set<string>>>({ device: new Set(), camera: new Set(), sensor: new Set() });
-
-  useEffect(() => {
-    if (pendingCreate) {
-      const created = resourceGroups[pendingCreate.kind].find((resource) => !knownIds.current[pendingCreate.kind].has(resource.id));
-      if (created) {
-        if (created.name !== pendingCreate.name) onRenameResource(created.kind, created.id, pendingCreate.name);
-        if (created.zoneId !== pendingCreate.zoneId) onMoveResource(created.kind, created.id, pendingCreate.zoneId);
-        setPendingCreate(null);
-      }
-    }
-    knownIds.current = {
-      device: new Set(resourceGroups.device.map((resource) => resource.id)),
-      camera: new Set(resourceGroups.camera.map((resource) => resource.id)),
-      sensor: new Set(resourceGroups.sensor.map((resource) => resource.id)),
-    };
-  }, [onMoveResource, onRenameResource, pendingCreate, resourceGroups]);
-
   const defaultEditorValue = (kind: ResourceKind): ResourceEditorValue => ({ kind, name: "", zoneId: zones[0]?.id ?? "", enabled: kind !== "device", status: kind === "sensor" || kind === "camera" ? "online" : "disabled" });
   const editorValue = editing ? { kind: editing.kind, name: editing.name, zoneId: editing.zoneId ?? zones[0]?.id ?? "", enabled: editing.enabled, status: editing.status } : defaultEditorValue(creatingKind ?? "device");
   const submitEditor = (value: ResourceEditorValue) => {
@@ -227,8 +208,7 @@ function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cam
       setEditing(null);
       return;
     }
-    setPendingCreate({ kind: value.kind, name: value.name, zoneId: value.zoneId });
-    onAddResource(value.kind);
+    onCreateResource(value);
     setCreatingKind(null);
   };
 
@@ -240,7 +220,7 @@ function ResourceBindingsSection({ greenhouses, activeGreenhouseId, devices, cam
   </>;
 }
 
-export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, devices, sensors, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch, onAddResource, onMoveResource, onRenameResource, onDeleteResource }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; devices: DemoDevice[]; sensors: DemoSensor[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void; onAddResource: (kind: "device" | "camera" | "sensor") => void; onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void; onRenameResource: (kind: "device" | "camera" | "sensor", id: string, name: string) => void; onDeleteResource: (kind: "device" | "camera" | "sensor", id: string) => void }) {
+export function SettingsView({ settings, greenhouses, cropBatches, activeGreenhouseId, devices, sensors, onSave, onSaveGreenhouse, onArchiveGreenhouse, onRestoreGreenhouse, onAddZone, onArchiveZone, onRestoreZone, onSaveBatch, onArchiveBatch, onRestoreBatch, onCreateResource, onMoveResource, onRenameResource, onDeleteResource }: { settings: DemoSettings; greenhouses: DemoGreenhouse[]; cropBatches: DemoCropBatch[]; activeGreenhouseId: string; devices: DemoDevice[]; sensors: DemoSensor[]; onSave: (settings: DemoSettings) => void; onSaveGreenhouse: (id: string | null, draft: GreenhouseDraft) => void; onArchiveGreenhouse: (id: string) => void; onRestoreGreenhouse: (id: string) => void; onAddZone: (greenhouseId: string, name: string) => void; onArchiveZone: (greenhouseId: string, zoneId: string) => void; onRestoreZone: (greenhouseId: string, zoneId: string) => void; onSaveBatch: (id: string | null, draft: CropBatchDraft) => void; onArchiveBatch: (id: string) => void; onRestoreBatch: (id: string) => void; onCreateResource: (value: ResourceEditorValue) => void; onMoveResource: (kind: "device" | "camera" | "sensor", id: string, zoneId: string) => void; onRenameResource: (kind: "device" | "camera" | "sensor", id: string, name: string) => void; onDeleteResource: (kind: "device" | "camera" | "sensor", id: string) => void }) {
   const [draft, setDraft] = useState(settings);
   const [error, setError] = useState("");
   const [prevSettings, setPrevSettings] = useState(settings);
@@ -252,7 +232,7 @@ export function SettingsView({ settings, greenhouses, cropBatches, activeGreenho
   return <div className="space-y-6">
     <FarmStructureSection greenhouses={greenhouses} onSaveGreenhouse={onSaveGreenhouse} onArchiveGreenhouse={onArchiveGreenhouse} onRestoreGreenhouse={onRestoreGreenhouse} onAddZone={onAddZone} onArchiveZone={onArchiveZone} onRestoreZone={onRestoreZone} />
     <CropBatchesSection greenhouses={greenhouses} cropBatches={cropBatches} activeGreenhouseId={activeGreenhouseId} onSaveBatch={onSaveBatch} onArchiveBatch={onArchiveBatch} onRestoreBatch={onRestoreBatch} />
-    <ResourceBindingsSection greenhouses={greenhouses} activeGreenhouseId={activeGreenhouseId} devices={devices} cameras={settings.cameras} sensors={sensors} onAddResource={onAddResource} onMoveResource={onMoveResource} onRenameResource={onRenameResource} onDeleteResource={onDeleteResource} />
+    <ResourceBindingsSection greenhouses={greenhouses} activeGreenhouseId={activeGreenhouseId} devices={devices} cameras={settings.cameras} sensors={sensors} onCreateResource={onCreateResource} onMoveResource={onMoveResource} onRenameResource={onRenameResource} onDeleteResource={onDeleteResource} />
     <SettingSection icon={<Settings2 className="size-5" aria-hidden="true" />} title="ค่าเป้าหมายสภาพแวดล้อม" description="ใช้กับการควบคุมอัตโนมัติและคำเตือนในเดโม">
       <div className="grid gap-4 md:grid-cols-2"><NumberField id="minTemperature" label="อุณหภูมิต่ำสุด" unit="°C" value={draft.minTemperature} onChange={(value) => update("minTemperature", value)} /><NumberField id="maxTemperature" label="อุณหภูมิสูงสุด" unit="°C" value={draft.maxTemperature} onChange={(value) => update("maxTemperature", value)} /><NumberField id="minHumidity" label="ความชื้นอากาศต่ำสุด" unit="%" value={draft.minHumidity} onChange={(value) => update("minHumidity", value)} /><NumberField id="minSoilMoisture" label="ความชื้นดินต่ำสุด" unit="%" value={draft.minSoilMoisture} onChange={(value) => update("minSoilMoisture", value)} /></div>
     </SettingSection>

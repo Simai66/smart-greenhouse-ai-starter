@@ -53,14 +53,19 @@ test("keeps safe controls and persisted operational page contracts", async () =>
 });
 
 test("keeps reusable resource editing and deliberate deletion in settings", async () => {
-  const settings = await readFile(
-    new URL("../components/greenhouse/views/settings-view.tsx", import.meta.url),
-    "utf8",
-  );
+  const [settings, app] = await Promise.all([
+    readFile(new URL("../components/greenhouse/views/settings-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+  ]);
 
   assert.match(settings, /ResourceEditorDialog/);
-  assert.match(settings, /onDeleteResource/);
+  assert.match(settings, /onCreateResource: \(value: ResourceEditorValue\) => void/);
+  assert.match(settings, /onCreateResource=\{onCreateResource\}/);
+  assert.match(settings, /onDeleteResource=\{onDeleteResource\}/);
   assert.match(settings, /ลบทรัพยากร\?/);
+  assert.doesNotMatch(settings, /pendingCreate|knownIds/);
+  assert.match(app, /onCreateResource=\{\(value\) => \{/);
+  assert.match(app, /return createResource\(current,/);
 });
 
 test("keeps live status and decisions ahead of dashboard detail", async () => {
