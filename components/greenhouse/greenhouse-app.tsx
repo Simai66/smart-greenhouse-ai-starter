@@ -113,7 +113,7 @@ export function GreenhouseApp() {
   }, [ready, state]);
 
   const activeGreenhouse = useMemo(
-    () => state.greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId && greenhouse.status === "active") ?? state.greenhouses.find((greenhouse) => greenhouse.status === "active"),
+    () => state.greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId && greenhouse.status === "active"),
     [activeGreenhouseId, state.greenhouses],
   );
   const greenhouseContext = useMemo(

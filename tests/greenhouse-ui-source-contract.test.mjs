@@ -114,8 +114,21 @@ test("keeps truthful configured status and decisions ahead of dashboard detail",
   assert.doesNotMatch(source, /dashboard-device-demo-note|คำสั่งเดโม/);
   assert.match(app, /!activeGreenhouse && activePage !== "settings"/);
   assert.match(app, /ระบบจะไม่แสดงข้อมูลจากโรงเรือนอื่นแทน/);
+  assert.match(app, /greenhouse\.id === activeGreenhouseId && greenhouse\.status === "active"/);
+  assert.doesNotMatch(app, /\?\? state\.greenhouses\.find\(\(greenhouse\) => greenhouse\.status === "active"\)/);
   assert.doesNotMatch(app, /demoInitialState\.greenhouses\[0\]|07:42|ข้อมูลเดโม|เดโมตอบรับ|รายงาน CSV เดโม/);
   assert.doesNotMatch(ai, /ระบบเดโม/);
+});
+
+test("keeps analytics plant filtering compatible with the plant data model", async () => {
+  const analytics = await readFile(
+    new URL("../components/greenhouse/views/analytics-view.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(analytics, /context\.cropBatches\.find\(\(item\) => item\.id === plant\.batchId\)/);
+  assert.match(analytics, /batch \? batch\.zoneId === selectedZone\.id : plant\.zone === selectedZone\.name/);
+  assert.doesNotMatch(analytics, /plant\.zoneId/);
 });
 
 test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", async () => {

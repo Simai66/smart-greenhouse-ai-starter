@@ -21,7 +21,10 @@ export function AnalyticsView({ period, onPeriodChange, context }: { period: Cha
   const scopedSensors = selectedZone ? context.sensors.filter((sensor) => sensor.zoneId === selectedZone.id) : context.sensors;
   const scopedCameras = selectedZone ? context.cameras.filter((camera) => camera.zoneId === selectedZone.id) : context.cameras;
   const scopedDevices = selectedZone ? context.devices.filter((device) => device.zoneId === selectedZone.id) : context.devices;
-  const scopedPlants = selectedZone ? context.plants.filter((plant) => plant.zoneId === selectedZone.id) : context.plants;
+  const scopedPlants = selectedZone ? context.plants.filter((plant) => {
+    const batch = plant.batchId ? context.cropBatches.find((item) => item.id === plant.batchId) : undefined;
+    return batch ? batch.zoneId === selectedZone.id : plant.zone === selectedZone.name;
+  }) : context.plants;
   const zoneLabel = selectedZone?.name ?? "ทุกโซน";
   const soilSensors = scopedSensors.filter((sensor) => sensor.metric === "soilMoisture");
   const lightDevices = scopedDevices.filter((device) => device.icon === "light");
