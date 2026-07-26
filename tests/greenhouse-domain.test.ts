@@ -228,14 +228,17 @@ test("keeps same-ID batch and plants in another greenhouse when deleting an arch
   assert.deepEqual(next.aiReviewedEvidence, { "TOM-OTHER": ["CAM-A-01"] });
 });
 
-test("permanently deletes only the first duplicate matching crop batch", () => {
+test("refuses to permanently delete an ambiguous duplicate crop batch without mutating state", () => {
   const state = structuredClone(demoInitialState);
   state.cropBatches[0]!.status = "archived";
   state.cropBatches.unshift({ ...state.cropBatches[0]!, cropName: "รอบปลูกซ้ำแรก" });
+  const before = structuredClone(state);
 
-  const next = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" });
-
-  assert.deepEqual(next.cropBatches.filter((batch) => batch.id === "BATCH-TOM-A").map((batch) => batch.cropName), ["มะเขือเทศเชอร์รี"]);
+  assert.throws(
+    () => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" }),
+    { message: /รอบปลูกซ้ำ/ },
+  );
+  assert.deepEqual(state, before);
 });
 
 test("refuses to permanently delete a missing or active crop batch without mutating state", () => {

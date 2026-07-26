@@ -281,11 +281,15 @@ export function restoreCropBatch(state: DemoState, input: RestoreCropBatchInput)
 }
 
 export function permanentlyDeleteCropBatch(state: DemoState, input: PermanentlyDeleteCropBatchInput): DemoState {
-  const batchIndex = state.cropBatches.findIndex((batch) =>
+  const matchingBatches = state.cropBatches.filter((batch) =>
     batch.greenhouseId === input.greenhouseId && batch.id === input.id,
   );
-  const batch = state.cropBatches[batchIndex];
+  const batch = matchingBatches[0];
   if (!batch) throw new Error("ไม่พบรอบปลูกที่ต้องการลบ");
+  if (matchingBatches.length > 1) throw new Error("พบรอบปลูกซ้ำ จึงไม่สามารถระบุข้อมูลที่จะลบได้");
+  const batchIndex = state.cropBatches.findIndex((item) =>
+    item.greenhouseId === input.greenhouseId && item.id === input.id,
+  );
   if (batch.status === "active") throw new Error("ต้องเก็บหรือจบรอบปลูกก่อนลบถาวร");
 
   const deletedPlantIds = new Set(state.plants
