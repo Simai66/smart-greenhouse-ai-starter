@@ -59,6 +59,7 @@ export type ResourceRow = {
 export type DashboardViewModel = {
   hasOperationalData: boolean;
   hasRecordedActivity: boolean;
+  hasPlantData: boolean;
   healthScore: number;
   activeDevices: number;
   deviceCount: number;
@@ -130,6 +131,7 @@ export function buildDashboardViewModel(
   return {
     hasOperationalData: Boolean(state.devices.length || state.sensors.length || state.plants.length || state.settings.cameras.length),
     hasRecordedActivity,
+    hasPlantData,
     healthScore,
     activeDevices,
     deviceCount: state.devices.length,

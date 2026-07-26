@@ -18,13 +18,27 @@ test("publishes the seven approved pages in operational order", () => {
   assert.equal(pageMetadata.dashboard.title, "ศูนย์ปฏิบัติการ");
 });
 
-test("derives the command-deck summary from demo state", () => {
+test("ships configured plants without fabricated readings or alerts", () => {
+  assert.equal(demoInitialState.plants.every((plant) => plant.moisture === null && plant.confidence === null && plant.health === "ยังไม่มีข้อมูล"), true);
+  assert.deepEqual(demoInitialState.alerts, []);
   const view = buildDashboardViewModel(demoInitialState);
+  assert.equal(view.healthScore, 0);
+  assert.equal(view.hasPlantData, false);
+  assert.equal(view.hasRecordedActivity, false);
+  assert.equal(view.metrics.find((metric) => metric.id === "health")?.value, "—");
+});
+
+test("derives the command-deck summary from demo state", () => {
+  const recorded = structuredClone(demoInitialState);
+  recorded.plants[0] = { ...recorded.plants[0]!, moisture: 48, health: "ปกติ", confidence: 92 };
+  recorded.alerts.push({ id: "leaf-spot", type: "critical", title: "ควรตรวจ", detail: "บันทึกจริง", time: "ตอนนี้", resolved: false, greenhouseId: "GH-01" });
+  const view = buildDashboardViewModel(recorded);
   assert.equal(view.healthScore, 92);
+  assert.equal(view.hasPlantData, true);
   assert.equal(view.activeDevices, 2);
   assert.equal(view.deviceCount, 4);
-  assert.equal(view.openAlerts, 2);
-  assert.equal(view.workItems.length, 2);
+  assert.equal(view.openAlerts, 1);
+  assert.equal(view.workItems.length, 1);
   assert.equal(view.workItems[0]?.severity, "critical");
   assert.equal(view.hasRecordedActivity, true);
   assert.equal(view.resourceRows.some((row) => row.id === "leaf-spot"), true);
@@ -66,10 +80,10 @@ test("filters plants and alerts without mutating source state", () => {
     filterPlants(demoInitialState.plants, "tom-003", "all").map((plant) => plant.id),
     ["TOM-003"],
   );
-  assert.equal(filterPlants(demoInitialState.plants, "", "ควรตรวจสอบ").length, 1);
-  assert.equal(filterAlerts(demoInitialState.alerts, "open").length, 2);
-  assert.equal(filterAlerts(demoInitialState.alerts, "resolved").length, 1);
-  assert.equal(demoInitialState.alerts[0]?.resolved, false);
+  assert.equal(filterPlants(demoInitialState.plants, "", "ยังไม่มีข้อมูล").length, 4);
+  assert.equal(filterAlerts(demoInitialState.alerts, "open").length, 0);
+  assert.equal(filterAlerts(demoInitialState.alerts, "resolved").length, 0);
+  assert.deepEqual(demoInitialState.alerts, []);
 });
 
 test("describes recorded soil-moisture data without requiring a demo series", () => {

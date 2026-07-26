@@ -6,6 +6,7 @@ import {
   deleteResource,
   permanentlyDeleteGreenhouse,
   permanentlyDeleteZone,
+  restoreCropBatch,
   selectDevicePresentation,
   selectGreenhouseContext,
   selectResourcesForGreenhouse,
@@ -25,6 +26,23 @@ test("creates, updates, moves, and deletes a device", () => {
   assert.equal(moved.devices.find((item) => item.id === id)?.zoneId, "ZONE-B");
   assert.equal(deleted.devices.some((item) => item.id === id), false);
   assert.equal(demoInitialState.devices.some((item) => item.id === id), false);
+});
+
+test("restores a crop batch only into an active greenhouse and zone", () => {
+  const state = structuredClone(demoInitialState);
+  state.cropBatches[0]!.status = "archived";
+  const restored = restoreCropBatch(state, { id: state.cropBatches[0]!.id });
+  assert.equal(restored.cropBatches[0]?.status, "active");
+
+  const archivedZone = structuredClone(state);
+  archivedZone.greenhouses[0]!.zones[0]!.status = "archived";
+  assert.throws(() => restoreCropBatch(archivedZone, { id: archivedZone.cropBatches[0]!.id }), { message: /ต้องเรียกคืนโซน/ });
+  assert.equal(archivedZone.cropBatches[0]?.status, "archived");
+
+  const archivedGreenhouse = structuredClone(state);
+  archivedGreenhouse.greenhouses[0]!.status = "archived";
+  assert.throws(() => restoreCropBatch(archivedGreenhouse, { id: archivedGreenhouse.cropBatches[0]!.id }), { message: /ต้องเรียกคืนโรงเรือน/ });
+  assert.equal(archivedGreenhouse.cropBatches[0]?.status, "archived");
 });
 
 test("keeps resource mutations scoped to their matching collection", () => {

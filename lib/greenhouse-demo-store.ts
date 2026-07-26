@@ -84,16 +84,12 @@ export const demoInitialState: DemoState = {
     { id: "mist", name: "เครื่องพ่นหมอก", detail: "โหมดอัตโนมัติ · ต่ำกว่า 60% RH", icon: "mist", active: true, greenhouseId: "GH-01", zoneId: "ZONE-B" },
   ],
   plants: [
-    { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: 46, health: "ปกติ", confidence: 98, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
-    { id: "TOM-002", name: "มะเขือเทศ 02", zone: "โซน A", age: "42 วัน", moisture: 44, health: "ปกติ", confidence: 96, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
-    { id: "TOM-003", name: "มะเขือเทศ 03", zone: "โซน B", age: "38 วัน", moisture: 39, health: "ควรตรวจสอบ", confidence: 78, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
-    { id: "TOM-004", name: "มะเขือเทศ 04", zone: "โซน B", age: "38 วัน", moisture: 36, health: "ปกติ", confidence: 94, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
+    { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
+    { id: "TOM-002", name: "มะเขือเทศ 02", zone: "โซน A", age: "42 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
+    { id: "TOM-003", name: "มะเขือเทศ 03", zone: "โซน B", age: "38 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
+    { id: "TOM-004", name: "มะเขือเทศ 04", zone: "โซน B", age: "38 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
   ],
-  alerts: [
-    { id: "leaf-spot", type: "critical", title: "ควรตรวจใบของมะเขือเทศ 03", detail: "ผลวิเคราะห์ภาพพบลักษณะที่อาจเป็นใบจุด ความมั่นใจ 78%", time: "18 นาทีที่แล้ว", resolved: false, greenhouseId: "GH-01" },
-    { id: "soil-moisture", type: "warning", title: "ความชื้นในดินของมะเขือเทศ 04 ลดลง", detail: "ค่าปัจจุบัน 36% ใกล้ค่าเริ่มรดน้ำอัตโนมัติที่ 35%", time: "5 นาทีที่แล้ว", resolved: false, greenhouseId: "GH-01" },
-    { id: "ventilation", type: "info", title: "รอบระบายอากาศเสร็จสิ้น", detail: "อุณหภูมิในโซน A กลับสู่ช่วงเป้าหมายแล้ว", time: "42 นาทีที่แล้ว", resolved: true, greenhouseId: "GH-01" },
-  ],
+  alerts: [],
   settings: {
     minTemperature: "22", maxTemperature: "30", minHumidity: "60", minSoilMoisture: "35",
     automation: { water: true, fan: true, light: true, alert: true },
@@ -154,10 +150,8 @@ function isState(value: unknown): value is DemoState {
     Array.isArray(state.devices) &&
     state.devices.every(validDevice) &&
     Array.isArray(state.plants) &&
-    state.plants.length > 0 &&
     state.plants.every(validPlant) &&
     Array.isArray(state.alerts) &&
-    state.alerts.length > 0 &&
     state.alerts.every(validAlert) &&
     validSettings &&
     (state.aiReviewedPlantId === undefined ||

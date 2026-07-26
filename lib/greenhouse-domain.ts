@@ -32,6 +32,7 @@ export type DeleteResourceInput = { kind: ResourceKind; id: string };
 export type DeleteZoneInput = { greenhouseId: string; zoneId: string };
 export type PermanentlyDeleteZoneInput = { greenhouseId: string; zoneId: string };
 export type PermanentlyDeleteGreenhouseInput = { greenhouseId: string };
+export type RestoreCropBatchInput = { id: string };
 
 export type GreenhouseContext = {
   greenhouse: DemoGreenhouse | undefined;
@@ -260,6 +261,20 @@ export function deleteZone(state: DemoState, input: DeleteZoneInput): DemoState 
           }
         : greenhouse,
     ),
+  };
+}
+
+export function restoreCropBatch(state: DemoState, input: RestoreCropBatchInput): DemoState {
+  const batch = state.cropBatches.find((item) => item.id === input.id);
+  if (!batch) throw new Error("ไม่พบรอบปลูกที่ต้องการเรียกคืน");
+  const greenhouse = state.greenhouses.find((item) => item.id === batch.greenhouseId);
+  if (!greenhouse || greenhouse.status !== "active") throw new Error("ต้องเรียกคืนโรงเรือนก่อนเรียกคืนรอบปลูก");
+  if (!greenhouse.zones.some((zone) => zone.id === batch.zoneId && zone.status === "active")) {
+    throw new Error("ต้องเรียกคืนโซนก่อนเรียกคืนรอบปลูก");
+  }
+  return {
+    ...state,
+    cropBatches: state.cropBatches.map((item) => item.id === input.id ? { ...item, status: "active" } : item),
   };
 }
 

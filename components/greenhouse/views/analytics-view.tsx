@@ -17,7 +17,8 @@ function EmptyReadings({ title, detail }: { title: string; detail: string }) {
 export function AnalyticsView({ period, onPeriodChange, context }: { period: ChartPeriod; onPeriodChange: (period: ChartPeriod) => void; context: GreenhouseContext }) {
   const zoneOptions = context.greenhouse?.zones.filter((item) => item.status === "active") ?? [];
   const [zoneId, setZoneId] = useState("all");
-  const selectedZone = zoneOptions.find((item) => item.id === zoneId);
+  const selectedZoneId = zoneOptions.some((item) => item.id === zoneId) ? zoneId : "all";
+  const selectedZone = zoneOptions.find((item) => item.id === selectedZoneId);
   const scopedSensors = selectedZone ? context.sensors.filter((sensor) => sensor.zoneId === selectedZone.id) : context.sensors;
   const scopedCameras = selectedZone ? context.cameras.filter((camera) => camera.zoneId === selectedZone.id) : context.cameras;
   const scopedDevices = selectedZone ? context.devices.filter((device) => device.zoneId === selectedZone.id) : context.devices;
@@ -39,7 +40,7 @@ export function AnalyticsView({ period, onPeriodChange, context }: { period: Cha
   return <section className="space-y-6" aria-labelledby="analytics-overview-title">
     <div className="flex flex-col gap-3 border-b border-border/70 pb-5 sm:flex-row sm:items-center sm:justify-between">
       <div><p className="page-kicker">มุมมองการตัดสินใจ</p><h2 id="analytics-overview-title" className="mt-1 text-lg font-semibold">ภาพรวมการวิเคราะห์</h2><p className="mt-1 text-sm text-muted-foreground">จะแสดงเฉพาะค่าที่บันทึกจากโรงเรือนที่เลือก ไม่มีการเติมข้อมูลตัวอย่าง</p></div>
-      <div className="flex flex-wrap items-center gap-2"><label className="sr-only" htmlFor="analytics-zone">เลือกโซน</label><Select value={zoneId} onValueChange={setZoneId}><SelectTrigger id="analytics-zone" className="w-full sm:w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">ทุกโซน</SelectItem>{zoneOptions.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select><Tabs value={period} onValueChange={(value) => onPeriodChange(value as ChartPeriod)}><TabsList aria-label="เลือกช่วงเวลาของกราฟ"><TabsTrigger value="วันนี้">วันนี้</TabsTrigger><TabsTrigger value="7 วัน">7 วัน</TabsTrigger><TabsTrigger value="30 วัน">30 วัน</TabsTrigger></TabsList></Tabs></div>
+      <div className="flex flex-wrap items-center gap-2"><label className="sr-only" htmlFor="analytics-zone">เลือกโซน</label><Select value={selectedZoneId} onValueChange={setZoneId}><SelectTrigger id="analytics-zone" className="w-full sm:w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">ทุกโซน</SelectItem>{zoneOptions.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select><Tabs value={period} onValueChange={(value) => onPeriodChange(value as ChartPeriod)}><TabsList aria-label="เลือกช่วงเวลาของกราฟ"><TabsTrigger value="วันนี้">วันนี้</TabsTrigger><TabsTrigger value="7 วัน">7 วัน</TabsTrigger><TabsTrigger value="30 วัน">30 วัน</TabsTrigger></TabsList></Tabs></div>
     </div>
 
     {!hasConfiguredResources ? <EmptyReadings title="ยังไม่มีทรัพยากรสำหรับวิเคราะห์" detail={`เพิ่มเซ็นเซอร์ กล้อง อุปกรณ์ หรือรอบปลูกใน${context.greenhouse?.name ?? "โรงเรือนนี้"}ก่อน จึงจะเริ่มเก็บข้อมูลได้`} /> : <>

@@ -104,10 +104,12 @@ test("keeps zone edits and device status language truthful", async () => {
   assert.match(analytics, /ไม่ใช่สถานะการทำงานจริง/);
   assert.doesNotMatch(analytics, />ทำงาน<|>หยุด</);
   assert.match(devices, /const selectedZone = zoneOptions\.some/);
-  assert.match(app, /useState\(""\)/);
+  assert.match(app, /useState\(\(\) => demoInitialState\.greenhouses\.find/);
   assert.match(app, /greenhouse\.id !== id && greenhouse\.status === "active"/);
+  assert.match(app, /changeGreenhouse\(state\.greenhouses\.find/);
   assert.match(app, /moisture: null/);
   assert.match(app, /health: "ยังไม่มีข้อมูล"/);
+  assert.match(app, /device\.detail === `ผูกกับ \$\{oldName\}`/);
 });
 
 test("keeps permanent deletion confirmation and selected-greenhouse cleanup deliberate", async () => {
@@ -172,8 +174,25 @@ test("keeps analytics plant filtering compatible with the plant data model", asy
   );
 
   assert.match(analytics, /context\.cropBatches\.find\(\(item\) => item\.id === plant\.batchId\)/);
+  assert.match(analytics, /const selectedZoneId = zoneOptions\.some/);
   assert.match(analytics, /batch \? batch\.zoneId === selectedZone\.id : plant\.zone === selectedZone\.name/);
   assert.doesNotMatch(analytics, /plant\.zoneId/);
+});
+
+test("keeps unknown plants neutral and restoration validated", async () => {
+  const [plants, commandDeck, app] = await Promise.all([
+    readFile(new URL("../components/greenhouse/views/plants-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(plants, /ยังไม่มีหลักฐานภาพของ/);
+  assert.match(plants, /plant\.health === "ยังไม่มีข้อมูล"/);
+  assert.doesNotMatch(plants, /ภาพล่าสุดของ/);
+  assert.match(commandDeck, /plants\.some\(\(plant\) => plant\.confidence !== null\)/);
+  assert.match(commandDeck, /viewModel\.hasPlantData \? `\$\{viewModel\.healthScore\}%` : "—"/);
+  assert.match(app, /restoreCropBatch/);
+  assert.match(app, /changeGreenhouse\(greenhouse\.id\)/);
+  assert.match(app, /changeGreenhouse\(id\)/);
 });
 
 test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", async () => {

@@ -156,6 +156,21 @@ test("preserves an intentionally empty device collection", async () => {
   assert.deepEqual(result.state.devices, []);
 });
 
+test("preserves intentionally empty plant and alert collections", async () => {
+  for (const [emptyPlants, emptyAlerts] of [[true, false], [false, true], [true, true]]) {
+    const saved = structuredClone(demoInitialState);
+    if (!emptyPlants) saved.plants.push({ id: "RECORDED", name: "ต้นทดสอบ", zone: "โซน A", age: "1 วัน", moisture: 50, health: "ปกติ", confidence: 90, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" });
+    if (!emptyAlerts) saved.alerts.push({ id: "ALERT", type: "info", title: "บันทึก", detail: "รายละเอียด", time: "ตอนนี้", resolved: false, greenhouseId: "GH-01" });
+    if (emptyPlants) saved.plants = [];
+    if (emptyAlerts) saved.alerts = [];
+    globalThis.window = { localStorage: { getItem: () => JSON.stringify(saved), setItem: () => {} } } as never;
+    const result = await greenhouseDemoStore.load();
+    assert.equal(result.recovered, false);
+    assert.equal(result.state.plants.length, saved.plants.length);
+    assert.equal(result.state.alerts.length, saved.alerts.length);
+  }
+});
+
 test("preserves a valid greenhouse with no zones", async () => {
   const legacy = structuredClone(demoInitialState);
   legacy.greenhouses.push({ id: "GH-EMPTY", name: "โรงเรือนว่าง", code: "EMPTY-01", status: "active", zones: [] });
@@ -191,8 +206,9 @@ test("transitions device only after a confirmed result", () => {
 });
 
 test("resolves and reopens an alert", () => {
-  const resolved = setDemoAlertResolution(demoInitialState, "leaf-spot", true);
-  const reopened = setDemoAlertResolution(resolved, "leaf-spot", false);
+  const state = { ...demoInitialState, alerts: [{ id: "recorded", type: "info" as const, title: "บันทึก", detail: "รายละเอียด", time: "ตอนนี้", resolved: false, greenhouseId: "GH-01" }] };
+  const resolved = setDemoAlertResolution(state, "recorded", true);
+  const reopened = setDemoAlertResolution(resolved, "recorded", false);
   assert.equal(resolved.alerts[0].resolved, true);
   assert.equal(reopened.alerts[0].resolved, false);
 });
@@ -201,6 +217,7 @@ test("validates settings and selects search results", () => {
   assert.equal(validateDemoSettings({ ...demoInitialState.settings, minTemperature: "" }), "กรุณาระบุค่าเป้าหมายเป็นตัวเลขให้ครบถ้วน");
   assert.equal(validateDemoSettings({ ...demoInitialState.settings, minTemperature: "31" }), "อุณหภูมิต่ำสุดต้องน้อยกว่าอุณหภูมิสูงสุด");
   assert.equal(buildDashboardSearchResults(demoInitialState, "TOM-003")[0]?.plantId, "TOM-003");
+  assert.equal(validateDemoSettings({ ...demoInitialState.settings, cameras: [] }), null);
 });
 
 test("creates an escaped CSV payload with configured resource labels", () => {
@@ -243,11 +260,20 @@ test("escapes saved resource details in CSV output", () => {
 test("neutralizes spreadsheet formulas in CSV cells", () => {
   const state = structuredClone(demoInitialState);
   state.devices[0]!.name = " =SUM(1,1)";
-  state.alerts[0]!.detail = "@cmd";
+  state.alerts.push({ id: "formula", type: "info", title: "บันทึก", detail: "@cmd", time: "ตอนนี้", resolved: false, greenhouseId: "GH-01" });
   const csv = createDemoCsv(state, [["+1+1", "28.5", "°C"]], "2026-07-18 07:42");
   assert.match(csv, /"' =SUM\(1,1\)"/);
   assert.match(csv, /"'@cmd"/);
   assert.match(csv, /"'\+1\+1"/);
+});
+
+test("scopes CSV zone names by greenhouse and zone id", () => {
+  const state = structuredClone(demoInitialState);
+  state.greenhouses.push({ id: "GH-02", name: "โรงเรือน 2", code: "GH-02", status: "active", zones: [{ id: "ZONE-A", name: "โซนอีกโรงเรือน", status: "active" }] });
+  state.devices.push({ id: "device-gh-02", name: "ปั๊มโรงเรือน 2", detail: "ตั้งค่า", icon: "pump", active: false, greenhouseId: "GH-02", zoneId: "ZONE-A" });
+  const csv = createDemoCsv(state, [], "2026-07-18 07:42");
+  assert.match(csv, /"ปั๊มน้ำ","โซน A"/);
+  assert.match(csv, /"ปั๊มโรงเรือน 2","โซนอีกโรงเรือน"/);
 });
 
 test("keeps device state unchanged until acknowledgement arrives", async () => {

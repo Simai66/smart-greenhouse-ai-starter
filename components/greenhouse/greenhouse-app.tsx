@@ -34,7 +34,7 @@ import {
   type DemoGreenhouse,
   type DemoState,
 } from "@/lib/greenhouse-demo-store";
-import { createResource, deleteZone, permanentlyDeleteGreenhouse, permanentlyDeleteZone, selectGreenhouseContext } from "@/lib/greenhouse-domain";
+import { createResource, deleteZone, permanentlyDeleteGreenhouse, permanentlyDeleteZone, restoreCropBatch, selectGreenhouseContext } from "@/lib/greenhouse-domain";
 import {
   buildDashboardViewModel,
   pageMetadata,
@@ -47,7 +47,7 @@ export function GreenhouseApp() {
   const [ready, setReady] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [activePage, setActivePage] = useState<GreenhousePageId>("dashboard");
-  const [activeGreenhouseId, setActiveGreenhouseId] = useState("");
+  const [activeGreenhouseId, setActiveGreenhouseId] = useState(() => demoInitialState.greenhouses.find((greenhouse) => greenhouse.status === "active")?.id ?? "");
   const [period, setPeriod] = useState<ChartPeriod>("วันนี้");
   const [search, setSearch] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
@@ -86,7 +86,9 @@ export function GreenhouseApp() {
     void greenhouseDemoStore.load().then((result) => {
       if (!active) return;
       setState(result.state);
-      setActiveGreenhouseId((current) => current || result.state.greenhouses.find((greenhouse) => greenhouse.status === "active")?.id || "");
+      setActiveGreenhouseId((current) => result.state.greenhouses.some((greenhouse) => greenhouse.id === current && greenhouse.status === "active")
+        ? current
+        : result.state.greenhouses.find((greenhouse) => greenhouse.status === "active")?.id ?? "");
       setStorageAvailable(result.storageAvailable);
       setDataStale(!navigator.onLine);
       if (staleTimer.current) window.clearTimeout(staleTimer.current);
@@ -330,23 +332,16 @@ export function GreenhouseApp() {
           notify("บันทึกการตั้งค่าแล้ว");
         }}
         onSaveGreenhouse={(id, draft) => {
-          setState((current) => {
-            if (id) {
-              return {
-                ...current,
-                greenhouses: current.greenhouses.map((greenhouse) =>
-                  greenhouse.id === id ? { ...greenhouse, ...draft } : greenhouse,
-                ),
-              };
-            }
-            const greenhouse: DemoGreenhouse = {
-              id: `GH-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-              ...draft,
-              status: "active",
-              zones: [],
-            };
-            return { ...current, greenhouses: [...current.greenhouses, greenhouse] };
-          });
+          if (id) {
+            setState((current) => ({
+              ...current,
+              greenhouses: current.greenhouses.map((greenhouse) => greenhouse.id === id ? { ...greenhouse, ...draft } : greenhouse),
+            }));
+          } else {
+            const greenhouse: DemoGreenhouse = { id: `GH-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, ...draft, status: "active", zones: [] };
+            setState((current) => ({ ...current, greenhouses: [...current.greenhouses, greenhouse] }));
+            changeGreenhouse(greenhouse.id);
+          }
           notify(id ? "แก้ไขข้อมูลโรงเรือนแล้ว" : "เพิ่มโรงเรือนแล้ว");
         }}
         onArchiveGreenhouse={(id) => {
@@ -356,7 +351,7 @@ export function GreenhouseApp() {
               greenhouse.id === id ? { ...greenhouse, status: "archived" } : greenhouse,
             ),
           }));
-          if (id === activeGreenhouseId) setActiveGreenhouseId(state.greenhouses.find((greenhouse) => greenhouse.id !== id && greenhouse.status === "active")?.id ?? "");
+          if (id === activeGreenhouseId) changeGreenhouse(state.greenhouses.find((greenhouse) => greenhouse.id !== id && greenhouse.status === "active")?.id ?? "");
           notify("เก็บโรงเรือนเข้าคลังแล้ว", "info");
         }}
         onRestoreGreenhouse={(id) => {
@@ -366,6 +361,7 @@ export function GreenhouseApp() {
               greenhouse.id === id ? { ...greenhouse, status: "active" } : greenhouse,
             ),
           }));
+          changeGreenhouse(id);
           notify("เรียกคืนโรงเรือนแล้ว");
         }}
         onAddZone={(greenhouseId, name) => {
@@ -387,14 +383,18 @@ export function GreenhouseApp() {
           notify(`เพิ่ม ${name} แล้ว`);
         }}
         onRenameZone={(greenhouseId, zoneId, name) => {
-          setState((current) => ({
-            ...current,
-            greenhouses: current.greenhouses.map((greenhouse) => greenhouse.id === greenhouseId
-              ? { ...greenhouse, zones: greenhouse.zones.map((zone) => zone.id === zoneId ? { ...zone, name } : zone) }
-              : greenhouse),
-            settings: { ...current.settings, cameras: current.settings.cameras.map((camera) => camera.greenhouseId === greenhouseId && camera.zoneId === zoneId ? { ...camera, zone: name } : camera) },
-            plants: current.plants.map((plant) => current.cropBatches.some((batch) => batch.id === plant.batchId && batch.greenhouseId === greenhouseId && batch.zoneId === zoneId) ? { ...plant, zone: name } : plant),
-          }));
+          setState((current) => {
+            const oldName = current.greenhouses.find((greenhouse) => greenhouse.id === greenhouseId)?.zones.find((zone) => zone.id === zoneId)?.name;
+            return {
+              ...current,
+              greenhouses: current.greenhouses.map((greenhouse) => greenhouse.id === greenhouseId
+                ? { ...greenhouse, zones: greenhouse.zones.map((zone) => zone.id === zoneId ? { ...zone, name } : zone) }
+                : greenhouse),
+              devices: current.devices.map((device) => device.greenhouseId === greenhouseId && device.zoneId === zoneId && device.detail === `ผูกกับ ${oldName}` ? { ...device, detail: `ผูกกับ ${name}` } : device),
+              settings: { ...current.settings, cameras: current.settings.cameras.map((camera) => camera.greenhouseId === greenhouseId && camera.zoneId === zoneId ? { ...camera, zone: name } : camera) },
+              plants: current.plants.map((plant) => current.cropBatches.some((batch) => batch.id === plant.batchId && batch.greenhouseId === greenhouseId && batch.zoneId === zoneId) ? { ...plant, zone: name } : plant),
+            };
+          });
           notify(`เปลี่ยนชื่อโซนเป็น ${name} แล้ว`);
         }}
         onArchiveZone={(greenhouseId, zoneId) => {
@@ -481,8 +481,12 @@ export function GreenhouseApp() {
           notify("เก็บรอบปลูกถาวรแล้ว", "info");
         }}
         onRestoreBatch={(id) => {
-          setState((current) => ({ ...current, cropBatches: current.cropBatches.map((batch) => batch.id === id ? { ...batch, status: "active" } : batch) }));
-          notify("เรียกคืนรอบปลูกแล้ว");
+          try {
+            setState(restoreCropBatch(state, { id }));
+            notify("เรียกคืนรอบปลูกแล้ว");
+          } catch (error) {
+            notify(error instanceof Error ? error.message : "ไม่สามารถเรียกคืนรอบปลูกได้", "error");
+          }
         }}
         onCreateResource={(value) => {
           if (!activeGreenhouse) { notify("เพิ่มโรงเรือนก่อนจึงจะผูกทรัพยากรได้", "error"); return; }

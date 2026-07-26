@@ -38,16 +38,14 @@ function PlantDetail({
 }) {
   return (
     <div className="space-y-5">
-      <div className="relative aspect-[16/10] overflow-hidden rounded-lg bg-muted">
-        <Image
-          src={plant.health === "ปกติ"
-            ? "/images/tomato-healthy.png"
-            : "/images/tomato-leaf-spot.png"}
-          alt={"ภาพล่าสุดของ" + plant.name}
+      <div className="relative grid aspect-[16/10] place-items-center overflow-hidden rounded-lg bg-muted text-sm text-muted-foreground">
+        {plant.health === "ยังไม่มีข้อมูล" ? <p role="status">ยังไม่มีหลักฐานภาพของ{plant.name}</p> : <Image
+          src={plant.health === "ปกติ" ? "/images/tomato-healthy.png" : "/images/tomato-leaf-spot.png"}
+          alt={"หลักฐานภาพของ" + plant.name}
           fill
           unoptimized
           className="object-cover"
-        />
+        />}
       </div>
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -64,8 +62,8 @@ function PlantDetail({
         <div><dt className="text-muted-foreground">ความชื้นดิน</dt><dd className="font-medium tabular-nums">{plant.moisture === null ? "ยังไม่มีข้อมูล" : `${plant.moisture}%`}</dd></div>
         <div><dt className="text-muted-foreground">AI confidence</dt><dd className="font-medium tabular-nums">{plant.confidence === null ? "ยังไม่มีข้อมูล" : `${plant.confidence}%`}</dd></div>
       </dl>
-      <Button className="w-full" onClick={onInspect}>
-        เปิดหลักฐาน AI <ArrowRight aria-hidden="true" />
+      <Button className="w-full" disabled={plant.confidence === null} onClick={onInspect}>
+        {plant.confidence === null ? "ยังไม่มีหลักฐาน AI" : "เปิดหลักฐาน AI"} <ArrowRight aria-hidden="true" />
       </Button>
     </div>
   );
