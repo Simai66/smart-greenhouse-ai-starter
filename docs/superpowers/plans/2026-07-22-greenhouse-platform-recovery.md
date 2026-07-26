@@ -573,23 +573,23 @@ git commit -m "fix: compact plant health preview"
 - Produces `permanentlyDeleteCropBatch(state, { greenhouseId, id })`.
 - Returns a new `DemoState`; throws a Thai error for missing/active targets.
 
-- [ ] **Step 1: Add failing deletion, cleanup, and isolation tests**
+- [x] **Step 1: Add failing deletion, cleanup, and isolation tests**
 
-- [ ] **Step 2: Implement minimal pure mutation**
+- [x] **Step 2: Implement minimal pure mutation**
 
 Delete one archived/harvested batch, owned plants, and their AI review
 references. Never mutate source state or cross greenhouse boundaries.
 
-- [ ] **Step 3: Add deliberate archived-batch confirmation UI**
+- [x] **Step 3: Add deliberate archived-batch confirmation UI**
 
 Keep edit/archive/restore actions. Show destructive delete only when batch is
 not active; name the target and plant-record impact in the dialog.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `node --experimental-strip-types --test tests/greenhouse-domain.test.ts && node --test tests/greenhouse-ui-source-contract.test.mjs && npm run test:unit && npm run lint && npm run build && git diff --check`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md lib/greenhouse-domain.ts components/greenhouse/views/settings-view.tsx components/greenhouse/greenhouse-app.tsx tests/greenhouse-domain.test.ts tests/greenhouse-ui-source-contract.test.mjs
@@ -600,19 +600,22 @@ git commit -m "feat: permanently delete archived crop batches"
 
 ### Completion status — 2026-07-26
 
-- Tasks 1–8 complete on `codex/greenhouse-platform-recovery`.
+- Tasks 1–9 complete on `codex/greenhouse-platform-recovery`.
 - Permanent deletion shipped for empty greenhouses and zones with dependency
   guards, named confirmation, no cascade, reference cleanup, and empty-store
   persistence.
 - Dashboard plant-health preview shows at most four plants, prioritizes warning
   and unknown states, and uses amber/green/gray semantic status tokens.
+- Archived and harvested crop batches can be permanently deleted after named
+  confirmation. The mutation removes owned plants and AI references, rejects
+  active/ambiguous records without mutation, and unlocks safe zone deletion.
 - Final fixes include truthful empty operational data, safe legacy migrations,
   selected-greenhouse isolation, CSV hardening, and legacy plant-zone binding
   preservation.
-- Final verification: domain 26/26, source contract 11/11, unit 47/47, lint with
+- Final verification: domain 32/32, source contract 11/11, unit 47/47, lint with
   zero errors, production build and artifact validation pass, and
   `git diff --check` pass.
-- Final QA: PASS at `18d23e8`. Final whole-branch review: READY.
+- Final QA: PASS at `3d0209b`. Final whole-delta review: READY.
 - Deferred nonblocking note: Task 8 ordering/count/navigation has source-contract
   coverage; add behavioral component coverage when a render harness exists.
 
