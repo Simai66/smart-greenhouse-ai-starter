@@ -8,8 +8,8 @@ export async function GET() {
   return Response.json({
     greenhouseId: "GH-01",
     collectedAt: new Date().toISOString(),
-    connection: "connected",
-    source: "mock",
+    connection: "unconfigured",
+    source: "none",
     sensors,
   }, {
     headers: { "Cache-Control": "no-store" },

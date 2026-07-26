@@ -5,12 +5,12 @@ Starter project สำหรับระบบโรงเรือนอัจ�
 ## สิ่งที่มีในเวอร์ชันนี้
 
 - Dashboard: Temperature, Humidity, Soil Moisture, Light Intensity, กราฟแนวโน้ม, Plant Health และ Alerts
-- Plant Monitoring: การ์ดพืช 4 ต้น, ตัวกรองสถานะ และค้นหาพืช
-- AI Detection: กล้องจำลอง, Bounding box, Confidence, Severity, Recommendation และสถานะ Processing
+- Plant Monitoring: รองรับรายการพืช ตัวกรองสถานะ และค้นหาพืชเมื่อเพิ่มรอบปลูก
+- AI Detection: รองรับหลักฐานภาพ Confidence, Severity และ Recommendation เมื่อมีข้อมูลจริง
 - Device Control: Auto/Manual mode, Pending → Acknowledged, Schedule, Toast และ Emergency Stop confirmation
 - Analytics, Alerts และ Settings สำหรับใช้เป็นฐานพัฒนาต่อ
 - Responsive shell: Sidebar บน Desktop, Drawer/Bottom navigation บน Mobile
-- Mock API adapter และตัวอย่าง API route ที่เปลี่ยนเป็น Cloudflare D1, MQTT หรือ Raspberry Pi gateway ได้
+- API route เริ่มต้นแบบไม่มีข้อมูล พร้อมเปลี่ยนเป็น Cloudflare D1, MQTT หรือ Raspberry Pi gateway
 
 ## เริ่มต้นใช้งาน
 
@@ -38,13 +38,13 @@ npm run build
 - `components/greenhouse/charts/` contains accessible Recharts views.
 - `components/ui/` contains CLI-managed shadcn primitives.
 - `lib/greenhouse-demo-store.ts` remains the browser demo source of truth.
-- `lib/mock-data.ts` remains because the protected sensors API consumes it.
+- `lib/mock-data.ts` keeps empty typed collections for the protected sensors API.
 
 
 ## จุดเชื่อมระบบจริง
 
 1. เปลี่ยน `lib/greenhouse-api.ts` ให้เรียก Cloudflare Worker API หรือ MQTT gateway
-2. เปลี่ยนข้อมูลใน `lib/mock-data.ts` เป็นผลจาก API / D1
+2. เปลี่ยน empty data provider ใน `lib/mock-data.ts` เป็นผลจาก API / D1
 3. Sensor gateway ส่งค่า Temperature, Humidity, Soil Moisture และ Light ตามช่วงเวลาที่กำหนด
 4. Raspberry Pi ส่งรูปหรือ URL ของภาพ พร้อมผลโมเดล `classification`, `confidence`, `condition`, `severity` และ `recommendation`
 5. Device command ต้องตอบกลับด้วย acknowledgement ก่อนเปลี่ยนสถานะ UI เป็นสำเร็จ
@@ -84,7 +84,7 @@ GET /api/sensors
 - Authentication: แยกสิทธิ์ Administrator, Operator และ Viewer
 - Tests: เพิ่ม unit test สำหรับ API adapter และ end-to-end test สำหรับ command acknowledgement
 
-ข้อมูลในหน้าเว็บเป็นข้อมูลจำลองเพื่อแสดง flow และสถานะต่าง ๆ ก่อนเชื่อมฮาร์ดแวร์จริง
+หน้าเว็บไม่เติมข้อมูลปฏิบัติการจำลอง ผู้ใช้ต้องเพิ่มข้อมูลเองหรือเชื่อมแหล่งข้อมูลจริง
 
 ## Real-operation foundation (Pi → Cloud only)
 

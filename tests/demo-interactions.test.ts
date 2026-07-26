@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { demoInitialState, greenhouseDemoStore } from "../lib/greenhouse-demo-store.ts";
+import { demoTestState } from "./fixtures/demo-state.ts";
 import {
   buildDashboardSearchResults,
   createDemoCsv,
@@ -19,20 +20,20 @@ test("recovers from corrupt local demo storage", async () => {
   assert.equal(result.state.devices.length, demoInitialState.devices.length);
 });
 
-test("upgrades a state created before sensor and zone bindings", async () => {
-  const legacy = structuredClone(demoInitialState);
+test("does not repopulate sensors missing from legacy storage", async () => {
+  const legacy = structuredClone(demoTestState);
   delete (legacy as Partial<typeof legacy>).sensors;
   for (const device of legacy.devices) delete device.zoneId;
   globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
 
   const result = await greenhouseDemoStore.load();
   assert.equal(result.recovered, false);
-  assert.equal(result.state.sensors.length > 0, true);
+  assert.deepEqual(result.state.sensors, []);
   assert.equal(result.state.devices.every((device) => typeof device.zoneId === "string"), true);
 });
 
 test("binds legacy resources to the migrated custom greenhouse and its zone", async () => {
-  const legacy = structuredClone(demoInitialState);
+  const legacy = structuredClone(demoTestState);
   legacy.greenhouses = [{
     id: "GH-CUSTOM",
     name: "โรงเรือนทดลอง",
@@ -63,7 +64,7 @@ test("binds legacy resources to the migrated custom greenhouse and its zone", as
 });
 
 test("normalizes malformed resource bindings without changing valid saved bindings", async () => {
-  const legacy = structuredClone(demoInitialState);
+  const legacy = structuredClone(demoTestState);
   legacy.devices[0]!.greenhouseId = 42 as never;
   legacy.devices[0]!.zoneId = { stale: true } as never;
   legacy.settings.cameras[0]!.greenhouseId = "GH-01";
@@ -93,8 +94,8 @@ test("normalizes malformed resource bindings without changing valid saved bindin
   assert.equal(result.state.settings.cameras[1]?.zone, "โซน A");
 });
 
-test("upgrades a legacy saved settings payload with multi-camera defaults", async () => {
-  const legacy = structuredClone(demoInitialState);
+test("upgrades legacy settings without repopulating mock records", async () => {
+  const legacy = structuredClone(demoTestState);
   delete (legacy as Partial<typeof legacy>).greenhouses;
   delete (legacy as Partial<typeof legacy>).cropBatches;
   delete (legacy as Partial<typeof legacy>).sensors;
@@ -107,15 +108,15 @@ test("upgrades a legacy saved settings payload with multi-camera defaults", asyn
   } as unknown as Window & typeof globalThis;
   const result = await greenhouseDemoStore.load();
   assert.equal(result.recovered, false);
-  assert.equal(result.state.settings.cameras.length, 3);
+  assert.deepEqual(result.state.settings.cameras, []);
   assert.equal(result.state.settings.ai.minConfidence, "75");
   assert.deepEqual(result.state.greenhouses, demoInitialState.greenhouses);
-  assert.equal(result.state.cropBatches.length, 2);
-  assert.equal(result.state.sensors.length, 3);
+  assert.deepEqual(result.state.cropBatches, []);
+  assert.deepEqual(result.state.sensors, []);
 });
 
 test("removes crop batches with stale greenhouse or cross-greenhouse zone bindings", async () => {
-  const legacy = structuredClone(demoInitialState);
+  const legacy = structuredClone(demoTestState);
   legacy.greenhouses.push({
     id: "GH-02",
     name: "โรงเรือนที่สอง",
@@ -131,12 +132,12 @@ test("removes crop batches with stale greenhouse or cross-greenhouse zone bindin
   globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
 
   const result = await greenhouseDemoStore.load();
-  assert.deepEqual(result.state.cropBatches.map((batch) => batch.id), ["BATCH-TOM-A", "BATCH-TOM-B", "BATCH-VALID"]);
+  assert.deepEqual(result.state.cropBatches.map((batch) => batch.id), ["BATCH-TEST-A", "BATCH-TEST-B", "BATCH-VALID"]);
   assert.deepEqual(result.state.cropBatches.at(-1), legacy.cropBatches.at(-3));
 });
 
 test("preserves intentionally empty camera and sensor collections", async () => {
-  const legacy = structuredClone(demoInitialState);
+  const legacy = structuredClone(demoTestState);
   legacy.settings.cameras = [];
   legacy.sensors = [];
   globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
@@ -147,7 +148,7 @@ test("preserves intentionally empty camera and sensor collections", async () => 
 });
 
 test("preserves an intentionally empty device collection", async () => {
-  const legacy = structuredClone(demoInitialState);
+  const legacy = structuredClone(demoTestState);
   legacy.devices = [];
   globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
 
@@ -158,8 +159,8 @@ test("preserves an intentionally empty device collection", async () => {
 
 test("preserves intentionally empty plant and alert collections", async () => {
   for (const [emptyPlants, emptyAlerts] of [[true, false], [false, true], [true, true]]) {
-    const saved = structuredClone(demoInitialState);
-    if (!emptyPlants) saved.plants.push({ id: "RECORDED", name: "ต้นทดสอบ", zone: "โซน A", age: "1 วัน", moisture: 50, health: "ปกติ", confidence: 90, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" });
+    const saved = structuredClone(demoTestState);
+    if (!emptyPlants) saved.plants.push({ id: "RECORDED", name: "ต้นทดสอบ", zone: "โซน A", age: "1 วัน", moisture: 50, health: "ปกติ", confidence: 90, greenhouseId: "GH-01", batchId: "BATCH-TEST-A" });
     if (!emptyAlerts) saved.alerts.push({ id: "ALERT", type: "info", title: "บันทึก", detail: "รายละเอียด", time: "ตอนนี้", resolved: false, greenhouseId: "GH-01" });
     if (emptyPlants) saved.plants = [];
     if (emptyAlerts) saved.alerts = [];
@@ -172,7 +173,7 @@ test("preserves intentionally empty plant and alert collections", async () => {
 });
 
 test("preserves a valid greenhouse with no zones", async () => {
-  const legacy = structuredClone(demoInitialState);
+  const legacy = structuredClone(demoTestState);
   legacy.greenhouses.push({ id: "GH-EMPTY", name: "โรงเรือนว่าง", code: "EMPTY-01", status: "active", zones: [] });
   globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
 
@@ -181,7 +182,7 @@ test("preserves a valid greenhouse with no zones", async () => {
 });
 
 test("preserves an intentionally empty greenhouse collection without resurrecting default resources", async () => {
-  const saved = structuredClone(demoInitialState);
+  const saved = structuredClone(demoTestState);
   saved.greenhouses = [];
   saved.aiReviewedPlantId = "TOM-003";
   saved.aiReviewedEvidence = { "TOM-003": ["CAM-B-01"] };
@@ -202,7 +203,7 @@ test("preserves an intentionally empty greenhouse collection without resurrectin
 });
 
 test("preserves a custom camera display label when its saved binding is valid", async () => {
-  const legacy = structuredClone(demoInitialState);
+  const legacy = structuredClone(demoTestState);
   legacy.settings.cameras[0]!.zone = "แปลงมะเขือเทศฝั่งเหนือ";
   legacy.settings.cameras[0]!.greenhouseId = "GH-01";
   legacy.settings.cameras[0]!.zoneId = "ZONE-A";
@@ -220,9 +221,42 @@ test("ships an editable greenhouse structure with active zones", () => {
   assert.deepEqual(greenhouse?.zones.map((zone) => zone.name), ["โซน A", "โซน B"]);
 });
 
+test("ships without operational mock records", () => {
+  assert.deepEqual(demoInitialState.cropBatches, []);
+  assert.deepEqual(demoInitialState.devices, []);
+  assert.deepEqual(demoInitialState.plants, []);
+  assert.deepEqual(demoInitialState.alerts, []);
+  assert.deepEqual(demoInitialState.sensors, []);
+  assert.deepEqual(demoInitialState.settings.cameras, []);
+});
+
+test("removes legacy mock records from storage without deleting user records", async () => {
+  const saved = structuredClone(demoTestState);
+  saved.cropBatches.push({ id: "BATCH-TOM-A", greenhouseId: "GH-01", zoneId: "ZONE-A", cropName: "mock", cultivar: "mock", plantCount: 1, plantedAt: "2026-01-01", status: "archived" });
+  saved.devices.push({ id: "pump", name: "mock", detail: "mock", icon: "pump", active: false, greenhouseId: "GH-01", zoneId: "ZONE-A" });
+  saved.plants.push({ id: "TOM-001", name: "mock", zone: "โซน A", age: "1 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" });
+  saved.sensors.push({ id: "SOIL-A-02", name: "mock", metric: "soilMoisture", greenhouseId: "GH-01", zoneId: "ZONE-A", status: "online" });
+  saved.settings.cameras.push({ id: "CAM-A-01", name: "mock", zone: "โซน A", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01", zoneId: "ZONE-A" });
+  saved.aiReviewedPlantId = "TOM-001";
+  saved.aiReviewedEvidence = { "TOM-001": ["CAM-A-01"], "PLANT-001": ["TEST-CAM-A", "CAM-A-01"] };
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(saved), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+
+  assert.equal(result.recovered, false);
+  assert.equal(result.state.cropBatches.some((item) => item.id === "BATCH-TOM-A"), false);
+  assert.equal(result.state.devices.some((item) => item.id === "pump"), false);
+  assert.equal(result.state.plants.some((item) => item.id === "TOM-001"), false);
+  assert.equal(result.state.sensors.some((item) => item.id === "SOIL-A-02"), false);
+  assert.equal(result.state.settings.cameras.some((item) => item.id === "CAM-A-01"), false);
+  assert.equal(result.state.plants.some((item) => item.id === "PLANT-001"), true);
+  assert.equal(result.state.aiReviewedPlantId, undefined);
+  assert.deepEqual(result.state.aiReviewedEvidence, { "PLANT-001": ["TEST-CAM-A"] });
+});
+
 test("transitions device only after a confirmed result", () => {
-  const next = transitionDemoDevice(demoInitialState, "pump", true);
-  assert.equal(demoInitialState.devices[0].active, false);
+  const next = transitionDemoDevice(demoTestState, "test-pump", true);
+  assert.equal(demoTestState.devices[0].active, false);
   assert.equal(next.devices[0].active, true);
 });
 
@@ -237,12 +271,12 @@ test("resolves and reopens an alert", () => {
 test("validates settings and selects search results", () => {
   assert.equal(validateDemoSettings({ ...demoInitialState.settings, minTemperature: "" }), "กรุณาระบุค่าเป้าหมายเป็นตัวเลขให้ครบถ้วน");
   assert.equal(validateDemoSettings({ ...demoInitialState.settings, minTemperature: "31" }), "อุณหภูมิต่ำสุดต้องน้อยกว่าอุณหภูมิสูงสุด");
-  assert.equal(buildDashboardSearchResults(demoInitialState, "TOM-003")[0]?.plantId, "TOM-003");
+  assert.equal(buildDashboardSearchResults(demoTestState, "PLANT-003")[0]?.plantId, "PLANT-003");
   assert.equal(validateDemoSettings({ ...demoInitialState.settings, cameras: [] }), null);
 });
 
 test("creates an escaped CSV payload with configured resource labels", () => {
-  const csv = createDemoCsv(demoInitialState, [["อุณหภูมิ", "28.5", "°C"]], "2026-07-18 07:42");
+  const csv = createDemoCsv(demoTestState, [["อุณหภูมิ", "28.5", "°C"]], "2026-07-18 07:42");
   assert.match(csv, /รายงาน Smart Greenhouse/);
   assert.match(csv, /ปั๊มน้ำ/);
   assert.match(csv, /โซน A/);
@@ -250,7 +284,7 @@ test("creates an escaped CSV payload with configured resource labels", () => {
 });
 
 test("labels search results from their saved resource details", () => {
-  const results = buildDashboardSearchResults(demoInitialState, "โหมดอัตโนมัติ");
+  const results = buildDashboardSearchResults(demoTestState, "โหมดอัตโนมัติ");
   assert.deepEqual(results[0] && {
     label: results[0].label,
     detail: results[0].detail,
@@ -272,14 +306,14 @@ test("exports honest placeholders for missing configured resources", () => {
 });
 
 test("escapes saved resource details in CSV output", () => {
-  const state = structuredClone(demoInitialState);
+  const state = structuredClone(demoTestState);
   state.devices[0]!.detail = 'ตั้งค่า "กำหนดเอง"';
   const csv = createDemoCsv(state, [], "2026-07-18 07:42");
   assert.match(csv, /"ตั้งค่า ""กำหนดเอง"""/);
 });
 
 test("neutralizes spreadsheet formulas in CSV cells", () => {
-  const state = structuredClone(demoInitialState);
+  const state = structuredClone(demoTestState);
   state.devices[0]!.name = " =SUM(1,1)";
   state.alerts.push({ id: "formula", type: "info", title: "บันทึก", detail: "@cmd", time: "ตอนนี้", resolved: false, greenhouseId: "GH-01" });
   const csv = createDemoCsv(state, [["+1+1", "28.5", "°C"]], "2026-07-18 07:42");
@@ -289,7 +323,7 @@ test("neutralizes spreadsheet formulas in CSV cells", () => {
 });
 
 test("scopes CSV zone names by greenhouse and zone id", () => {
-  const state = structuredClone(demoInitialState);
+  const state = structuredClone(demoTestState);
   state.greenhouses.push({ id: "GH-02", name: "โรงเรือน 2", code: "GH-02", status: "active", zones: [{ id: "ZONE-A", name: "โซนอีกโรงเรือน", status: "active" }] });
   state.devices.push({ id: "device-gh-02", name: "ปั๊มโรงเรือน 2", detail: "ตั้งค่า", icon: "pump", active: false, greenhouseId: "GH-02", zoneId: "ZONE-A" });
   const csv = createDemoCsv(state, [], "2026-07-18 07:42");
@@ -310,8 +344,8 @@ test("keeps device state unchanged until acknowledgement arrives", async () => {
     | undefined;
 
   const pending = executeConfirmedDemoDeviceCommand(
-    demoInitialState,
-    "pump",
+    demoTestState,
+    "test-pump",
     true,
     async () =>
       new Promise((resolve) => {
@@ -319,10 +353,10 @@ test("keeps device state unchanged until acknowledgement arrives", async () => {
       }),
   );
 
-  assert.equal(demoInitialState.devices[0]?.active, false);
+  assert.equal(demoTestState.devices[0]?.active, false);
   resolveRequest?.({
     commandId: "test-command",
-    deviceId: "pump",
+    deviceId: "test-pump",
     command: "turn_on",
     state: "acknowledged",
     requestedAt: "2026-07-21T09:42:00+07:00",
@@ -337,12 +371,12 @@ test("keeps device state unchanged until acknowledgement arrives", async () => {
 test("does not mutate device state when acknowledgement fails", async () => {
   await assert.rejects(
     executeConfirmedDemoDeviceCommand(
-      demoInitialState,
-      "pump",
+      demoTestState,
+      "test-pump",
       true,
       async () => ({
         commandId: "failed-command",
-        deviceId: "pump",
+        deviceId: "test-pump",
         command: "turn_on",
         state: "failed",
         requestedAt: "2026-07-21T09:42:00+07:00",
@@ -351,5 +385,5 @@ test("does not mutate device state when acknowledgement fails", async () => {
     ),
     /gateway unavailable/,
   );
-  assert.equal(demoInitialState.devices[0]?.active, false);
+  assert.equal(demoTestState.devices[0]?.active, false);
 });

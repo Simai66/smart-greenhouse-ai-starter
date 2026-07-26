@@ -68,27 +68,10 @@ export const demoInitialState: DemoState = {
       ],
     },
   ],
-  cropBatches: [
-    { id: "BATCH-TOM-A", greenhouseId: "GH-01", zoneId: "ZONE-A", cropName: "มะเขือเทศเชอร์รี", cultivar: "Sweet 100", plantCount: 2, plantedAt: "2026-06-10", status: "active" },
-    { id: "BATCH-TOM-B", greenhouseId: "GH-01", zoneId: "ZONE-B", cropName: "มะเขือเทศเชอร์รี", cultivar: "Sweet 100", plantCount: 2, plantedAt: "2026-06-14", status: "active" },
-  ],
-  sensors: [
-    { id: "SOIL-A-02", name: "เซ็นเซอร์ดิน A-02", metric: "soilMoisture", greenhouseId: "GH-01", zoneId: "ZONE-A", status: "online" },
-    { id: "SOIL-B-02", name: "เซ็นเซอร์ดิน B-02", metric: "soilMoisture", greenhouseId: "GH-01", zoneId: "ZONE-B", status: "online" },
-    { id: "CLIMATE-01", name: "เซ็นเซอร์สภาพอากาศ", metric: "temperature", greenhouseId: "GH-01", zoneId: "ZONE-A", status: "online" },
-  ],
-  devices: [
-    { id: "pump", name: "ปั๊มน้ำ", detail: "รอบถัดไป 10:30 น.", icon: "pump", active: false, greenhouseId: "GH-01", zoneId: "ZONE-A" },
-    { id: "fan", name: "พัดลมระบายอากาศ", detail: "โหมดอัตโนมัติ · มากกว่า 30°C", icon: "fan", active: true, greenhouseId: "GH-01", zoneId: "ZONE-A" },
-    { id: "light", name: "ไฟปลูกพืช", detail: "รอบถัดไป 18:00 น.", icon: "light", active: false, greenhouseId: "GH-01", zoneId: "ZONE-B" },
-    { id: "mist", name: "เครื่องพ่นหมอก", detail: "โหมดอัตโนมัติ · ต่ำกว่า 60% RH", icon: "mist", active: true, greenhouseId: "GH-01", zoneId: "ZONE-B" },
-  ],
-  plants: [
-    { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
-    { id: "TOM-002", name: "มะเขือเทศ 02", zone: "โซน A", age: "42 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
-    { id: "TOM-003", name: "มะเขือเทศ 03", zone: "โซน B", age: "38 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
-    { id: "TOM-004", name: "มะเขือเทศ 04", zone: "โซน B", age: "38 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
-  ],
+  cropBatches: [],
+  sensors: [],
+  devices: [],
+  plants: [],
   alerts: [],
   settings: {
     minTemperature: "22", maxTemperature: "30", minHumidity: "60", minSoilMoisture: "35",
@@ -96,13 +79,40 @@ export const demoInitialState: DemoState = {
     schedules: { wateringMinutes: "8", lightStart: "06:00", lightEnd: "18:00", fanDelayMinutes: "3" },
     notifications: { critical: true, dailySummary: true, quietStart: "21:00", quietEnd: "06:00" },
     ai: { minConfidence: "75", scanInterval: "30", retainDays: "14", detectLeafSpot: true, detectPests: true },
-    cameras: [
-      { id: "CAM-A-01", name: "กล้องโซน A · แปลงเหนือ", zone: "โซน A", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01", zoneId: "ZONE-A" },
-      { id: "CAM-B-01", name: "กล้องโซน B · แปลงใต้", zone: "โซน B", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01", zoneId: "ZONE-B" },
-      { id: "CAM-ENTRY-01", name: "กล้องทางเข้าโรงเรือน", zone: "ทางเข้า", source: "USB gateway", status: "offline", captureInterval: "30 นาที", enabled: false, greenhouseId: "GH-01", zoneId: "ZONE-A" },
-    ],
+    cameras: [],
   },
 };
+
+const legacyMockIds = {
+  cropBatches: new Set(["BATCH-TOM-A", "BATCH-TOM-B"]),
+  sensors: new Set(["SOIL-A-02", "SOIL-B-02", "CLIMATE-01"]),
+  devices: new Set(["pump", "fan", "light", "mist"]),
+  plants: new Set(["TOM-001", "TOM-002", "TOM-003", "TOM-004"]),
+  cameras: new Set(["CAM-A-01", "CAM-B-01", "CAM-ENTRY-01"]),
+};
+
+function removeLegacyMockData(state: DemoState): DemoState {
+  const removedPlantIds = legacyMockIds.plants;
+  const evidence = state.aiReviewedEvidence && Object.fromEntries(
+    Object.entries(state.aiReviewedEvidence)
+      .filter(([plantId]) => !removedPlantIds.has(plantId))
+      .map(([plantId, cameraIds]) => [plantId, cameraIds.filter((cameraId) => !legacyMockIds.cameras.has(cameraId))]),
+  );
+
+  return {
+    ...state,
+    cropBatches: (state.cropBatches ?? []).filter((item) => !legacyMockIds.cropBatches.has(item.id)),
+    sensors: (state.sensors ?? []).filter((item) => !legacyMockIds.sensors.has(item.id)),
+    devices: state.devices.filter((item) => !legacyMockIds.devices.has(item.id)),
+    plants: state.plants.filter((item) => !removedPlantIds.has(item.id)),
+    settings: {
+      ...state.settings,
+      cameras: (state.settings.cameras ?? []).filter((item) => !legacyMockIds.cameras.has(item.id)),
+    },
+    ...(removedPlantIds.has(state.aiReviewedPlantId ?? "") ? { aiReviewedPlantId: undefined } : {}),
+    ...(evidence ? { aiReviewedEvidence: evidence } : {}),
+  };
+}
 
 function isState(value: unknown): value is DemoState {
   if (!value || typeof value !== "object") return false;
@@ -316,7 +326,7 @@ export const greenhouseDemoStore = {
         return { state: cloneInitial(), recovered: true, storageAvailable: true };
       }
       return isState(parsed)
-        ? { state: upgradeState(parsed), recovered: false, storageAvailable: true }
+        ? { state: upgradeState(removeLegacyMockData(parsed)), recovered: false, storageAvailable: true }
         : { state: cloneInitial(), recovered: true, storageAvailable: true };
     } catch {
       return { state: cloneInitial(), recovered: true, storageAvailable: false };

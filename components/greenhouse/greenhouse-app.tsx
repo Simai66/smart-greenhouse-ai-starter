@@ -59,7 +59,7 @@ export function GreenhouseApp() {
   const [message, setMessage] = useState<LiveMessageValue>(null);
   const [pendingDevice, setPendingDevice] = useState<PendingDevice>(null);
   const [commandPending, setCommandPending] = useState(false);
-  const [selectedPlantId, setSelectedPlantId] = useState("TOM-003");
+  const [selectedPlantId, setSelectedPlantId] = useState("");
   const [selectedAlert, setSelectedAlert] = useState<DemoAlert | null>(null);
   const messageTimer = useRef<number | null>(null);
   const staleTimer = useRef<number | null>(null);
