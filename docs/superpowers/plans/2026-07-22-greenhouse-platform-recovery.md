@@ -472,6 +472,63 @@ git add docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md lib/gr
 git commit -m "feat: permanently delete empty farm structures"
 ```
 
+### Task 8: Keep the dashboard plant-health preview compact
+
+**Feature card**
+
+- **User outcome:** “สุขภาพพืชล่าสุด” stays a quick dashboard preview instead
+  of repeating the complete Plants page.
+- **Acceptance criteria:**
+  1. Preview renders at most four plants while “ดูทุกต้น” still opens the full
+     plant list.
+  2. Plants needing review appear before normal plants; plants without recorded
+     health appear after recorded warnings and before normal results. Ordering
+     inside each group stays stable.
+  3. Header states how many plants are shown when more exist (for example,
+     “แสดง 4 จาก 12 ต้น”).
+  4. Health tokens use semantic, accessible colors: “ควรตรวจสอบ” uses amber
+     warning styling, “ปกติ” uses green success styling, and “ยังไม่มีข้อมูล”
+     uses neutral gray styling. Color is not the only status signal because
+     visible Thai text remains.
+  5. Empty and no-recorded-health states remain truthful. Plant data and full
+     list behavior do not change.
+- **In scope:** dashboard preview selection, status-token presentation, and
+  focused source/unit regression checks.
+- **Out of scope:** Plants-page pagination, new health rules, API/database
+  changes, and dashboard layout redesign.
+- **Assumptions and risks:** four items fit the current two-column card without
+  creating a second long list; warning priority is presentation-only and must
+  not mutate source arrays.
+- **Owners and order:** Frontend writes focused failing contract → Frontend
+  implements compact semantic preview → QA validates mobile/desktop, keyboard,
+  color contrast, priority, count, and full-list navigation.
+
+**Files:**
+
+- Modify: `components/greenhouse/views/command-deck-view.tsx`
+- Modify: `tests/greenhouse-ui-source-contract.test.mjs`
+
+- [ ] **Step 1: Add failing compact-preview contract**
+
+Require a four-item limit, warning-first stable selection, remaining-count copy,
+and separate semantic classes for warning, success, and neutral tokens.
+
+- [ ] **Step 2: Implement minimal derived preview**
+
+Derive a new sorted copy; never sort or mutate the `plants` prop. Keep the full
+list behind the existing “ดูทุกต้น” action.
+
+- [ ] **Step 3: Verify**
+
+Run: `node --test tests/greenhouse-ui-source-contract.test.mjs && npm run test:unit && npm run lint && npm run build && git diff --check`
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md components/greenhouse/views/command-deck-view.tsx tests/greenhouse-ui-source-contract.test.mjs
+git commit -m "fix: compact plant health preview"
+```
+
 ## Execution handoff
 
 Plan complete and saved to `docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md`.

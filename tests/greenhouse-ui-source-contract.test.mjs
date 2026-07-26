@@ -195,6 +195,25 @@ test("keeps unknown plants neutral and restoration validated", async () => {
   assert.match(app, /changeGreenhouse\(id\)/);
 });
 
+test("keeps the dashboard plant-health preview compact and warning-first", async () => {
+  const source = await readFile(
+    new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /const previewPlants = \[\.\.\.plants\]\s*\.sort/);
+  assert.match(source, /"ควรตรวจสอบ": 0/);
+  assert.match(source, /"ยังไม่มีข้อมูล": 1/);
+  assert.match(source, /"ปกติ": 2/);
+  assert.match(source, /\.slice\(0, 4\)/);
+  assert.match(source, /แสดง \$\{previewPlants\.length\} จาก \$\{plants\.length\} ต้น/);
+  assert.match(source, /previewPlants\.map/);
+  assert.match(source, /border-amber-200 bg-amber-50 text-amber-800/);
+  assert.match(source, /border-emerald-200 bg-emerald-50 text-emerald-800/);
+  assert.match(source, /border-slate-200 bg-slate-100 text-slate-700/);
+  assert.doesNotMatch(source, /plants\.sort\(/);
+});
+
 test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", async () => {
   const [sidebar, header, search, viewState, useMobile] = await Promise.all([
     readFile(new URL("../components/greenhouse/app-sidebar.tsx", import.meta.url), "utf8"),
