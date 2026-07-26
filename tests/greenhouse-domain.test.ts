@@ -4,6 +4,7 @@ import {
   createResource,
   deleteZone,
   deleteResource,
+  permanentlyDeleteCropBatch,
   permanentlyDeleteGreenhouse,
   permanentlyDeleteZone,
   renameZone,
@@ -192,6 +193,73 @@ test("refuses to permanently delete a zone with archived history without mutatin
     { message: /รอบปลูก 1 รายการ/ },
   );
   assert.deepEqual(state, before);
+});
+
+test("permanently deletes one archived batch, its owned plants, and AI references", () => {
+  const state = structuredClone(demoInitialState);
+  state.cropBatches[0]!.status = "archived";
+  state.aiReviewedPlantId = "TOM-001";
+  state.aiReviewedEvidence = { "TOM-001": ["CAM-A-01"], "TOM-003": ["CAM-B-01"] };
+  const before = structuredClone(state);
+
+  const next = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" });
+
+  assert.equal(next.cropBatches.some((batch) => batch.id === "BATCH-TOM-A"), false);
+  assert.deepEqual(next.plants.map((plant) => plant.id), ["TOM-003", "TOM-004"]);
+  assert.equal(next.aiReviewedPlantId, undefined);
+  assert.deepEqual(next.aiReviewedEvidence, { "TOM-003": ["CAM-B-01"] });
+  assert.deepEqual(state, before);
+});
+
+test("keeps same-ID batch and plants in another greenhouse when deleting an archived batch", () => {
+  const state = structuredClone(demoInitialState);
+  state.cropBatches[0]!.status = "harvested";
+  state.greenhouses.push({ id: "GH-02", name: "โรงเรือนที่สอง", code: "GREENHOUSE 02", status: "active", zones: [{ id: "ZONE-A", name: "โซน A", status: "active" }] });
+  state.cropBatches.push({ ...state.cropBatches[0]!, greenhouseId: "GH-02", status: "archived" });
+  state.plants.push({ ...state.plants[0]!, id: "TOM-OTHER", greenhouseId: "GH-02" });
+  state.aiReviewedPlantId = "TOM-OTHER";
+  state.aiReviewedEvidence = { "TOM-001": ["CAM-A-01"], "TOM-OTHER": ["CAM-A-01"] };
+
+  const next = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" });
+
+  assert.deepEqual(next.cropBatches.filter((batch) => batch.id === "BATCH-TOM-A").map((batch) => batch.greenhouseId), ["GH-02"]);
+  assert.equal(next.plants.some((plant) => plant.id === "TOM-OTHER"), true);
+  assert.equal(next.aiReviewedPlantId, "TOM-OTHER");
+  assert.deepEqual(next.aiReviewedEvidence, { "TOM-OTHER": ["CAM-A-01"] });
+});
+
+test("permanently deletes only the first duplicate matching crop batch", () => {
+  const state = structuredClone(demoInitialState);
+  state.cropBatches[0]!.status = "archived";
+  state.cropBatches.unshift({ ...state.cropBatches[0]!, cropName: "รอบปลูกซ้ำแรก" });
+
+  const next = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" });
+
+  assert.deepEqual(next.cropBatches.filter((batch) => batch.id === "BATCH-TOM-A").map((batch) => batch.cropName), ["มะเขือเทศเชอร์รี"]);
+});
+
+test("refuses to permanently delete a missing or active crop batch without mutating state", () => {
+  const state = structuredClone(demoInitialState);
+  const before = structuredClone(state);
+
+  assert.throws(() => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "missing" }), { message: /ไม่พบรอบปลูก/ });
+  assert.throws(() => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" }), { message: /ต้องเก็บหรือจบรอบปลูก/ });
+  assert.deepEqual(state, before);
+});
+
+test("allows permanent zone deletion after its archived batch and owned plants are removed", () => {
+  const state = structuredClone(demoInitialState);
+  state.greenhouses = [{ id: "GH-01", name: "โรงเรือนหนึ่ง", code: "ONE", status: "archived", zones: [{ id: "ZONE-A", name: "โซน A", status: "archived" }] }];
+  state.cropBatches = [{ ...state.cropBatches[0]!, status: "archived" }];
+  state.plants = state.plants.filter((plant) => plant.batchId === "BATCH-TOM-A");
+  state.devices = [];
+  state.settings.cameras = [];
+  state.sensors = [];
+
+  const withoutBatch = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" });
+  const next = permanentlyDeleteZone(withoutBatch, { greenhouseId: "GH-01", zoneId: "ZONE-A" });
+
+  assert.deepEqual(next.greenhouses[0]?.zones, []);
 });
 
 test("permanently deletes an empty greenhouse without changing another greenhouse", () => {
