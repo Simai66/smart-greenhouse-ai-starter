@@ -6,6 +6,7 @@ import {
   deleteResource,
   permanentlyDeleteGreenhouse,
   permanentlyDeleteZone,
+  renameZone,
   restoreCropBatch,
   selectDevicePresentation,
   selectGreenhouseContext,
@@ -285,4 +286,33 @@ test("refuses to permanently delete a greenhouse with archived zone history with
     { message: /โซน 1 โซน/ },
   );
   assert.deepEqual(state, before);
+});
+
+test("renames legacy plants before permanent-delete guards without crossing greenhouse boundaries", () => {
+  const state = structuredClone(demoInitialState);
+  state.greenhouses = [
+    { id: "GH-01", name: "โรงเรือนหนึ่ง", code: "ONE", status: "active", zones: [{ id: "ZONE-A", name: "โซนเดิม", status: "active" }] },
+    { id: "GH-02", name: "โรงเรือนสอง", code: "TWO", status: "active", zones: [{ id: "ZONE-A", name: "โซนเดิม", status: "active" }] },
+  ];
+  state.cropBatches = [{ id: "MISSING", greenhouseId: "GH-02", zoneId: "ZONE-A", cropName: "ผักอีกโรงเรือน", cultivar: "Other", plantCount: 1, plantedAt: "2026-01-01", status: "archived" }];
+  state.devices = [];
+  state.settings.cameras = [];
+  state.sensors = [];
+  state.alerts = [];
+  state.plants = [
+    { id: "LEGACY-NO-BATCH", name: "ต้น legacy 1", zone: "โซนเดิม", age: "1 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01" },
+    { id: "LEGACY-MISSING-BATCH", name: "ต้น legacy 2", zone: "โซนเดิม", age: "1 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "MISSING" },
+    { id: "OTHER-GREENHOUSE", name: "ต้นอีกโรงเรือน", zone: "โซนเดิม", age: "1 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-02" },
+  ];
+
+  const renamed = renameZone(state, { greenhouseId: "GH-01", zoneId: "ZONE-A", name: "โซนใหม่" });
+  const beforeDelete = structuredClone(renamed);
+
+  assert.deepEqual(renamed.plants.map((plant) => plant.zone), ["โซนใหม่", "โซนใหม่", "โซนเดิม"]);
+  assert.equal(renamed.greenhouses[1]!.zones[0]!.name, "โซนเดิม");
+  assert.throws(
+    () => permanentlyDeleteZone(renamed, { greenhouseId: "GH-01", zoneId: "ZONE-A" }),
+    { message: /พืช 2 ต้น/ },
+  );
+  assert.deepEqual(renamed, beforeDelete);
 });

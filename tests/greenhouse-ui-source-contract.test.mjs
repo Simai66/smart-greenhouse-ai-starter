@@ -109,7 +109,7 @@ test("keeps zone edits and device status language truthful", async () => {
   assert.match(app, /changeGreenhouse\(state\.greenhouses\.find/);
   assert.match(app, /moisture: null/);
   assert.match(app, /health: "ยังไม่มีข้อมูล"/);
-  assert.match(app, /device\.detail === `ผูกกับ \$\{oldName\}`/);
+  assert.match(app, /renameZone\(current, \{ greenhouseId, zoneId, name \}\)/);
 });
 
 test("keeps permanent deletion confirmation and selected-greenhouse cleanup deliberate", async () => {

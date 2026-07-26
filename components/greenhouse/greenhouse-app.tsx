@@ -34,7 +34,7 @@ import {
   type DemoGreenhouse,
   type DemoState,
 } from "@/lib/greenhouse-demo-store";
-import { createResource, deleteZone, permanentlyDeleteGreenhouse, permanentlyDeleteZone, restoreCropBatch, selectGreenhouseContext } from "@/lib/greenhouse-domain";
+import { createResource, deleteZone, permanentlyDeleteGreenhouse, permanentlyDeleteZone, renameZone, restoreCropBatch, selectGreenhouseContext } from "@/lib/greenhouse-domain";
 import {
   buildDashboardViewModel,
   pageMetadata,
@@ -383,18 +383,7 @@ export function GreenhouseApp() {
           notify(`เพิ่ม ${name} แล้ว`);
         }}
         onRenameZone={(greenhouseId, zoneId, name) => {
-          setState((current) => {
-            const oldName = current.greenhouses.find((greenhouse) => greenhouse.id === greenhouseId)?.zones.find((zone) => zone.id === zoneId)?.name;
-            return {
-              ...current,
-              greenhouses: current.greenhouses.map((greenhouse) => greenhouse.id === greenhouseId
-                ? { ...greenhouse, zones: greenhouse.zones.map((zone) => zone.id === zoneId ? { ...zone, name } : zone) }
-                : greenhouse),
-              devices: current.devices.map((device) => device.greenhouseId === greenhouseId && device.zoneId === zoneId && device.detail === `ผูกกับ ${oldName}` ? { ...device, detail: `ผูกกับ ${name}` } : device),
-              settings: { ...current.settings, cameras: current.settings.cameras.map((camera) => camera.greenhouseId === greenhouseId && camera.zoneId === zoneId ? { ...camera, zone: name } : camera) },
-              plants: current.plants.map((plant) => current.cropBatches.some((batch) => batch.id === plant.batchId && batch.greenhouseId === greenhouseId && batch.zoneId === zoneId) ? { ...plant, zone: name } : plant),
-            };
-          });
+          setState((current) => renameZone(current, { greenhouseId, zoneId, name }));
           notify(`เปลี่ยนชื่อโซนเป็น ${name} แล้ว`);
         }}
         onArchiveZone={(greenhouseId, zoneId) => {

@@ -30,6 +30,7 @@ export type UpdateResourceInput =
 export type DeleteResourceInput = { kind: ResourceKind; id: string };
 
 export type DeleteZoneInput = { greenhouseId: string; zoneId: string };
+export type RenameZoneInput = { greenhouseId: string; zoneId: string; name: string };
 export type PermanentlyDeleteZoneInput = { greenhouseId: string; zoneId: string };
 export type PermanentlyDeleteGreenhouseInput = { greenhouseId: string };
 export type RestoreCropBatchInput = { id: string };
@@ -284,6 +285,33 @@ function permanentDeletionError(target: string, dependencies: Array<[string, num
     .map(([label, count, unit]) => `${label} ${count} ${unit}`)
     .join(", ");
   return new Error(`ไม่สามารถลบ${target}ถาวรได้ เพราะยังมีข้อมูลอ้างอิง: ${details} โปรดลบหรือเก็บข้อมูลเหล่านี้ก่อน`);
+}
+
+export function renameZone(state: DemoState, input: RenameZoneInput): DemoState {
+  const zone = state.greenhouses
+    .find((greenhouse) => greenhouse.id === input.greenhouseId)
+    ?.zones.find((item) => item.id === input.zoneId);
+  if (!zone) throw new Error("ไม่พบโซนที่ต้องการเปลี่ยนชื่อ");
+
+  const matchingBatchIds = new Set(state.cropBatches
+    .filter((batch) => batch.greenhouseId === input.greenhouseId && batch.zoneId === input.zoneId)
+    .map((batch) => batch.id));
+  const greenhouseBatchIds = new Set(state.cropBatches
+    .filter((batch) => batch.greenhouseId === input.greenhouseId)
+    .map((batch) => batch.id));
+
+  return {
+    ...state,
+    greenhouses: state.greenhouses.map((greenhouse) => greenhouse.id === input.greenhouseId
+      ? { ...greenhouse, zones: greenhouse.zones.map((item) => item.id === input.zoneId ? { ...item, name: input.name } : item) }
+      : greenhouse),
+    devices: state.devices.map((device) => device.greenhouseId === input.greenhouseId && device.zoneId === input.zoneId && device.detail === `ผูกกับ ${zone.name}` ? { ...device, detail: `ผูกกับ ${input.name}` } : device),
+    settings: { ...state.settings, cameras: state.settings.cameras.map((camera) => camera.greenhouseId === input.greenhouseId && camera.zoneId === input.zoneId ? { ...camera, zone: input.name } : camera) },
+    plants: state.plants.map((plant) => plant.greenhouseId === input.greenhouseId && (
+      matchingBatchIds.has(plant.batchId ?? "") ||
+      ((!plant.batchId || !greenhouseBatchIds.has(plant.batchId)) && plant.zone === zone.name)
+    ) ? { ...plant, zone: input.name } : plant),
+  };
 }
 
 export function permanentlyDeleteZone(state: DemoState, input: PermanentlyDeleteZoneInput): DemoState {
