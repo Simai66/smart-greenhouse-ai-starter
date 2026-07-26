@@ -187,6 +187,70 @@ test("permanently deletes an empty greenhouse without changing another greenhous
   assert.deepEqual(state, before);
 });
 
+test("permanently deletes only the first duplicate matching zone", () => {
+  const state = structuredClone(demoInitialState);
+  state.greenhouses[0]!.zones.push(
+    { id: "ZONE-DUPLICATE", name: "โซนซ้ำ 1", status: "archived" },
+    { id: "ZONE-DUPLICATE", name: "โซนซ้ำ 2", status: "archived" },
+  );
+
+  const next = permanentlyDeleteZone(state, { greenhouseId: "GH-01", zoneId: "ZONE-DUPLICATE" });
+
+  assert.deepEqual(next.greenhouses[0]!.zones.filter((zone) => zone.id === "ZONE-DUPLICATE").map((zone) => zone.name), ["โซนซ้ำ 2"]);
+});
+
+test("permanently deletes only the first duplicate matching greenhouse", () => {
+  const state = structuredClone(demoInitialState);
+  state.greenhouses.push(
+    { id: "GH-DUPLICATE", name: "โรงเรือนซ้ำ 1", code: "DUP-1", status: "archived", zones: [] },
+    { id: "GH-DUPLICATE", name: "โรงเรือนซ้ำ 2", code: "DUP-2", status: "archived", zones: [] },
+  );
+
+  const next = permanentlyDeleteGreenhouse(state, { greenhouseId: "GH-DUPLICATE" });
+
+  assert.deepEqual(next.greenhouses.filter((greenhouse) => greenhouse.id === "GH-DUPLICATE").map((greenhouse) => greenhouse.name), ["โรงเรือนซ้ำ 2"]);
+});
+
+const zoneDependencyCases = [
+  ["plant", "พืช 1 ต้น", (state: typeof demoInitialState) => state.plants.push({ id: "PLANT-GUARD", name: "พืช guard", zone: "โซน guard", age: "1 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01" })],
+  ["device", "อุปกรณ์ 1 รายการ", (state: typeof demoInitialState) => state.devices.push({ id: "DEVICE-GUARD", name: "อุปกรณ์ guard", detail: "", icon: "pump", active: false, greenhouseId: "GH-01", zoneId: "ZONE-GUARD" })],
+  ["camera", "กล้อง 1 รายการ", (state: typeof demoInitialState) => state.settings.cameras.push({ id: "CAMERA-GUARD", name: "กล้อง guard", zone: "โซน guard", source: "IP camera", status: "offline", captureInterval: "15 นาที", enabled: false, greenhouseId: "GH-01", zoneId: "ZONE-GUARD" })],
+  ["sensor", "เซ็นเซอร์ 1 รายการ", (state: typeof demoInitialState) => state.sensors.push({ id: "SENSOR-GUARD", name: "เซ็นเซอร์ guard", metric: "temperature", status: "offline", greenhouseId: "GH-01", zoneId: "ZONE-GUARD" })],
+] as const;
+
+for (const [kind, message, addDependency] of zoneDependencyCases) {
+  test(`refuses to permanently delete a zone with a ${kind} dependency`, () => {
+    const state = structuredClone(demoInitialState);
+    state.greenhouses[0]!.zones.push({ id: "ZONE-GUARD", name: "โซน guard", status: "archived" });
+    addDependency(state);
+    const before = structuredClone(state);
+
+    assert.throws(() => permanentlyDeleteZone(state, { greenhouseId: "GH-01", zoneId: "ZONE-GUARD" }), { message: new RegExp(message) });
+    assert.deepEqual(state, before);
+  });
+}
+
+const greenhouseDependencyCases = [
+  ["crop batch", "รอบปลูก 1 รายการ", (state: typeof demoInitialState) => state.cropBatches.push({ id: "BATCH-GUARD", greenhouseId: "GH-GUARD", zoneId: "ZONE-GUARD", cropName: "ผัก guard", cultivar: "Guard", plantCount: 1, plantedAt: "2026-01-01", status: "archived" })],
+  ["plant", "พืช 1 ต้น", (state: typeof demoInitialState) => state.plants.push({ id: "PLANT-GUARD-GH", name: "พืช guard", zone: "โซน guard", age: "1 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-GUARD" })],
+  ["device", "อุปกรณ์ 1 รายการ", (state: typeof demoInitialState) => state.devices.push({ id: "DEVICE-GUARD-GH", name: "อุปกรณ์ guard", detail: "", icon: "pump", active: false, greenhouseId: "GH-GUARD", zoneId: "ZONE-GUARD" })],
+  ["camera", "กล้อง 1 รายการ", (state: typeof demoInitialState) => state.settings.cameras.push({ id: "CAMERA-GUARD-GH", name: "กล้อง guard", zone: "โซน guard", source: "IP camera", status: "offline", captureInterval: "15 นาที", enabled: false, greenhouseId: "GH-GUARD", zoneId: "ZONE-GUARD" })],
+  ["sensor", "เซ็นเซอร์ 1 รายการ", (state: typeof demoInitialState) => state.sensors.push({ id: "SENSOR-GUARD-GH", name: "เซ็นเซอร์ guard", metric: "temperature", status: "offline", greenhouseId: "GH-GUARD", zoneId: "ZONE-GUARD" })],
+  ["alert", "การแจ้งเตือน 1 รายการ", (state: typeof demoInitialState) => state.alerts.push({ id: "ALERT-GUARD", type: "info", title: "guard", detail: "guard", time: "ตอนนี้", resolved: true, greenhouseId: "GH-GUARD" })],
+] as const;
+
+for (const [kind, message, addDependency] of greenhouseDependencyCases) {
+  test(`refuses to permanently delete a greenhouse with a ${kind} dependency`, () => {
+    const state = structuredClone(demoInitialState);
+    state.greenhouses.push({ id: "GH-GUARD", name: "โรงเรือน guard", code: "GUARD", status: "archived", zones: [] });
+    addDependency(state);
+    const before = structuredClone(state);
+
+    assert.throws(() => permanentlyDeleteGreenhouse(state, { greenhouseId: "GH-GUARD" }), { message: new RegExp(message) });
+    assert.deepEqual(state, before);
+  });
+}
+
 test("refuses to permanently delete a greenhouse with archived zone history without mutating state", () => {
   const state = structuredClone(demoInitialState);
   state.greenhouses.push({

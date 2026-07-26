@@ -272,7 +272,8 @@ function permanentDeletionError(target: string, dependencies: Array<[string, num
 }
 
 export function permanentlyDeleteZone(state: DemoState, input: PermanentlyDeleteZoneInput): DemoState {
-  const greenhouse = state.greenhouses.find((item) => item.id === input.greenhouseId);
+  const greenhouseIndex = state.greenhouses.findIndex((item) => item.id === input.greenhouseId);
+  const greenhouse = state.greenhouses[greenhouseIndex];
   const zone = greenhouse?.zones.find((item) => item.id === input.zoneId);
   if (!zone) throw new Error("ไม่พบโซนที่ต้องการลบ");
 
@@ -289,16 +290,18 @@ export function permanentlyDeleteZone(state: DemoState, input: PermanentlyDelete
   ];
   if (dependencies.some(([, count]) => count > 0)) throw permanentDeletionError("โซน", dependencies);
 
+  const zoneIndex = greenhouse.zones.findIndex((item) => item.id === input.zoneId);
   return {
     ...state,
-    greenhouses: state.greenhouses.map((item) => item.id === input.greenhouseId
-      ? { ...item, zones: item.zones.filter((candidate) => candidate.id !== input.zoneId) }
+    greenhouses: state.greenhouses.map((item, index) => index === greenhouseIndex
+      ? { ...item, zones: [...item.zones.slice(0, zoneIndex), ...item.zones.slice(zoneIndex + 1)] }
       : item),
   };
 }
 
 export function permanentlyDeleteGreenhouse(state: DemoState, input: PermanentlyDeleteGreenhouseInput): DemoState {
-  const greenhouse = state.greenhouses.find((item) => item.id === input.greenhouseId);
+  const greenhouseIndex = state.greenhouses.findIndex((item) => item.id === input.greenhouseId);
+  const greenhouse = state.greenhouses[greenhouseIndex];
   if (!greenhouse) throw new Error("ไม่พบโรงเรือนที่ต้องการลบ");
 
   const dependencies: Array<[string, number, string]> = [
@@ -312,5 +315,5 @@ export function permanentlyDeleteGreenhouse(state: DemoState, input: Permanently
   ];
   if (dependencies.some(([, count]) => count > 0)) throw permanentDeletionError("โรงเรือน", dependencies);
 
-  return { ...state, greenhouses: state.greenhouses.filter((item) => item.id !== input.greenhouseId) };
+  return { ...state, greenhouses: [...state.greenhouses.slice(0, greenhouseIndex), ...state.greenhouses.slice(greenhouseIndex + 1)] };
 }
