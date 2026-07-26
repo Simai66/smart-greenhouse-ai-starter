@@ -34,7 +34,7 @@ import {
   type DemoGreenhouse,
   type DemoState,
 } from "@/lib/greenhouse-demo-store";
-import { createResource, deleteZone, permanentlyDeleteGreenhouse, permanentlyDeleteZone, renameZone, restoreCropBatch, selectGreenhouseContext } from "@/lib/greenhouse-domain";
+import { createResource, deleteZone, permanentlyDeleteCropBatch, permanentlyDeleteGreenhouse, permanentlyDeleteZone, renameZone, restoreCropBatch, selectGreenhouseContext } from "@/lib/greenhouse-domain";
 import {
   buildDashboardViewModel,
   pageMetadata,
@@ -324,6 +324,7 @@ export function GreenhouseApp() {
         settings={state.settings}
         greenhouses={state.greenhouses}
         cropBatches={state.cropBatches}
+        plants={state.plants}
         activeGreenhouseId={activeGreenhouse?.id ?? ""}
         devices={state.devices}
         sensors={state.sensors}
@@ -476,6 +477,10 @@ export function GreenhouseApp() {
           } catch (error) {
             notify(error instanceof Error ? error.message : "ไม่สามารถเรียกคืนรอบปลูกได้", "error");
           }
+        }}
+        onPermanentlyDeleteBatch={(greenhouseId, id) => {
+          setState(permanentlyDeleteCropBatch(state, { greenhouseId, id }));
+          notify("ลบรอบปลูกถาวรแล้ว", "info");
         }}
         onCreateResource={(value) => {
           if (!activeGreenhouse) { notify("เพิ่มโรงเรือนก่อนจึงจะผูกทรัพยากรได้", "error"); return; }

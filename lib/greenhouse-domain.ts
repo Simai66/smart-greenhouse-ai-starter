@@ -33,6 +33,7 @@ export type DeleteZoneInput = { greenhouseId: string; zoneId: string };
 export type RenameZoneInput = { greenhouseId: string; zoneId: string; name: string };
 export type PermanentlyDeleteZoneInput = { greenhouseId: string; zoneId: string };
 export type PermanentlyDeleteGreenhouseInput = { greenhouseId: string };
+export type PermanentlyDeleteCropBatchInput = { greenhouseId: string; id: string };
 export type RestoreCropBatchInput = { id: string };
 
 export type GreenhouseContext = {
@@ -276,6 +277,38 @@ export function restoreCropBatch(state: DemoState, input: RestoreCropBatchInput)
   return {
     ...state,
     cropBatches: state.cropBatches.map((item) => item.id === input.id ? { ...item, status: "active" } : item),
+  };
+}
+
+export function permanentlyDeleteCropBatch(state: DemoState, input: PermanentlyDeleteCropBatchInput): DemoState {
+  const matchingBatches = state.cropBatches.filter((batch) =>
+    batch.greenhouseId === input.greenhouseId && batch.id === input.id,
+  );
+  const batch = matchingBatches[0];
+  if (!batch) throw new Error("ไม่พบรอบปลูกที่ต้องการลบ");
+  if (matchingBatches.length > 1) throw new Error("พบรอบปลูกซ้ำ จึงไม่สามารถระบุข้อมูลที่จะลบได้");
+  const batchIndex = state.cropBatches.findIndex((item) =>
+    item.greenhouseId === input.greenhouseId && item.id === input.id,
+  );
+  if (batch.status === "active") throw new Error("ต้องเก็บหรือจบรอบปลูกก่อนลบถาวร");
+
+  const deletedPlantIds = new Set(state.plants
+    .filter((plant) => plant.greenhouseId === input.greenhouseId && plant.batchId === batch.id)
+    .map((plant) => plant.id));
+  if (state.plants.some((plant) =>
+    deletedPlantIds.has(plant.id) &&
+    (plant.greenhouseId !== input.greenhouseId || plant.batchId !== batch.id)
+  )) throw new Error("พบรหัสพืชซ้ำกับข้อมูลนอกรอบปลูก จึงไม่สามารถลบถาวรได้");
+  const aiReviewedEvidence = state.aiReviewedEvidence && Object.fromEntries(
+    Object.entries(state.aiReviewedEvidence).filter(([plantId]) => !deletedPlantIds.has(plantId)),
+  );
+
+  return {
+    ...state,
+    cropBatches: [...state.cropBatches.slice(0, batchIndex), ...state.cropBatches.slice(batchIndex + 1)],
+    plants: state.plants.filter((plant) => plant.greenhouseId !== input.greenhouseId || plant.batchId !== batch.id),
+    ...(deletedPlantIds.has(state.aiReviewedPlantId ?? "") ? { aiReviewedPlantId: undefined } : {}),
+    ...(aiReviewedEvidence ? { aiReviewedEvidence } : {}),
   };
 }
 
