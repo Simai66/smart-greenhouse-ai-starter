@@ -59,6 +59,7 @@ export type ResourceRow = {
 export type DashboardViewModel = {
   hasOperationalData: boolean;
   hasRecordedActivity: boolean;
+  hasPlantData: boolean;
   healthScore: number;
   activeDevices: number;
   deviceCount: number;
@@ -116,11 +117,12 @@ export const pageMetadata: Record<GreenhousePageId, PageMetadata> = {
 export function buildDashboardViewModel(
   state: DemoState,
 ): DashboardViewModel {
-  const hasPlantData = state.plants.length > 0;
+  const recordedPlants = state.plants.filter((plant) => plant.confidence !== null);
+  const hasPlantData = recordedPlants.length > 0;
   const hasTemperatureSensor = state.sensors.some((sensor) => sensor.metric === "temperature" && sensor.status === "online");
   const hasHumiditySensor = state.sensors.some((sensor) => sensor.metric === "humidity" && sensor.status === "online");
   const healthScore = hasPlantData
-    ? Math.round(state.plants.reduce((total, plant) => total + plant.confidence, 0) / state.plants.length)
+    ? Math.round(recordedPlants.reduce((total, plant) => total + (plant.confidence ?? 0), 0) / recordedPlants.length)
     : 0;
   const activeDevices = state.devices.filter((device) => device.active).length;
   const openAlerts = state.alerts.filter((alert) => !alert.resolved);
@@ -129,6 +131,7 @@ export function buildDashboardViewModel(
   return {
     hasOperationalData: Boolean(state.devices.length || state.sensors.length || state.plants.length || state.settings.cameras.length),
     hasRecordedActivity,
+    hasPlantData,
     healthScore,
     activeDevices,
     deviceCount: state.devices.length,

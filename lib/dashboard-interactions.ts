@@ -114,9 +114,6 @@ export function validateDemoSettings(settings: DemoSettings): string | null {
   if (![settings.schedules.lightStart, settings.schedules.lightEnd, settings.notifications.quietStart, settings.notifications.quietEnd].every((value) => timePattern.test(value))) {
     return "กรุณาระบุเวลาให้ถูกต้อง";
   }
-  if (!settings.cameras.some((camera) => camera.enabled && camera.status === "online")) {
-    return "กรุณาเปิดใช้งานกล้องออนไลน์อย่างน้อยหนึ่งตัว";
-  }
   return null;
 }
 
@@ -125,9 +122,13 @@ export function createDemoCsv(
   sensorRows: ReadonlyArray<readonly [string, string, string]>,
   createdAt: string,
 ): string {
+  const escapeCsvCell = (value: unknown) => {
+    const cell = String(value);
+    return /^\s*[=+\-@]/.test(cell) ? `'${cell}` : cell;
+  };
   const zoneNames = new Map(
     state.greenhouses.flatMap((greenhouse) =>
-      greenhouse.zones.map((zone) => [zone.id, zone.name] as const),
+      greenhouse.zones.map((zone) => [`${greenhouse.id}:${zone.id}`, zone.name] as const),
     ),
   );
   const normalizedSensorRows = sensorRows.length
@@ -136,7 +137,7 @@ export function createDemoCsv(
   const deviceRows = state.devices.length
     ? state.devices.map((device) => [
         device.name,
-        device.zoneId ? (zoneNames.get(device.zoneId) ?? "ไม่พบโซนที่ผูกไว้") : "ยังไม่ได้ผูกโซน",
+        device.greenhouseId && device.zoneId ? (zoneNames.get(`${device.greenhouseId}:${device.zoneId}`) ?? "ไม่พบโซนที่ผูกไว้") : "ยังไม่ได้ผูกโซน",
         device.detail || "ไม่มีรายละเอียดที่บันทึก",
       ])
     : [["ไม่มีอุปกรณ์ที่กำหนดค่า", "—", "—"]];
@@ -163,7 +164,7 @@ export function createDemoCsv(
 
   return rows
     .map((row) =>
-      row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","),
+      row.map((cell) => `"${escapeCsvCell(cell).replaceAll('"', '""')}"`).join(","),
     )
     .join("\n");
 }

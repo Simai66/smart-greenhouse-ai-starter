@@ -30,6 +30,10 @@ export type UpdateResourceInput =
 export type DeleteResourceInput = { kind: ResourceKind; id: string };
 
 export type DeleteZoneInput = { greenhouseId: string; zoneId: string };
+export type RenameZoneInput = { greenhouseId: string; zoneId: string; name: string };
+export type PermanentlyDeleteZoneInput = { greenhouseId: string; zoneId: string };
+export type PermanentlyDeleteGreenhouseInput = { greenhouseId: string };
+export type RestoreCropBatchInput = { id: string };
 
 export type GreenhouseContext = {
   greenhouse: DemoGreenhouse | undefined;
@@ -259,4 +263,100 @@ export function deleteZone(state: DemoState, input: DeleteZoneInput): DemoState 
         : greenhouse,
     ),
   };
+}
+
+export function restoreCropBatch(state: DemoState, input: RestoreCropBatchInput): DemoState {
+  const batch = state.cropBatches.find((item) => item.id === input.id);
+  if (!batch) throw new Error("ไม่พบรอบปลูกที่ต้องการเรียกคืน");
+  const greenhouse = state.greenhouses.find((item) => item.id === batch.greenhouseId);
+  if (!greenhouse || greenhouse.status !== "active") throw new Error("ต้องเรียกคืนโรงเรือนก่อนเรียกคืนรอบปลูก");
+  if (!greenhouse.zones.some((zone) => zone.id === batch.zoneId && zone.status === "active")) {
+    throw new Error("ต้องเรียกคืนโซนก่อนเรียกคืนรอบปลูก");
+  }
+  return {
+    ...state,
+    cropBatches: state.cropBatches.map((item) => item.id === input.id ? { ...item, status: "active" } : item),
+  };
+}
+
+function permanentDeletionError(target: string, dependencies: Array<[string, number, string]>): Error {
+  const details = dependencies
+    .filter(([, count]) => count > 0)
+    .map(([label, count, unit]) => `${label} ${count} ${unit}`)
+    .join(", ");
+  return new Error(`ไม่สามารถลบ${target}ถาวรได้ เพราะยังมีข้อมูลอ้างอิง: ${details} โปรดลบหรือเก็บข้อมูลเหล่านี้ก่อน`);
+}
+
+export function renameZone(state: DemoState, input: RenameZoneInput): DemoState {
+  const zone = state.greenhouses
+    .find((greenhouse) => greenhouse.id === input.greenhouseId)
+    ?.zones.find((item) => item.id === input.zoneId);
+  if (!zone) throw new Error("ไม่พบโซนที่ต้องการเปลี่ยนชื่อ");
+
+  const matchingBatchIds = new Set(state.cropBatches
+    .filter((batch) => batch.greenhouseId === input.greenhouseId && batch.zoneId === input.zoneId)
+    .map((batch) => batch.id));
+  const greenhouseBatchIds = new Set(state.cropBatches
+    .filter((batch) => batch.greenhouseId === input.greenhouseId)
+    .map((batch) => batch.id));
+
+  return {
+    ...state,
+    greenhouses: state.greenhouses.map((greenhouse) => greenhouse.id === input.greenhouseId
+      ? { ...greenhouse, zones: greenhouse.zones.map((item) => item.id === input.zoneId ? { ...item, name: input.name } : item) }
+      : greenhouse),
+    devices: state.devices.map((device) => device.greenhouseId === input.greenhouseId && device.zoneId === input.zoneId && device.detail === `ผูกกับ ${zone.name}` ? { ...device, detail: `ผูกกับ ${input.name}` } : device),
+    settings: { ...state.settings, cameras: state.settings.cameras.map((camera) => camera.greenhouseId === input.greenhouseId && camera.zoneId === input.zoneId ? { ...camera, zone: input.name } : camera) },
+    plants: state.plants.map((plant) => plant.greenhouseId === input.greenhouseId && (
+      matchingBatchIds.has(plant.batchId ?? "") ||
+      ((!plant.batchId || !greenhouseBatchIds.has(plant.batchId)) && plant.zone === zone.name)
+    ) ? { ...plant, zone: input.name } : plant),
+  };
+}
+
+export function permanentlyDeleteZone(state: DemoState, input: PermanentlyDeleteZoneInput): DemoState {
+  const greenhouseIndex = state.greenhouses.findIndex((item) => item.id === input.greenhouseId);
+  const greenhouse = state.greenhouses[greenhouseIndex];
+  const zone = greenhouse?.zones.find((item) => item.id === input.zoneId);
+  if (!zone) throw new Error("ไม่พบโซนที่ต้องการลบ");
+
+  const batches = state.cropBatches.filter((item) =>
+    item.greenhouseId === input.greenhouseId && item.zoneId === input.zoneId,
+  );
+  const batchIds = new Set(batches.map((item) => item.id));
+  const dependencies: Array<[string, number, string]> = [
+    ["รอบปลูก", batches.length, "รายการ"],
+    ["พืช", state.plants.filter((item) => item.greenhouseId === input.greenhouseId && (batchIds.has(item.batchId ?? "") || item.zone === zone.name)).length, "ต้น"],
+    ["อุปกรณ์", state.devices.filter((item) => item.greenhouseId === input.greenhouseId && item.zoneId === input.zoneId).length, "รายการ"],
+    ["กล้อง", state.settings.cameras.filter((item) => item.greenhouseId === input.greenhouseId && item.zoneId === input.zoneId).length, "รายการ"],
+    ["เซ็นเซอร์", state.sensors.filter((item) => item.greenhouseId === input.greenhouseId && item.zoneId === input.zoneId).length, "รายการ"],
+  ];
+  if (dependencies.some(([, count]) => count > 0)) throw permanentDeletionError("โซน", dependencies);
+
+  const zoneIndex = greenhouse.zones.findIndex((item) => item.id === input.zoneId);
+  return {
+    ...state,
+    greenhouses: state.greenhouses.map((item, index) => index === greenhouseIndex
+      ? { ...item, zones: [...item.zones.slice(0, zoneIndex), ...item.zones.slice(zoneIndex + 1)] }
+      : item),
+  };
+}
+
+export function permanentlyDeleteGreenhouse(state: DemoState, input: PermanentlyDeleteGreenhouseInput): DemoState {
+  const greenhouseIndex = state.greenhouses.findIndex((item) => item.id === input.greenhouseId);
+  const greenhouse = state.greenhouses[greenhouseIndex];
+  if (!greenhouse) throw new Error("ไม่พบโรงเรือนที่ต้องการลบ");
+
+  const dependencies: Array<[string, number, string]> = [
+    ["โซน", greenhouse.zones.length, "โซน"],
+    ["รอบปลูก", state.cropBatches.filter((item) => item.greenhouseId === input.greenhouseId).length, "รายการ"],
+    ["พืช", state.plants.filter((item) => item.greenhouseId === input.greenhouseId).length, "ต้น"],
+    ["อุปกรณ์", state.devices.filter((item) => item.greenhouseId === input.greenhouseId).length, "รายการ"],
+    ["กล้อง", state.settings.cameras.filter((item) => item.greenhouseId === input.greenhouseId).length, "รายการ"],
+    ["เซ็นเซอร์", state.sensors.filter((item) => item.greenhouseId === input.greenhouseId).length, "รายการ"],
+    ["การแจ้งเตือน", state.alerts.filter((item) => item.greenhouseId === input.greenhouseId).length, "รายการ"],
+  ];
+  if (dependencies.some(([, count]) => count > 0)) throw permanentDeletionError("โรงเรือน", dependencies);
+
+  return { ...state, greenhouses: [...state.greenhouses.slice(0, greenhouseIndex), ...state.greenhouses.slice(greenhouseIndex + 1)] };
 }

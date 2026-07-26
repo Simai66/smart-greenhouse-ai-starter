@@ -1,7 +1,7 @@
 import type { DeviceCommandAction, DeviceCommandResult } from "@/types/greenhouse";
 
 export type DemoDevice = { id: string; name: string; detail: string; icon: "pump" | "fan" | "light" | "mist"; active: boolean; greenhouseId?: string; zoneId?: string };
-export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number; health: "ปกติ" | "ควรตรวจสอบ"; confidence: number; greenhouseId?: string; batchId?: string };
+export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number | null; health: "ปกติ" | "ควรตรวจสอบ" | "ยังไม่มีข้อมูล"; confidence: number | null; greenhouseId?: string; batchId?: string };
 export type DemoAlert = { id: string; type: "critical" | "warning" | "info"; title: string; detail: string; time: string; resolved: boolean; greenhouseId?: string };
 export type DemoCamera = {
   id: string;
@@ -84,16 +84,12 @@ export const demoInitialState: DemoState = {
     { id: "mist", name: "เครื่องพ่นหมอก", detail: "โหมดอัตโนมัติ · ต่ำกว่า 60% RH", icon: "mist", active: true, greenhouseId: "GH-01", zoneId: "ZONE-B" },
   ],
   plants: [
-    { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: 46, health: "ปกติ", confidence: 98, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
-    { id: "TOM-002", name: "มะเขือเทศ 02", zone: "โซน A", age: "42 วัน", moisture: 44, health: "ปกติ", confidence: 96, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
-    { id: "TOM-003", name: "มะเขือเทศ 03", zone: "โซน B", age: "38 วัน", moisture: 39, health: "ควรตรวจสอบ", confidence: 78, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
-    { id: "TOM-004", name: "มะเขือเทศ 04", zone: "โซน B", age: "38 วัน", moisture: 36, health: "ปกติ", confidence: 94, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
+    { id: "TOM-001", name: "มะเขือเทศ 01", zone: "โซน A", age: "42 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
+    { id: "TOM-002", name: "มะเขือเทศ 02", zone: "โซน A", age: "42 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" },
+    { id: "TOM-003", name: "มะเขือเทศ 03", zone: "โซน B", age: "38 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
+    { id: "TOM-004", name: "มะเขือเทศ 04", zone: "โซน B", age: "38 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-B" },
   ],
-  alerts: [
-    { id: "leaf-spot", type: "critical", title: "ควรตรวจใบของมะเขือเทศ 03", detail: "ผลวิเคราะห์ภาพพบลักษณะที่อาจเป็นใบจุด ความมั่นใจ 78%", time: "18 นาทีที่แล้ว", resolved: false, greenhouseId: "GH-01" },
-    { id: "soil-moisture", type: "warning", title: "ความชื้นในดินของมะเขือเทศ 04 ลดลง", detail: "ค่าปัจจุบัน 36% ใกล้ค่าเริ่มรดน้ำอัตโนมัติที่ 35%", time: "5 นาทีที่แล้ว", resolved: false, greenhouseId: "GH-01" },
-    { id: "ventilation", type: "info", title: "รอบระบายอากาศเสร็จสิ้น", detail: "อุณหภูมิในโซน A กลับสู่ช่วงเป้าหมายแล้ว", time: "42 นาทีที่แล้ว", resolved: true, greenhouseId: "GH-01" },
-  ],
+  alerts: [],
   settings: {
     minTemperature: "22", maxTemperature: "30", minHumidity: "60", minSoilMoisture: "35",
     automation: { water: true, fan: true, light: true, alert: true },
@@ -126,9 +122,9 @@ function isState(value: unknown): value is DemoState {
     typeof item.name === "string" &&
     typeof item.zone === "string" &&
     typeof item.age === "string" &&
-    typeof item.moisture === "number" &&
-    ["ปกติ", "ควรตรวจสอบ"].includes(String(item.health)) &&
-    typeof item.confidence === "number";
+    (typeof item.moisture === "number" || item.moisture === null) &&
+    ["ปกติ", "ควรตรวจสอบ", "ยังไม่มีข้อมูล"].includes(String(item.health)) &&
+    (typeof item.confidence === "number" || item.confidence === null);
   const validAlert = (item: unknown) =>
     isRecord(item) &&
     typeof item.id === "string" &&
@@ -154,10 +150,8 @@ function isState(value: unknown): value is DemoState {
     Array.isArray(state.devices) &&
     state.devices.every(validDevice) &&
     Array.isArray(state.plants) &&
-    state.plants.length > 0 &&
     state.plants.every(validPlant) &&
     Array.isArray(state.alerts) &&
-    state.alerts.length > 0 &&
     state.alerts.every(validAlert) &&
     validSettings &&
     (state.aiReviewedPlantId === undefined ||
@@ -181,6 +175,7 @@ function upgradeState(state: DemoState): DemoState {
     !!item && typeof item === "object";
   const savedGreenhouses = (state as Partial<DemoState>).greenhouses;
   const savedCropBatches = (state as Partial<DemoState>).cropBatches;
+  const intentionallyEmptyGreenhouses = Array.isArray(savedGreenhouses) && savedGreenhouses.length === 0;
   const savedGreenhouseList = Array.isArray(savedGreenhouses) && savedGreenhouses.length > 0
     ? savedGreenhouses.filter((greenhouse): greenhouse is DemoGreenhouse =>
       isRecord(greenhouse) &&
@@ -189,7 +184,6 @@ function upgradeState(state: DemoState): DemoState {
       typeof greenhouse.code === "string" &&
       ["active", "archived"].includes(String(greenhouse.status)) &&
       Array.isArray(greenhouse.zones) &&
-      greenhouse.zones.length > 0 &&
       greenhouse.zones.every((zone) =>
         isRecord(zone) &&
         typeof zone.id === "string" &&
@@ -198,9 +192,12 @@ function upgradeState(state: DemoState): DemoState {
       ),
     )
     : defaultGreenhouses;
-  const greenhouses = savedGreenhouseList.length > 0
+  const greenhouses = intentionallyEmptyGreenhouses
+    ? []
+    : savedGreenhouseList.length > 0
     ? savedGreenhouseList
     : defaultGreenhouses;
+  const hasGreenhouses = greenhouses.length > 0;
   const primaryGreenhouse = greenhouses.find((greenhouse) => greenhouse.zones.length > 0)
     ?? defaultGreenhouses[0]!;
   const primaryZone = primaryGreenhouse.zones[0] ?? defaultGreenhouses[0]!.zones[0]!;
@@ -237,7 +234,9 @@ function upgradeState(state: DemoState): DemoState {
     const binding = resolveBinding(sensor);
     return { ...sensor, greenhouseId: binding.greenhouseId, zoneId: binding.zoneId };
   };
-  const cropBatches = Array.isArray(savedCropBatches)
+  const cropBatches = !hasGreenhouses
+    ? []
+    : Array.isArray(savedCropBatches)
     ? savedCropBatches.filter((batch): batch is DemoCropBatch => {
       if (
         !isRecord(batch) || typeof batch.id !== "string" || typeof batch.greenhouseId !== "string" ||
@@ -270,23 +269,24 @@ function upgradeState(state: DemoState): DemoState {
     );
   return {
     ...state,
-    devices: state.devices.map(normalizeDevice),
-    plants: state.plants.map((plant) => ({
+    devices: hasGreenhouses ? state.devices.map(normalizeDevice) : [],
+    plants: hasGreenhouses ? state.plants.map((plant) => ({
       ...plant,
       greenhouseId: typeof plant.greenhouseId === "string" && greenhouses.some((greenhouse) => greenhouse.id === plant.greenhouseId)
         ? plant.greenhouseId
         : primaryGreenhouse.id,
-    })),
-    alerts: state.alerts.map((alert) => ({
+    })) : [],
+    alerts: hasGreenhouses ? state.alerts.map((alert) => ({
       ...alert,
       greenhouseId: typeof alert.greenhouseId === "string" && greenhouses.some((greenhouse) => greenhouse.id === alert.greenhouseId)
         ? alert.greenhouseId
         : primaryGreenhouse.id,
-    })),
+    })) : [],
     greenhouses,
     cropBatches,
-    sensors: (validSensors(state.sensors) ? state.sensors : defaultState.sensors).map(normalizeSensor),
-    aiReviewedEvidence: state.aiReviewedEvidence ?? {},
+    sensors: hasGreenhouses ? (validSensors(state.sensors) ? state.sensors : defaultState.sensors).map(normalizeSensor) : [],
+    aiReviewedPlantId: hasGreenhouses ? state.aiReviewedPlantId : undefined,
+    aiReviewedEvidence: hasGreenhouses ? (state.aiReviewedEvidence ?? {}) : {},
     settings: {
       ...defaults,
       ...saved,
@@ -294,7 +294,9 @@ function upgradeState(state: DemoState): DemoState {
       schedules: { ...defaults.schedules, ...saved.schedules },
       notifications: { ...defaults.notifications, ...saved.notifications },
       ai: { ...defaults.ai, ...saved.ai },
-      cameras: isValidCameras(saved.cameras)
+      cameras: !hasGreenhouses
+        ? []
+        : isValidCameras(saved.cameras)
         ? saved.cameras.map(normalizeCamera)
         : defaults.cameras.map(normalizeCamera),
     },

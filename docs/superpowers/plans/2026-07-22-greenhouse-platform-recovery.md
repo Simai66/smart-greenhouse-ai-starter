@@ -60,7 +60,7 @@ The Plants page opens in zone/batch mode. Per-plant mode is a drill-down. A gree
 - Produces `ResourceKind = "device" | "camera" | "sensor"`.
 - Produces `createResource(state, input)`, `updateResource(state, input)`, `deleteResource(state, input)`, and `selectResourcesForGreenhouse(state, greenhouseId)`.
 
-- [ ] **Step 1: Write the failing lifecycle test**
+- [x] **Step 1: Write the failing lifecycle test**
 
 ```ts
 test("creates, updates, moves, and deletes a device", () => {
@@ -77,13 +77,13 @@ test("creates, updates, moves, and deletes a device", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `node --experimental-strip-types --test tests/greenhouse-domain.test.ts`
 
 Expected: FAIL because `greenhouse-domain.ts` does not exist.
 
-- [ ] **Step 3: Implement the minimal domain interface**
+- [x] **Step 3: Implement the minimal domain interface**
 
 ```ts
 export type ResourceKind = "device" | "camera" | "sensor";
@@ -99,13 +99,13 @@ export function selectResourcesForGreenhouse(state: DemoState, greenhouseId: str
 
 Implement the three mutation functions immutably. Delete must change exactly one matching collection.
 
-- [ ] **Step 4: Run focused and full tests**
+- [x] **Step 4: Run focused and full tests**
 
 Run: `node --experimental-strip-types --test tests/greenhouse-domain.test.ts && npm run test:unit`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/greenhouse-domain.ts tests/greenhouse-domain.test.ts
@@ -121,7 +121,7 @@ git commit -m "refactor: centralize greenhouse resource mutations"
 **Interfaces:**
 - Produces a loaded state where every resource has `greenhouseId` and `zoneId`, and `sensors` exists.
 
-- [ ] **Step 1: Add a failing legacy migration test**
+- [x] **Step 1: Add a failing legacy migration test**
 
 ```ts
 test("upgrades a state created before sensor and zone bindings", async () => {
@@ -137,13 +137,13 @@ test("upgrades a state created before sensor and zone bindings", async () => {
 });
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `node --experimental-strip-types --test tests/demo-interactions.test.ts`
 
 Expected: FAIL before migration is implemented.
 
-- [ ] **Step 3: Normalize in one migration boundary**
+- [x] **Step 3: Normalize in one migration boundary**
 
 ```ts
 devices: state.devices.map((device) => ({
@@ -154,13 +154,13 @@ devices: state.devices.map((device) => ({
 sensors: validSensors(state.sensors) ? state.sensors : defaultState.sensors,
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `npm run test:unit && npm run build`
 
 Expected: PASS and `Build complete`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/greenhouse-demo-store.ts tests/demo-interactions.test.ts
@@ -181,7 +181,7 @@ git commit -m "fix: migrate greenhouse resource bindings"
 - Consumes the Task 1 mutations.
 - Produces `ResourceEditorDialog` and `ResourceList`.
 
-- [ ] **Step 1: Write the failing source contract**
+- [x] **Step 1: Write the failing source contract**
 
 ```js
 assert.match(settingsSource, /ResourceEditorDialog/);
@@ -189,13 +189,13 @@ assert.match(settingsSource, /onDeleteResource/);
 assert.match(settingsSource, /ลบทรัพยากร\\?/);
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `node --test tests/greenhouse-ui-source-contract.test.mjs`
 
 Expected: FAIL until focused components are wired.
 
-- [ ] **Step 3: Implement a single shadcn dialog for create/edit**
+- [x] **Step 3: Implement a single shadcn dialog for create/edit**
 
 ```tsx
 export function ResourceEditorDialog({
@@ -213,13 +213,13 @@ export function ResourceEditorDialog({
 
 The form contains name, kind, zone, and enabled/status. Delete stays in a separate confirmation dialog.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `node --test tests/greenhouse-ui-source-contract.test.mjs && npm run build`
 
 Expected: PASS and `Build complete`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add components/greenhouse/settings components/greenhouse/views/settings-view.tsx tests/greenhouse-ui-source-contract.test.mjs
@@ -237,7 +237,7 @@ git commit -m "refactor: use reusable greenhouse resource editor"
 **Interfaces:**
 - Produces `deleteZone(state, { greenhouseId, zoneId })`.
 
-- [ ] **Step 1: Write the failing dependency test**
+- [x] **Step 1: Write the failing dependency test**
 
 ```ts
 test("refuses to delete a zone containing an active crop batch", () => {
@@ -248,13 +248,13 @@ test("refuses to delete a zone containing an active crop batch", () => {
 });
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `node --experimental-strip-types --test tests/greenhouse-domain.test.ts`
 
 Expected: FAIL because `deleteZone` does not exist.
 
-- [ ] **Step 3: Implement the guard**
+- [x] **Step 3: Implement the guard**
 
 ```ts
 const hasActiveBatch = state.cropBatches.some(
@@ -265,13 +265,13 @@ if (hasActiveBatch) throw new Error("ยังมีรอบปลูกที�
 
 Use archive/restore for historical records; permanently delete only an incorrect resource that has no dependent data.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `npm run test:unit && npm run build`
 
 Expected: PASS and `Build complete`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/greenhouse-domain.ts components/greenhouse/settings/farm-structure-section.tsx components/greenhouse/views/plants-view.tsx tests/greenhouse-domain.test.ts
@@ -291,7 +291,7 @@ git commit -m "feat: enforce safe farm structure lifecycle"
 **Interfaces:**
 - Produces `selectGreenhouseContext(state, greenhouseId)` and `selectDevicePresentation(device)`.
 
-- [ ] **Step 1: Write the failing isolation test**
+- [x] **Step 1: Write the failing isolation test**
 
 ```ts
 test("selected greenhouse context excludes another greenhouse's resources", () => {
@@ -302,13 +302,13 @@ test("selected greenhouse context excludes another greenhouse's resources", () =
 });
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `node --experimental-strip-types --test tests/greenhouse-domain.test.ts`
 
 Expected: FAIL before the selector exists.
 
-- [ ] **Step 3: Remove hard-coded device metadata**
+- [x] **Step 3: Remove hard-coded device metadata**
 
 ```ts
 export function selectDevicePresentation(device: DemoDevice) {
@@ -323,13 +323,13 @@ export function selectDevicePresentation(device: DemoDevice) {
 
 Delete the `deviceMeta[device.id]` record from `devices-view.tsx`. User-created devices must never need a hard-coded key.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `node --experimental-strip-types --test tests/greenhouse-domain.test.ts && npm run build`
 
 Expected: PASS and `Build complete`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/greenhouse-domain.ts components/greenhouse/greenhouse-app.tsx components/greenhouse/views/devices-view.tsx tests/greenhouse-domain.test.ts
@@ -348,7 +348,7 @@ git commit -m "refactor: derive operations from greenhouse context"
 **Interfaces:**
 - Adds `hasOperationalData: boolean` and `setupAction: "add_zone" | "add_resource" | "add_crop_batch" | null` to `DashboardViewModel`.
 
-- [ ] **Step 1: Write the failing empty-context test**
+- [x] **Step 1: Write the failing empty-context test**
 
 ```ts
 test("dashboard has setup state for a greenhouse without resources", () => {
@@ -358,13 +358,13 @@ test("dashboard has setup state for a greenhouse without resources", () => {
 });
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `node --experimental-strip-types --test tests/greenhouse-presentation.test.ts`
 
 Expected: FAIL because `hasOperationalData` is absent.
 
-- [ ] **Step 3: Implement setup-state rendering**
+- [x] **Step 3: Implement setup-state rendering**
 
 ```tsx
 if (!viewModel.hasOperationalData) {
@@ -377,22 +377,180 @@ if (!viewModel.hasOperationalData) {
 
 Do not show copied camera images, fabricated charts, or alerts in an empty greenhouse.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `npm run test:unit && npm run build && git diff --check`
 
 Expected: all tests pass, `Build complete`, and no whitespace errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/greenhouse-presentation.ts components/greenhouse/views tests/greenhouse-presentation.test.ts
 git commit -m "feat: show truthful greenhouse setup states"
 ```
 
+## Subproject D: explicit permanent deletion
+
+### Task 7: Let users permanently delete empty greenhouses and zones
+
+**Feature card**
+
+- **User outcome:** Settings provides a distinct “ลบถาวร” action for a
+  greenhouse or zone instead of forcing users to keep unwanted records in the
+  archive forever.
+- **Acceptance criteria:**
+  1. A zone with no crop batch, plant, device, camera, or sensor can be deleted
+     after a confirmation dialog names that zone.
+  2. A greenhouse with no zones, crop batches, plants, devices, cameras,
+     sensors, or alerts can be deleted after a confirmation dialog names that
+     greenhouse.
+  3. Deletion with any dependency is refused without mutating state. UI lists
+     what must be removed or archived first; no silent cascade is allowed.
+  4. Archive/restore remains available for historical records and is visually
+     distinct from permanent deletion.
+  5. Deleting the selected greenhouse clears stale plant, alert, device-command,
+     search, and zone-filter state, then selects another active greenhouse only
+     as part of the confirmed delete transition. No operational data leaks while
+     selection is invalid.
+  6. Domain, source-contract, unit, lint, build, and whitespace checks pass.
+- **In scope:** pure domain deletion guards, Settings confirmation UI, client
+  orchestration, selection cleanup, and regression tests.
+- **Out of scope:** cascade deletion, undelete/recycle bin, server/database
+  deletion, physical device commands, and deployment changes.
+- **Assumptions and risks:** permanent deletion is irreversible; dependency
+  checks include archived/history records because those records still reference
+  the parent. Copy must explain why blocked deletion is safe.
+- **Owners and order:** Frontend/domain owner writes failing mutation tests and
+  publishes deletion result/error contract → Frontend wires shadcn confirmation
+  controls → QA validates happy, blocked, keyboard, responsive, and regression
+  paths.
+
+**Files:**
+
+- Modify: `lib/greenhouse-domain.ts`
+- Modify: `components/greenhouse/settings/farm-structure-section.tsx`
+- Modify: `components/greenhouse/views/settings-view.tsx`
+- Modify: `components/greenhouse/greenhouse-app.tsx`
+- Modify: `tests/greenhouse-domain.test.ts`
+- Modify: `tests/greenhouse-ui-source-contract.test.mjs`
+
+**Interfaces:**
+
+- Produces `permanentlyDeleteZone(state, { greenhouseId, zoneId })`.
+- Produces `permanentlyDeleteGreenhouse(state, { greenhouseId })`.
+- Both functions return a new `DemoState` on success and throw a Thai error
+  describing dependencies on refusal.
+
+- [x] **Step 1: Write failing safe-deletion tests**
+
+Cover empty-zone success, dependent-zone refusal, empty-greenhouse success,
+dependent-greenhouse refusal, immutability on refusal, and selected-reference
+cleanup contract.
+
+- [x] **Step 2: Implement minimal pure deletion guards**
+
+Inspect every collection that binds `greenhouseId` or `zoneId`. Never cascade.
+Delete exactly one matching parent on success.
+
+- [x] **Step 3: Add deliberate confirmation UI**
+
+Use existing shadcn dialog controls. Keep archive and restore actions. Label
+permanent deletion explicitly and show dependency error with `role="alert"`.
+
+- [x] **Step 4: Verify**
+
+Run: `node --experimental-strip-types --test tests/greenhouse-domain.test.ts && node --test tests/greenhouse-ui-source-contract.test.mjs && npm run test:unit && npm run lint && npm run build && git diff --check`
+
+Expected: all checks pass; lint may retain documented pre-existing warnings but
+must have zero errors.
+
+- [x] **Step 5: Commit**
+
+```bash
+git add docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md lib/greenhouse-domain.ts components/greenhouse/settings/farm-structure-section.tsx components/greenhouse/views/settings-view.tsx components/greenhouse/greenhouse-app.tsx tests/greenhouse-domain.test.ts tests/greenhouse-ui-source-contract.test.mjs
+git commit -m "feat: permanently delete empty farm structures"
+```
+
+### Task 8: Keep the dashboard plant-health preview compact
+
+**Feature card**
+
+- **User outcome:** “สุขภาพพืชล่าสุด” stays a quick dashboard preview instead
+  of repeating the complete Plants page.
+- **Acceptance criteria:**
+  1. Preview renders at most four plants while “ดูทุกต้น” still opens the full
+     plant list.
+  2. Plants needing review appear before normal plants; plants without recorded
+     health appear after recorded warnings and before normal results. Ordering
+     inside each group stays stable.
+  3. Header states how many plants are shown when more exist (for example,
+     “แสดง 4 จาก 12 ต้น”).
+  4. Health tokens use semantic, accessible colors: “ควรตรวจสอบ” uses amber
+     warning styling, “ปกติ” uses green success styling, and “ยังไม่มีข้อมูล”
+     uses neutral gray styling. Color is not the only status signal because
+     visible Thai text remains.
+  5. Empty and no-recorded-health states remain truthful. Plant data and full
+     list behavior do not change.
+- **In scope:** dashboard preview selection, status-token presentation, and
+  focused source/unit regression checks.
+- **Out of scope:** Plants-page pagination, new health rules, API/database
+  changes, and dashboard layout redesign.
+- **Assumptions and risks:** four items fit the current two-column card without
+  creating a second long list; warning priority is presentation-only and must
+  not mutate source arrays.
+- **Owners and order:** Frontend writes focused failing contract → Frontend
+  implements compact semantic preview → QA validates mobile/desktop, keyboard,
+  color contrast, priority, count, and full-list navigation.
+
+**Files:**
+
+- Modify: `components/greenhouse/views/command-deck-view.tsx`
+- Modify: `tests/greenhouse-ui-source-contract.test.mjs`
+
+- [x] **Step 1: Add failing compact-preview contract**
+
+Require a four-item limit, warning-first stable selection, remaining-count copy,
+and separate semantic classes for warning, success, and neutral tokens.
+
+- [x] **Step 2: Implement minimal derived preview**
+
+Derive a new sorted copy; never sort or mutate the `plants` prop. Keep the full
+list behind the existing “ดูทุกต้น” action.
+
+- [x] **Step 3: Verify**
+
+Run: `node --test tests/greenhouse-ui-source-contract.test.mjs && npm run test:unit && npm run lint && npm run build && git diff --check`
+
+- [x] **Step 4: Commit**
+
+```bash
+git add docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md components/greenhouse/views/command-deck-view.tsx tests/greenhouse-ui-source-contract.test.mjs
+git commit -m "fix: compact plant health preview"
+```
+
 ## Execution handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md`.
+### Completion status — 2026-07-26
+
+- Tasks 1–8 complete on `codex/greenhouse-platform-recovery`.
+- Permanent deletion shipped for empty greenhouses and zones with dependency
+  guards, named confirmation, no cascade, reference cleanup, and empty-store
+  persistence.
+- Dashboard plant-health preview shows at most four plants, prioritizes warning
+  and unknown states, and uses amber/green/gray semantic status tokens.
+- Final fixes include truthful empty operational data, safe legacy migrations,
+  selected-greenhouse isolation, CSV hardening, and legacy plant-zone binding
+  preservation.
+- Final verification: domain 26/26, source contract 11/11, unit 47/47, lint with
+  zero errors, production build and artifact validation pass, and
+  `git diff --check` pass.
+- Final QA: PASS at `18d23e8`. Final whole-branch review: READY.
+- Deferred nonblocking note: Task 8 ordering/count/navigation has source-contract
+  coverage; add behavioral component coverage when a render harness exists.
+
+Plan complete and updated at
+`docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md`.
 
 Two execution options:
 

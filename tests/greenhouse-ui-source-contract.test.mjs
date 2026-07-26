@@ -77,6 +77,9 @@ test("keeps reusable resource editing and deliberate deletion in settings", asyn
   assert.match(editor, /ยังไม่มีโซนที่ใช้งานอยู่ กรุณาเพิ่มโซนก่อนผูกทรัพยากร/);
   assert.match(editor, /disabled=\{!canBind\}/);
   assert.doesNotMatch(settings, /pendingCreate|knownIds/);
+  assert.match(settings, /onRenameZone/);
+  assert.match(editor, /<Dialog open onOpenChange/);
+  assert.doesNotMatch(editor, /useEffect/);
   assert.match(app, /onCreateResource=\{\(value\) => \{/);
   assert.match(app, /return createResource\(current,/);
   assert.match(app, /onUpdateResourceStatus=\{\(kind, id, \{ enabled, status \}\) => \{/);
@@ -86,6 +89,50 @@ test("keeps reusable resource editing and deliberate deletion in settings", asyn
   assert.match(app, /item\.id !== id \|\| item\.greenhouseId !== activeGreenhouse\.id/);
   assert.match(app, /active: enabled/);
   assert.match(app, /enabled, status: status === "online" \? "online" : "offline"/);
+});
+
+test("keeps zone edits and device status language truthful", async () => {
+  const [farm, analytics, devices, app] = await Promise.all([
+    readFile(new URL("../components/greenhouse/settings/farm-structure-section.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/analytics-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/devices-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(farm, /แก้ไขโซน/);
+  assert.match(farm, /onRenameZone/);
+  assert.match(analytics, /การตั้งค่าอุปกรณ์/);
+  assert.match(analytics, /ไม่ใช่สถานะการทำงานจริง/);
+  assert.doesNotMatch(analytics, />ทำงาน<|>หยุด</);
+  assert.match(devices, /const selectedZone = zoneOptions\.some/);
+  assert.match(app, /useState\(\(\) => demoInitialState\.greenhouses\.find/);
+  assert.match(app, /greenhouse\.id !== id && greenhouse\.status === "active"/);
+  assert.match(app, /changeGreenhouse\(state\.greenhouses\.find/);
+  assert.match(app, /moisture: null/);
+  assert.match(app, /health: "ยังไม่มีข้อมูล"/);
+  assert.match(app, /renameZone\(current, \{ greenhouseId, zoneId, name \}\)/);
+});
+
+test("keeps permanent deletion confirmation and selected-greenhouse cleanup deliberate", async () => {
+  const [farm, settings, app] = await Promise.all([
+    readFile(new URL("../components/greenhouse/settings/farm-structure-section.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/settings-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(farm, /ลบถาวร/);
+  assert.match(farm, /role="alert"/);
+  assert.match(farm, /onPermanentlyDeleteGreenhouse/);
+  assert.match(farm, /onPermanentlyDeleteZone/);
+  assert.match(settings, /onPermanentlyDeleteGreenhouse/);
+  assert.match(settings, /onPermanentlyDeleteZone/);
+  assert.doesNotMatch(settings, /activeGreenhouseId\) \?\? greenhouses\[0\]/);
+  assert.match(app, /permanentlyDeleteGreenhouse/);
+  assert.match(app, /permanentlyDeleteZone/);
+  assert.match(app, /setPendingDevice\(null\)/);
+  assert.match(app, /setSearch\(""\)/);
+  assert.match(app, /setSelectedPlantId\(""\)/);
+  assert.match(app, /setSelectedAlert\(null\)/);
+  assert.doesNotMatch(app, /\?\? state\.greenhouses\.find\(\(greenhouse\) => greenhouse\.status === "active"\)/);
 });
 
 test("keeps truthful configured status and decisions ahead of dashboard detail", async () => {
@@ -127,8 +174,44 @@ test("keeps analytics plant filtering compatible with the plant data model", asy
   );
 
   assert.match(analytics, /context\.cropBatches\.find\(\(item\) => item\.id === plant\.batchId\)/);
+  assert.match(analytics, /const selectedZoneId = zoneOptions\.some/);
   assert.match(analytics, /batch \? batch\.zoneId === selectedZone\.id : plant\.zone === selectedZone\.name/);
   assert.doesNotMatch(analytics, /plant\.zoneId/);
+});
+
+test("keeps unknown plants neutral and restoration validated", async () => {
+  const [plants, commandDeck, app] = await Promise.all([
+    readFile(new URL("../components/greenhouse/views/plants-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(plants, /ยังไม่มีหลักฐานภาพของ/);
+  assert.match(plants, /plant\.health === "ยังไม่มีข้อมูล"/);
+  assert.doesNotMatch(plants, /ภาพล่าสุดของ/);
+  assert.match(commandDeck, /plants\.some\(\(plant\) => plant\.confidence !== null\)/);
+  assert.match(commandDeck, /viewModel\.hasPlantData \? `\$\{viewModel\.healthScore\}%` : "—"/);
+  assert.match(app, /restoreCropBatch/);
+  assert.match(app, /changeGreenhouse\(greenhouse\.id\)/);
+  assert.match(app, /changeGreenhouse\(id\)/);
+});
+
+test("keeps the dashboard plant-health preview compact and warning-first", async () => {
+  const source = await readFile(
+    new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /const previewPlants = \[\.\.\.plants\]\s*\.sort/);
+  assert.match(source, /"ควรตรวจสอบ": 0/);
+  assert.match(source, /"ยังไม่มีข้อมูล": 1/);
+  assert.match(source, /"ปกติ": 2/);
+  assert.match(source, /\.slice\(0, 4\)/);
+  assert.match(source, /แสดง \$\{previewPlants\.length\} จาก \$\{plants\.length\} ต้น/);
+  assert.match(source, /previewPlants\.map/);
+  assert.match(source, /border-amber-200 bg-amber-50 text-amber-800/);
+  assert.match(source, /border-emerald-200 bg-emerald-50 text-emerald-800/);
+  assert.match(source, /border-slate-200 bg-slate-100 text-slate-700/);
+  assert.doesNotMatch(source, /plants\.sort\(/);
 });
 
 test("keeps the hamburger sidebar, stale-state, and keyboard search contracts", async () => {

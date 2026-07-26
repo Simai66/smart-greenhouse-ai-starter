@@ -34,7 +34,7 @@ import {
   type DemoGreenhouse,
   type DemoState,
 } from "@/lib/greenhouse-demo-store";
-import { createResource, deleteZone, selectGreenhouseContext } from "@/lib/greenhouse-domain";
+import { createResource, deleteZone, permanentlyDeleteGreenhouse, permanentlyDeleteZone, renameZone, restoreCropBatch, selectGreenhouseContext } from "@/lib/greenhouse-domain";
 import {
   buildDashboardViewModel,
   pageMetadata,
@@ -47,7 +47,7 @@ export function GreenhouseApp() {
   const [ready, setReady] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [activePage, setActivePage] = useState<GreenhousePageId>("dashboard");
-  const [activeGreenhouseId, setActiveGreenhouseId] = useState("GH-01");
+  const [activeGreenhouseId, setActiveGreenhouseId] = useState(() => demoInitialState.greenhouses.find((greenhouse) => greenhouse.status === "active")?.id ?? "");
   const [period, setPeriod] = useState<ChartPeriod>("วันนี้");
   const [search, setSearch] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
@@ -86,6 +86,9 @@ export function GreenhouseApp() {
     void greenhouseDemoStore.load().then((result) => {
       if (!active) return;
       setState(result.state);
+      setActiveGreenhouseId((current) => result.state.greenhouses.some((greenhouse) => greenhouse.id === current && greenhouse.status === "active")
+        ? current
+        : result.state.greenhouses.find((greenhouse) => greenhouse.status === "active")?.id ?? "");
       setStorageAvailable(result.storageAvailable);
       setDataStale(!navigator.onLine);
       if (staleTimer.current) window.clearTimeout(staleTimer.current);
@@ -142,8 +145,11 @@ export function GreenhouseApp() {
   const changeGreenhouse = (greenhouseId: string) => {
     setActiveGreenhouseId(greenhouseId);
     setSearch("");
+    setSearchIndex(0);
     setSelectedPlantId("");
     setSelectedAlert(null);
+    setPendingDevice(null);
+    setMobileSearchOpen(false);
   };
 
   const navigate = (page: GreenhousePageId) => {
@@ -302,6 +308,7 @@ export function GreenhouseApp() {
       ) : <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center"><p className="font-semibold">ยังไม่มีพืชสำหรับตรวจด้วย AI</p><p className="max-w-md text-sm text-muted-foreground">เพิ่มรอบปลูกและข้อมูลพืชของ {activeGreenhouse.name} ก่อน แล้วจึงเริ่มตรวจหลักฐานจากกล้องได้</p><Button variant="outline" onClick={() => navigate("settings")}>ไปที่ตั้งค่า</Button></CardContent></Card>
     ) : activePage === "devices" ? (
       <DevicesView
+        key={activeGreenhouse?.id ?? "no-greenhouse"}
         devices={greenhouseState.devices}
         context={greenhouseContext}
         pendingDeviceId={pendingDevice?.device.id ?? null}
@@ -309,7 +316,7 @@ export function GreenhouseApp() {
         onRequest={(device) => setPendingDevice({ device, nextActive: !device.active })}
       />
     ) : activePage === "analytics" ? (
-      <AnalyticsView period={period} onPeriodChange={setPeriod} context={greenhouseContext} />
+      <AnalyticsView key={activeGreenhouse?.id ?? "no-greenhouse"} period={period} onPeriodChange={setPeriod} context={greenhouseContext} />
     ) : activePage === "alerts" ? (
       <AlertsView alerts={greenhouseState.alerts} onOpen={setSelectedAlert} />
     ) : (
@@ -325,23 +332,16 @@ export function GreenhouseApp() {
           notify("บันทึกการตั้งค่าแล้ว");
         }}
         onSaveGreenhouse={(id, draft) => {
-          setState((current) => {
-            if (id) {
-              return {
-                ...current,
-                greenhouses: current.greenhouses.map((greenhouse) =>
-                  greenhouse.id === id ? { ...greenhouse, ...draft } : greenhouse,
-                ),
-              };
-            }
-            const greenhouse: DemoGreenhouse = {
-              id: `GH-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-              ...draft,
-              status: "active",
-              zones: [],
-            };
-            return { ...current, greenhouses: [...current.greenhouses, greenhouse] };
-          });
+          if (id) {
+            setState((current) => ({
+              ...current,
+              greenhouses: current.greenhouses.map((greenhouse) => greenhouse.id === id ? { ...greenhouse, ...draft } : greenhouse),
+            }));
+          } else {
+            const greenhouse: DemoGreenhouse = { id: `GH-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, ...draft, status: "active", zones: [] };
+            setState((current) => ({ ...current, greenhouses: [...current.greenhouses, greenhouse] }));
+            changeGreenhouse(greenhouse.id);
+          }
           notify(id ? "แก้ไขข้อมูลโรงเรือนแล้ว" : "เพิ่มโรงเรือนแล้ว");
         }}
         onArchiveGreenhouse={(id) => {
@@ -351,7 +351,8 @@ export function GreenhouseApp() {
               greenhouse.id === id ? { ...greenhouse, status: "archived" } : greenhouse,
             ),
           }));
-          notify("เก็บโรงเรือนถาวรแล้ว", "info");
+          if (id === activeGreenhouseId) changeGreenhouse(state.greenhouses.find((greenhouse) => greenhouse.id !== id && greenhouse.status === "active")?.id ?? "");
+          notify("เก็บโรงเรือนเข้าคลังแล้ว", "info");
         }}
         onRestoreGreenhouse={(id) => {
           setState((current) => ({
@@ -360,6 +361,7 @@ export function GreenhouseApp() {
               greenhouse.id === id ? { ...greenhouse, status: "active" } : greenhouse,
             ),
           }));
+          changeGreenhouse(id);
           notify("เรียกคืนโรงเรือนแล้ว");
         }}
         onAddZone={(greenhouseId, name) => {
@@ -380,11 +382,15 @@ export function GreenhouseApp() {
           }));
           notify(`เพิ่ม ${name} แล้ว`);
         }}
+        onRenameZone={(greenhouseId, zoneId, name) => {
+          setState((current) => renameZone(current, { greenhouseId, zoneId, name }));
+          notify(`เปลี่ยนชื่อโซนเป็น ${name} แล้ว`);
+        }}
         onArchiveZone={(greenhouseId, zoneId) => {
           try {
             const nextState = deleteZone(state, { greenhouseId, zoneId });
             setState(nextState);
-            notify("เก็บโซนถาวรแล้ว", "info");
+            notify("เก็บโซนเข้าคลังแล้ว", "info");
           } catch (error) {
             notify(
               error instanceof Error ? error.message : "ไม่สามารถเก็บโซนได้",
@@ -408,6 +414,18 @@ export function GreenhouseApp() {
           }));
           notify("เรียกคืนโซนแล้ว");
         }}
+        onPermanentlyDeleteGreenhouse={(id) => {
+          const nextState = permanentlyDeleteGreenhouse(state, { greenhouseId: id });
+          setState(nextState);
+          if (id === activeGreenhouseId) {
+            changeGreenhouse(nextState.greenhouses.find((greenhouse) => greenhouse.status === "active")?.id ?? "");
+          }
+          notify("ลบโรงเรือนถาวรแล้ว", "info");
+        }}
+        onPermanentlyDeleteZone={(greenhouseId, zoneId) => {
+          setState(permanentlyDeleteZone(state, { greenhouseId, zoneId }));
+          notify("ลบโซนถาวรแล้ว", "info");
+        }}
         onSaveBatch={(id, draft) => {
           setState((current) => {
             const greenhouse = current.greenhouses.find((item) => item.id === draft.greenhouseId);
@@ -418,9 +436,9 @@ export function GreenhouseApp() {
               name: `${draft.cropName} ${String(from + index + 1).padStart(2, "0")}`,
               zone: zoneName,
               age: "เริ่มปลูก",
-              moisture: 50,
-              health: "ปกติ" as const,
-              confidence: 0,
+              moisture: null,
+              health: "ยังไม่มีข้อมูล" as const,
+              confidence: null,
               greenhouseId: draft.greenhouseId,
               batchId,
             }));
@@ -452,8 +470,12 @@ export function GreenhouseApp() {
           notify("เก็บรอบปลูกถาวรแล้ว", "info");
         }}
         onRestoreBatch={(id) => {
-          setState((current) => ({ ...current, cropBatches: current.cropBatches.map((batch) => batch.id === id ? { ...batch, status: "active" } : batch) }));
-          notify("เรียกคืนรอบปลูกแล้ว");
+          try {
+            setState(restoreCropBatch(state, { id }));
+            notify("เรียกคืนรอบปลูกแล้ว");
+          } catch (error) {
+            notify(error instanceof Error ? error.message : "ไม่สามารถเรียกคืนรอบปลูกได้", "error");
+          }
         }}
         onCreateResource={(value) => {
           if (!activeGreenhouse) { notify("เพิ่มโรงเรือนก่อนจึงจะผูกทรัพยากรได้", "error"); return; }
