@@ -180,6 +180,23 @@ test("preserves a valid greenhouse with no zones", async () => {
   assert.deepEqual(result.state.greenhouses.find((greenhouse) => greenhouse.id === "GH-EMPTY"), legacy.greenhouses.at(-1));
 });
 
+test("preserves an intentionally empty greenhouse collection without resurrecting default resources", async () => {
+  const saved = structuredClone(demoInitialState);
+  saved.greenhouses = [];
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(saved), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+
+  assert.equal(result.recovered, false);
+  assert.deepEqual(result.state.greenhouses, []);
+  assert.deepEqual(result.state.cropBatches, []);
+  assert.deepEqual(result.state.devices, []);
+  assert.deepEqual(result.state.plants, []);
+  assert.deepEqual(result.state.alerts, []);
+  assert.deepEqual(result.state.sensors, []);
+  assert.deepEqual(result.state.settings.cameras, []);
+});
+
 test("preserves a custom camera display label when its saved binding is valid", async () => {
   const legacy = structuredClone(demoInitialState);
   legacy.settings.cameras[0]!.zone = "แปลงมะเขือเทศฝั่งเหนือ";
