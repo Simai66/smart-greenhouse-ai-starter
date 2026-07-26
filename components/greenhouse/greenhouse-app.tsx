@@ -34,7 +34,7 @@ import {
   type DemoGreenhouse,
   type DemoState,
 } from "@/lib/greenhouse-demo-store";
-import { createResource, deleteZone, selectGreenhouseContext } from "@/lib/greenhouse-domain";
+import { createResource, deleteZone, permanentlyDeleteGreenhouse, permanentlyDeleteZone, selectGreenhouseContext } from "@/lib/greenhouse-domain";
 import {
   buildDashboardViewModel,
   pageMetadata,
@@ -143,8 +143,11 @@ export function GreenhouseApp() {
   const changeGreenhouse = (greenhouseId: string) => {
     setActiveGreenhouseId(greenhouseId);
     setSearch("");
+    setSearchIndex(0);
     setSelectedPlantId("");
     setSelectedAlert(null);
+    setPendingDevice(null);
+    setMobileSearchOpen(false);
   };
 
   const navigate = (page: GreenhousePageId) => {
@@ -303,6 +306,7 @@ export function GreenhouseApp() {
       ) : <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center"><p className="font-semibold">ยังไม่มีพืชสำหรับตรวจด้วย AI</p><p className="max-w-md text-sm text-muted-foreground">เพิ่มรอบปลูกและข้อมูลพืชของ {activeGreenhouse.name} ก่อน แล้วจึงเริ่มตรวจหลักฐานจากกล้องได้</p><Button variant="outline" onClick={() => navigate("settings")}>ไปที่ตั้งค่า</Button></CardContent></Card>
     ) : activePage === "devices" ? (
       <DevicesView
+        key={activeGreenhouse?.id ?? "no-greenhouse"}
         devices={greenhouseState.devices}
         context={greenhouseContext}
         pendingDeviceId={pendingDevice?.device.id ?? null}
@@ -310,7 +314,7 @@ export function GreenhouseApp() {
         onRequest={(device) => setPendingDevice({ device, nextActive: !device.active })}
       />
     ) : activePage === "analytics" ? (
-      <AnalyticsView period={period} onPeriodChange={setPeriod} context={greenhouseContext} />
+      <AnalyticsView key={activeGreenhouse?.id ?? "no-greenhouse"} period={period} onPeriodChange={setPeriod} context={greenhouseContext} />
     ) : activePage === "alerts" ? (
       <AlertsView alerts={greenhouseState.alerts} onOpen={setSelectedAlert} />
     ) : (
@@ -353,7 +357,7 @@ export function GreenhouseApp() {
             ),
           }));
           if (id === activeGreenhouseId) setActiveGreenhouseId(state.greenhouses.find((greenhouse) => greenhouse.id !== id && greenhouse.status === "active")?.id ?? "");
-          notify("เก็บโรงเรือนถาวรแล้ว", "info");
+          notify("เก็บโรงเรือนเข้าคลังแล้ว", "info");
         }}
         onRestoreGreenhouse={(id) => {
           setState((current) => ({
@@ -397,7 +401,7 @@ export function GreenhouseApp() {
           try {
             const nextState = deleteZone(state, { greenhouseId, zoneId });
             setState(nextState);
-            notify("เก็บโซนถาวรแล้ว", "info");
+            notify("เก็บโซนเข้าคลังแล้ว", "info");
           } catch (error) {
             notify(
               error instanceof Error ? error.message : "ไม่สามารถเก็บโซนได้",
@@ -420,6 +424,18 @@ export function GreenhouseApp() {
             ),
           }));
           notify("เรียกคืนโซนแล้ว");
+        }}
+        onPermanentlyDeleteGreenhouse={(id) => {
+          const nextState = permanentlyDeleteGreenhouse(state, { greenhouseId: id });
+          setState(nextState);
+          if (id === activeGreenhouseId) {
+            changeGreenhouse(nextState.greenhouses.find((greenhouse) => greenhouse.status === "active")?.id ?? "");
+          }
+          notify("ลบโรงเรือนถาวรแล้ว", "info");
+        }}
+        onPermanentlyDeleteZone={(greenhouseId, zoneId) => {
+          setState(permanentlyDeleteZone(state, { greenhouseId, zoneId }));
+          notify("ลบโซนถาวรแล้ว", "info");
         }}
         onSaveBatch={(id, draft) => {
           setState((current) => {

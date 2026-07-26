@@ -4,6 +4,8 @@ import {
   createResource,
   deleteZone,
   deleteResource,
+  permanentlyDeleteGreenhouse,
+  permanentlyDeleteZone,
   selectDevicePresentation,
   selectGreenhouseContext,
   selectResourcesForGreenhouse,
@@ -136,5 +138,69 @@ test("archives an inactive batch zone without changing other greenhouse zones", 
 
   assert.equal(next.greenhouses.find((greenhouse) => greenhouse.id === "GH-01")?.zones[0]?.status, "archived");
   assert.equal(next.greenhouses.find((greenhouse) => greenhouse.id === "GH-02")?.zones[0]?.status, "active");
+  assert.deepEqual(state, before);
+});
+
+test("permanently deletes an empty zone without changing its greenhouse or other zones", () => {
+  const state = structuredClone(demoInitialState);
+  state.greenhouses[0]!.zones.push({ id: "ZONE-EMPTY", name: "โซนว่าง", status: "archived" });
+  const before = structuredClone(state);
+
+  const next = permanentlyDeleteZone(state, { greenhouseId: "GH-01", zoneId: "ZONE-EMPTY" });
+
+  assert.equal(next.greenhouses[0]!.zones.some((zone) => zone.id === "ZONE-EMPTY"), false);
+  assert.equal(next.greenhouses[0]!.zones.length, before.greenhouses[0]!.zones.length - 1);
+  assert.deepEqual(state, before);
+});
+
+test("refuses to permanently delete a zone with archived history without mutating state", () => {
+  const state = structuredClone(demoInitialState);
+  state.greenhouses[0]!.zones.push({ id: "ZONE-HISTORY", name: "โซนประวัติ", status: "archived" });
+  state.cropBatches.push({
+    id: "BATCH-HISTORY",
+    greenhouseId: "GH-01",
+    zoneId: "ZONE-HISTORY",
+    cropName: "ผักสลัด",
+    cultivar: "Green",
+    plantCount: 1,
+    plantedAt: "2026-01-01",
+    status: "archived",
+  });
+  const before = structuredClone(state);
+
+  assert.throws(
+    () => permanentlyDeleteZone(state, { greenhouseId: "GH-01", zoneId: "ZONE-HISTORY" }),
+    { message: /รอบปลูก 1 รายการ/ },
+  );
+  assert.deepEqual(state, before);
+});
+
+test("permanently deletes an empty greenhouse without changing another greenhouse", () => {
+  const state = structuredClone(demoInitialState);
+  state.greenhouses.push({ id: "GH-EMPTY", name: "โรงเรือนว่าง", code: "EMPTY", status: "archived", zones: [] });
+  const before = structuredClone(state);
+
+  const next = permanentlyDeleteGreenhouse(state, { greenhouseId: "GH-EMPTY" });
+
+  assert.equal(next.greenhouses.some((greenhouse) => greenhouse.id === "GH-EMPTY"), false);
+  assert.equal(next.greenhouses.some((greenhouse) => greenhouse.id === "GH-01"), true);
+  assert.deepEqual(state, before);
+});
+
+test("refuses to permanently delete a greenhouse with archived zone history without mutating state", () => {
+  const state = structuredClone(demoInitialState);
+  state.greenhouses.push({
+    id: "GH-HISTORY",
+    name: "โรงเรือนประวัติ",
+    code: "HISTORY",
+    status: "archived",
+    zones: [{ id: "ZONE-HISTORY", name: "โซนประวัติ", status: "archived" }],
+  });
+  const before = structuredClone(state);
+
+  assert.throws(
+    () => permanentlyDeleteGreenhouse(state, { greenhouseId: "GH-HISTORY" }),
+    { message: /โซน 1 โซน/ },
+  );
   assert.deepEqual(state, before);
 });

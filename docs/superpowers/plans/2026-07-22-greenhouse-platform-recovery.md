@@ -390,6 +390,88 @@ git add lib/greenhouse-presentation.ts components/greenhouse/views tests/greenho
 git commit -m "feat: show truthful greenhouse setup states"
 ```
 
+## Subproject D: explicit permanent deletion
+
+### Task 7: Let users permanently delete empty greenhouses and zones
+
+**Feature card**
+
+- **User outcome:** Settings provides a distinct “ลบถาวร” action for a
+  greenhouse or zone instead of forcing users to keep unwanted records in the
+  archive forever.
+- **Acceptance criteria:**
+  1. A zone with no crop batch, plant, device, camera, or sensor can be deleted
+     after a confirmation dialog names that zone.
+  2. A greenhouse with no zones, crop batches, plants, devices, cameras,
+     sensors, or alerts can be deleted after a confirmation dialog names that
+     greenhouse.
+  3. Deletion with any dependency is refused without mutating state. UI lists
+     what must be removed or archived first; no silent cascade is allowed.
+  4. Archive/restore remains available for historical records and is visually
+     distinct from permanent deletion.
+  5. Deleting the selected greenhouse clears stale plant, alert, device-command,
+     search, and zone-filter state, then selects another active greenhouse only
+     as part of the confirmed delete transition. No operational data leaks while
+     selection is invalid.
+  6. Domain, source-contract, unit, lint, build, and whitespace checks pass.
+- **In scope:** pure domain deletion guards, Settings confirmation UI, client
+  orchestration, selection cleanup, and regression tests.
+- **Out of scope:** cascade deletion, undelete/recycle bin, server/database
+  deletion, physical device commands, and deployment changes.
+- **Assumptions and risks:** permanent deletion is irreversible; dependency
+  checks include archived/history records because those records still reference
+  the parent. Copy must explain why blocked deletion is safe.
+- **Owners and order:** Frontend/domain owner writes failing mutation tests and
+  publishes deletion result/error contract → Frontend wires shadcn confirmation
+  controls → QA validates happy, blocked, keyboard, responsive, and regression
+  paths.
+
+**Files:**
+
+- Modify: `lib/greenhouse-domain.ts`
+- Modify: `components/greenhouse/settings/farm-structure-section.tsx`
+- Modify: `components/greenhouse/views/settings-view.tsx`
+- Modify: `components/greenhouse/greenhouse-app.tsx`
+- Modify: `tests/greenhouse-domain.test.ts`
+- Modify: `tests/greenhouse-ui-source-contract.test.mjs`
+
+**Interfaces:**
+
+- Produces `permanentlyDeleteZone(state, { greenhouseId, zoneId })`.
+- Produces `permanentlyDeleteGreenhouse(state, { greenhouseId })`.
+- Both functions return a new `DemoState` on success and throw a Thai error
+  describing dependencies on refusal.
+
+- [ ] **Step 1: Write failing safe-deletion tests**
+
+Cover empty-zone success, dependent-zone refusal, empty-greenhouse success,
+dependent-greenhouse refusal, immutability on refusal, and selected-reference
+cleanup contract.
+
+- [ ] **Step 2: Implement minimal pure deletion guards**
+
+Inspect every collection that binds `greenhouseId` or `zoneId`. Never cascade.
+Delete exactly one matching parent on success.
+
+- [ ] **Step 3: Add deliberate confirmation UI**
+
+Use existing shadcn dialog controls. Keep archive and restore actions. Label
+permanent deletion explicitly and show dependency error with `role="alert"`.
+
+- [ ] **Step 4: Verify**
+
+Run: `node --experimental-strip-types --test tests/greenhouse-domain.test.ts && node --test tests/greenhouse-ui-source-contract.test.mjs && npm run test:unit && npm run lint && npm run build && git diff --check`
+
+Expected: all checks pass; lint may retain documented pre-existing warnings but
+must have zero errors.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md lib/greenhouse-domain.ts components/greenhouse/settings/farm-structure-section.tsx components/greenhouse/views/settings-view.tsx components/greenhouse/greenhouse-app.tsx tests/greenhouse-domain.test.ts tests/greenhouse-ui-source-contract.test.mjs
+git commit -m "feat: permanently delete empty farm structures"
+```
+
 ## Execution handoff
 
 Plan complete and saved to `docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md`.

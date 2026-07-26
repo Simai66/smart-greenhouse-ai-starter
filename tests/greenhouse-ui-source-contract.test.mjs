@@ -110,6 +110,29 @@ test("keeps zone edits and device status language truthful", async () => {
   assert.match(app, /health: "ยังไม่มีข้อมูล"/);
 });
 
+test("keeps permanent deletion confirmation and selected-greenhouse cleanup deliberate", async () => {
+  const [farm, settings, app] = await Promise.all([
+    readFile(new URL("../components/greenhouse/settings/farm-structure-section.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/settings-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(farm, /ลบถาวร/);
+  assert.match(farm, /role="alert"/);
+  assert.match(farm, /onPermanentlyDeleteGreenhouse/);
+  assert.match(farm, /onPermanentlyDeleteZone/);
+  assert.match(settings, /onPermanentlyDeleteGreenhouse/);
+  assert.match(settings, /onPermanentlyDeleteZone/);
+  assert.doesNotMatch(settings, /activeGreenhouseId\) \?\? greenhouses\[0\]/);
+  assert.match(app, /permanentlyDeleteGreenhouse/);
+  assert.match(app, /permanentlyDeleteZone/);
+  assert.match(app, /setPendingDevice\(null\)/);
+  assert.match(app, /setSearch\(""\)/);
+  assert.match(app, /setSelectedPlantId\(""\)/);
+  assert.match(app, /setSelectedAlert\(null\)/);
+  assert.doesNotMatch(app, /\?\? state\.greenhouses\.find\(\(greenhouse\) => greenhouse\.status === "active"\)/);
+});
+
 test("keeps truthful configured status and decisions ahead of dashboard detail", async () => {
   const [source, app, ai] = await Promise.all([
     readFile(new URL("../components/greenhouse/views/command-deck-view.tsx", import.meta.url), "utf8"),
