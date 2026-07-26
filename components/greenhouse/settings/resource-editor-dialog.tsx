@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,7 +22,6 @@ export type ResourceEditorValue = {
 };
 
 type ResourceEditorDialogProps = {
-  open: boolean;
   mode: "create" | "edit";
   zones: ResourceZone[];
   initialValue: ResourceEditorValue;
@@ -36,17 +35,10 @@ const kindLabels: Record<ResourceKind, string> = {
   sensor: "เซ็นเซอร์",
 };
 
-export function ResourceEditorDialog({ open, mode, zones, initialValue, onOpenChange, onSubmit }: ResourceEditorDialogProps) {
+export function ResourceEditorDialog({ mode, zones, initialValue, onOpenChange, onSubmit }: ResourceEditorDialogProps) {
   const [draft, setDraft] = useState(initialValue);
   const [error, setError] = useState("");
   const canBind = zones.length > 0;
-
-  useEffect(() => {
-    if (open) {
-      setDraft(initialValue);
-      setError("");
-    }
-  }, [initialValue, open]);
 
   const submit = () => {
     const name = draft.name.trim();
@@ -59,7 +51,7 @@ export function ResourceEditorDialog({ open, mode, zones, initialValue, onOpenCh
   };
 
   const online = draft.status === "online" || draft.status === "enabled";
-  return <Dialog open={open} onOpenChange={onOpenChange}>
+  return <Dialog open onOpenChange={onOpenChange}>
     <DialogContent>
       <DialogHeader>
         <DialogTitle>{mode === "create" ? "เพิ่มทรัพยากร" : "แก้ไขทรัพยากร"}</DialogTitle>

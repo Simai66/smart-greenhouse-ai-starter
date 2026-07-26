@@ -77,6 +77,9 @@ test("keeps reusable resource editing and deliberate deletion in settings", asyn
   assert.match(editor, /ยังไม่มีโซนที่ใช้งานอยู่ กรุณาเพิ่มโซนก่อนผูกทรัพยากร/);
   assert.match(editor, /disabled=\{!canBind\}/);
   assert.doesNotMatch(settings, /pendingCreate|knownIds/);
+  assert.match(settings, /onRenameZone/);
+  assert.match(editor, /<Dialog open onOpenChange/);
+  assert.doesNotMatch(editor, /useEffect/);
   assert.match(app, /onCreateResource=\{\(value\) => \{/);
   assert.match(app, /return createResource\(current,/);
   assert.match(app, /onUpdateResourceStatus=\{\(kind, id, \{ enabled, status \}\) => \{/);
@@ -86,6 +89,25 @@ test("keeps reusable resource editing and deliberate deletion in settings", asyn
   assert.match(app, /item\.id !== id \|\| item\.greenhouseId !== activeGreenhouse\.id/);
   assert.match(app, /active: enabled/);
   assert.match(app, /enabled, status: status === "online" \? "online" : "offline"/);
+});
+
+test("keeps zone edits and device status language truthful", async () => {
+  const [farm, analytics, devices, app] = await Promise.all([
+    readFile(new URL("../components/greenhouse/settings/farm-structure-section.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/analytics-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/views/devices-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/greenhouse/greenhouse-app.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(farm, /แก้ไขโซน/);
+  assert.match(farm, /onRenameZone/);
+  assert.match(analytics, /การตั้งค่าอุปกรณ์/);
+  assert.match(analytics, /ไม่ใช่สถานะการทำงานจริง/);
+  assert.doesNotMatch(analytics, />ทำงาน<|>หยุด</);
+  assert.match(devices, /const selectedZone = zoneOptions\.some/);
+  assert.match(app, /useState\(""\)/);
+  assert.match(app, /greenhouse\.id !== id && greenhouse\.status === "active"/);
+  assert.match(app, /moisture: null/);
+  assert.match(app, /health: "ยังไม่มีข้อมูล"/);
 });
 
 test("keeps truthful configured status and decisions ahead of dashboard detail", async () => {

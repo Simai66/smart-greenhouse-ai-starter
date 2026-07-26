@@ -156,6 +156,15 @@ test("preserves an intentionally empty device collection", async () => {
   assert.deepEqual(result.state.devices, []);
 });
 
+test("preserves a valid greenhouse with no zones", async () => {
+  const legacy = structuredClone(demoInitialState);
+  legacy.greenhouses.push({ id: "GH-EMPTY", name: "โรงเรือนว่าง", code: "EMPTY-01", status: "active", zones: [] });
+  globalThis.window = { localStorage: { getItem: () => JSON.stringify(legacy), setItem: () => {} } } as never;
+
+  const result = await greenhouseDemoStore.load();
+  assert.deepEqual(result.state.greenhouses.find((greenhouse) => greenhouse.id === "GH-EMPTY"), legacy.greenhouses.at(-1));
+});
+
 test("preserves a custom camera display label when its saved binding is valid", async () => {
   const legacy = structuredClone(demoInitialState);
   legacy.settings.cameras[0]!.zone = "แปลงมะเขือเทศฝั่งเหนือ";
@@ -229,6 +238,16 @@ test("escapes saved resource details in CSV output", () => {
   state.devices[0]!.detail = 'ตั้งค่า "กำหนดเอง"';
   const csv = createDemoCsv(state, [], "2026-07-18 07:42");
   assert.match(csv, /"ตั้งค่า ""กำหนดเอง"""/);
+});
+
+test("neutralizes spreadsheet formulas in CSV cells", () => {
+  const state = structuredClone(demoInitialState);
+  state.devices[0]!.name = " =SUM(1,1)";
+  state.alerts[0]!.detail = "@cmd";
+  const csv = createDemoCsv(state, [["+1+1", "28.5", "°C"]], "2026-07-18 07:42");
+  assert.match(csv, /"' =SUM\(1,1\)"/);
+  assert.match(csv, /"'@cmd"/);
+  assert.match(csv, /"'\+1\+1"/);
 });
 
 test("keeps device state unchanged until acknowledgement arrives", async () => {

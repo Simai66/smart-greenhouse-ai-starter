@@ -56,13 +56,13 @@ function PlantDetail({
             {plant.id} · {plant.zone} · อายุ {plant.age}
           </p>
         </div>
-        <Badge variant={plant.health === "ปกติ" ? "secondary" : "destructive"}>
+        <Badge variant={plant.health === "ปกติ" ? "secondary" : plant.health === "ควรตรวจสอบ" ? "destructive" : "outline"}>
           {plant.health}
         </Badge>
       </div>
       <dl className="grid grid-cols-2 gap-3 border-y border-border/70 py-4 text-sm">
-        <div><dt className="text-muted-foreground">ความชื้นดิน</dt><dd className="font-medium tabular-nums">{plant.moisture}%</dd></div>
-        <div><dt className="text-muted-foreground">AI confidence</dt><dd className="font-medium tabular-nums">{plant.confidence}%</dd></div>
+        <div><dt className="text-muted-foreground">ความชื้นดิน</dt><dd className="font-medium tabular-nums">{plant.moisture === null ? "ยังไม่มีข้อมูล" : `${plant.moisture}%`}</dd></div>
+        <div><dt className="text-muted-foreground">AI confidence</dt><dd className="font-medium tabular-nums">{plant.confidence === null ? "ยังไม่มีข้อมูล" : `${plant.confidence}%`}</dd></div>
       </dl>
       <Button className="w-full" onClick={onInspect}>
         เปิดหลักฐาน AI <ArrowRight aria-hidden="true" />
@@ -123,7 +123,7 @@ export function PlantsView({
           const batchPlants = plants.filter((plant) => plant.batchId === batch.id);
           const firstPlant = batchPlants[0];
           const zone = firstPlant?.zone ?? "โซนที่เลือก";
-          return <button key={batch.id} type="button" className="flex w-full items-center justify-between gap-4 rounded-xl border border-border/70 p-4 text-left transition-colors hover:border-primary/30 hover:bg-muted/40" onClick={() => firstPlant && selectPlant(firstPlant.id)}><span><strong className="block">{zone} · {batch.cropName}</strong><span className="mt-1 block text-sm text-muted-foreground">{batch.cultivar ? `${batch.cultivar} · ` : ""}{batch.plantCount} ต้น · กดเพื่อดูรายต้น</span></span><Badge variant="secondary" className="text-primary">{batchPlants.filter((plant) => plant.health === "ปกติ").length}/{batch.plantCount} ปกติ</Badge></button>;
+          return <button key={batch.id} type="button" className="flex w-full items-center justify-between gap-4 rounded-xl border border-border/70 p-4 text-left transition-colors hover:border-primary/30 hover:bg-muted/40" onClick={() => firstPlant && selectPlant(firstPlant.id)}><span><strong className="block">{zone} · {batch.cropName}</strong><span className="mt-1 block text-sm text-muted-foreground">{batch.cultivar ? `${batch.cultivar} · ` : ""}{batch.plantCount} ต้น · กดเพื่อดูรายต้น</span></span><Badge variant="outline">{batchPlants.filter((plant) => plant.confidence !== null).length}/{batch.plantCount} มีผลตรวจ</Badge></button>;
         })}{!cropBatches.filter((batch) => batch.status === "active").length ? <p className="py-8 text-center text-sm text-muted-foreground">ยังไม่มีรอบปลูกในโรงเรือนนี้</p> : null}</CardContent> : <CardContent className="overflow-x-auto p-0">
           <Table>
             <TableHeader><TableRow><TableHead>ต้นพืช</TableHead><TableHead>โซน</TableHead><TableHead>ความชื้น</TableHead><TableHead>ผลล่าสุด</TableHead></TableRow></TableHeader>
@@ -135,7 +135,7 @@ export function PlantsView({
                 >
                   <TableCell><Button variant="ghost" className="h-auto min-h-11 justify-start px-2 text-left" aria-current={selected?.id === plant.id ? "true" : undefined} onClick={() => selectPlant(plant.id)}><span><strong className="block">{plant.name}</strong><span className="block text-xs text-muted-foreground">{plant.id}</span></span></Button></TableCell>
                   <TableCell>{plant.zone}</TableCell>
-                  <TableCell className="tabular-nums">{plant.moisture}%</TableCell>
+                  <TableCell className="tabular-nums">{plant.moisture === null ? "—" : `${plant.moisture}%`}</TableCell>
                   <TableCell>{plant.health}</TableCell>
                 </TableRow>
               ))}

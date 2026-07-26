@@ -58,14 +58,6 @@ export function DevicesView({
   const [zone, setZone] = useState("all");
   const [kind, setKind] = useState<DeviceKind>("all");
   const [status, setStatus] = useState<FilterStatus>("all");
-  const visibleDevices = useMemo(
-    () => devices.filter((device) => {
-      return (zone === "all" || device.zoneId === zone) &&
-        (kind === "all" || device.icon === kind) &&
-        (status === "all" || (status === "running" ? device.active : !device.active));
-    }),
-    [context, devices, kind, status, zone],
-  );
   const zoneOptions = useMemo(() => {
     const names = new Map<string, string>();
     context.greenhouse?.zones.forEach((item) => names.set(item.id, item.name));
@@ -74,6 +66,15 @@ export function DevicesView({
     });
     return [...names.entries()].map(([id, name]) => ({ id, name }));
   }, [context.greenhouse?.zones, devices]);
+  const selectedZone = zoneOptions.some((item) => item.id === zone) ? zone : "all";
+  const visibleDevices = useMemo(
+    () => devices.filter((device) => {
+      return (selectedZone === "all" || device.zoneId === selectedZone) &&
+        (kind === "all" || device.icon === kind) &&
+        (status === "all" || (status === "running" ? device.active : !device.active));
+    }),
+    [devices, kind, selectedZone, status],
+  );
   const activeDevices = devices.filter((device) => device.active).length;
   const configuredZones = new Set(devices.map((device) => device.zoneId).filter(Boolean)).size;
 
@@ -108,7 +109,7 @@ export function DevicesView({
         <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2"><Gauge className="size-4 text-primary" aria-hidden="true" /><span className="text-sm font-medium">กรองอุปกรณ์</span></div>
           <div className="grid gap-2 sm:grid-cols-3">
-            <Select value={zone} onValueChange={setZone}>
+            <Select value={selectedZone} onValueChange={setZone}>
               <SelectTrigger aria-label="กรองตามโซน"><SelectValue placeholder="ทุกโซน" /></SelectTrigger>
               <SelectContent><SelectItem value="all">ทุกโซน</SelectItem>{zoneOptions.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
             </Select>

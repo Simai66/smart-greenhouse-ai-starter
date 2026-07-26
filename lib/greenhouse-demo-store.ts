@@ -1,7 +1,7 @@
 import type { DeviceCommandAction, DeviceCommandResult } from "@/types/greenhouse";
 
 export type DemoDevice = { id: string; name: string; detail: string; icon: "pump" | "fan" | "light" | "mist"; active: boolean; greenhouseId?: string; zoneId?: string };
-export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number; health: "ปกติ" | "ควรตรวจสอบ"; confidence: number; greenhouseId?: string; batchId?: string };
+export type DemoPlant = { id: string; name: string; zone: string; age: string; moisture: number | null; health: "ปกติ" | "ควรตรวจสอบ" | "ยังไม่มีข้อมูล"; confidence: number | null; greenhouseId?: string; batchId?: string };
 export type DemoAlert = { id: string; type: "critical" | "warning" | "info"; title: string; detail: string; time: string; resolved: boolean; greenhouseId?: string };
 export type DemoCamera = {
   id: string;
@@ -126,9 +126,9 @@ function isState(value: unknown): value is DemoState {
     typeof item.name === "string" &&
     typeof item.zone === "string" &&
     typeof item.age === "string" &&
-    typeof item.moisture === "number" &&
-    ["ปกติ", "ควรตรวจสอบ"].includes(String(item.health)) &&
-    typeof item.confidence === "number";
+    (typeof item.moisture === "number" || item.moisture === null) &&
+    ["ปกติ", "ควรตรวจสอบ", "ยังไม่มีข้อมูล"].includes(String(item.health)) &&
+    (typeof item.confidence === "number" || item.confidence === null);
   const validAlert = (item: unknown) =>
     isRecord(item) &&
     typeof item.id === "string" &&
@@ -189,7 +189,6 @@ function upgradeState(state: DemoState): DemoState {
       typeof greenhouse.code === "string" &&
       ["active", "archived"].includes(String(greenhouse.status)) &&
       Array.isArray(greenhouse.zones) &&
-      greenhouse.zones.length > 0 &&
       greenhouse.zones.every((zone) =>
         isRecord(zone) &&
         typeof zone.id === "string" &&

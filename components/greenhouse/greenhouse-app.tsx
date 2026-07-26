@@ -47,7 +47,7 @@ export function GreenhouseApp() {
   const [ready, setReady] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [activePage, setActivePage] = useState<GreenhousePageId>("dashboard");
-  const [activeGreenhouseId, setActiveGreenhouseId] = useState("GH-01");
+  const [activeGreenhouseId, setActiveGreenhouseId] = useState("");
   const [period, setPeriod] = useState<ChartPeriod>("วันนี้");
   const [search, setSearch] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
@@ -86,6 +86,7 @@ export function GreenhouseApp() {
     void greenhouseDemoStore.load().then((result) => {
       if (!active) return;
       setState(result.state);
+      setActiveGreenhouseId((current) => current || result.state.greenhouses.find((greenhouse) => greenhouse.status === "active")?.id || "");
       setStorageAvailable(result.storageAvailable);
       setDataStale(!navigator.onLine);
       if (staleTimer.current) window.clearTimeout(staleTimer.current);
@@ -351,6 +352,7 @@ export function GreenhouseApp() {
               greenhouse.id === id ? { ...greenhouse, status: "archived" } : greenhouse,
             ),
           }));
+          if (id === activeGreenhouseId) setActiveGreenhouseId(state.greenhouses.find((greenhouse) => greenhouse.id !== id && greenhouse.status === "active")?.id ?? "");
           notify("เก็บโรงเรือนถาวรแล้ว", "info");
         }}
         onRestoreGreenhouse={(id) => {
@@ -379,6 +381,17 @@ export function GreenhouseApp() {
             ),
           }));
           notify(`เพิ่ม ${name} แล้ว`);
+        }}
+        onRenameZone={(greenhouseId, zoneId, name) => {
+          setState((current) => ({
+            ...current,
+            greenhouses: current.greenhouses.map((greenhouse) => greenhouse.id === greenhouseId
+              ? { ...greenhouse, zones: greenhouse.zones.map((zone) => zone.id === zoneId ? { ...zone, name } : zone) }
+              : greenhouse),
+            settings: { ...current.settings, cameras: current.settings.cameras.map((camera) => camera.greenhouseId === greenhouseId && camera.zoneId === zoneId ? { ...camera, zone: name } : camera) },
+            plants: current.plants.map((plant) => current.cropBatches.some((batch) => batch.id === plant.batchId && batch.greenhouseId === greenhouseId && batch.zoneId === zoneId) ? { ...plant, zone: name } : plant),
+          }));
+          notify(`เปลี่ยนชื่อโซนเป็น ${name} แล้ว`);
         }}
         onArchiveZone={(greenhouseId, zoneId) => {
           try {
@@ -418,9 +431,9 @@ export function GreenhouseApp() {
               name: `${draft.cropName} ${String(from + index + 1).padStart(2, "0")}`,
               zone: zoneName,
               age: "เริ่มปลูก",
-              moisture: 50,
-              health: "ปกติ" as const,
-              confidence: 0,
+              moisture: null,
+              health: "ยังไม่มีข้อมูล" as const,
+              confidence: null,
               greenhouseId: draft.greenhouseId,
               batchId,
             }));

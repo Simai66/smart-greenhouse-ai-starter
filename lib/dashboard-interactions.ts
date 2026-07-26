@@ -125,6 +125,10 @@ export function createDemoCsv(
   sensorRows: ReadonlyArray<readonly [string, string, string]>,
   createdAt: string,
 ): string {
+  const escapeCsvCell = (value: unknown) => {
+    const cell = String(value);
+    return /^\s*[=+\-@]/.test(cell) ? `'${cell}` : cell;
+  };
   const zoneNames = new Map(
     state.greenhouses.flatMap((greenhouse) =>
       greenhouse.zones.map((zone) => [zone.id, zone.name] as const),
@@ -163,7 +167,7 @@ export function createDemoCsv(
 
   return rows
     .map((row) =>
-      row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","),
+      row.map((cell) => `"${escapeCsvCell(cell).replaceAll('"', '""')}"`).join(","),
     )
     .join("\n");
 }
