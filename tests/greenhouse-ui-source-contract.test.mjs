@@ -129,6 +129,8 @@ test("keeps permanent deletion confirmation and selected-greenhouse cleanup deli
   assert.match(settings, /batch\.status !== "active"/);
   assert.match(settings, /ยืนยันการลบรอบปลูกถาวร/);
   assert.match(settings, /ข้อมูลพืช \$\{deletedPlantCount\} ต้น/);
+  assert.match(settings, /zoneName\(deleting\)/);
+  assert.match(settings, /deleting\.plantedAt/);
   assert.doesNotMatch(settings, /activeGreenhouseId\) \?\? greenhouses\[0\]/);
   assert.match(app, /permanentlyDeleteCropBatch/);
   assert.match(app, /plants=\{state\.plants\}/);

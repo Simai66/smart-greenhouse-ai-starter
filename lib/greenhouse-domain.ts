@@ -295,6 +295,10 @@ export function permanentlyDeleteCropBatch(state: DemoState, input: PermanentlyD
   const deletedPlantIds = new Set(state.plants
     .filter((plant) => plant.greenhouseId === input.greenhouseId && plant.batchId === batch.id)
     .map((plant) => plant.id));
+  if (state.plants.some((plant) =>
+    deletedPlantIds.has(plant.id) &&
+    (plant.greenhouseId !== input.greenhouseId || plant.batchId !== batch.id)
+  )) throw new Error("พบรหัสพืชซ้ำกับข้อมูลนอกรอบปลูก จึงไม่สามารถลบถาวรได้");
   const aiReviewedEvidence = state.aiReviewedEvidence && Object.fromEntries(
     Object.entries(state.aiReviewedEvidence).filter(([plantId]) => !deletedPlantIds.has(plantId)),
   );
