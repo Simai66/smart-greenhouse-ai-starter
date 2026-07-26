@@ -285,7 +285,8 @@ function upgradeState(state: DemoState): DemoState {
     greenhouses,
     cropBatches,
     sensors: hasGreenhouses ? (validSensors(state.sensors) ? state.sensors : defaultState.sensors).map(normalizeSensor) : [],
-    aiReviewedEvidence: state.aiReviewedEvidence ?? {},
+    aiReviewedPlantId: hasGreenhouses ? state.aiReviewedPlantId : undefined,
+    aiReviewedEvidence: hasGreenhouses ? (state.aiReviewedEvidence ?? {}) : {},
     settings: {
       ...defaults,
       ...saved,

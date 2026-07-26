@@ -183,6 +183,8 @@ test("preserves a valid greenhouse with no zones", async () => {
 test("preserves an intentionally empty greenhouse collection without resurrecting default resources", async () => {
   const saved = structuredClone(demoInitialState);
   saved.greenhouses = [];
+  saved.aiReviewedPlantId = "TOM-003";
+  saved.aiReviewedEvidence = { "TOM-003": ["CAM-B-01"] };
   globalThis.window = { localStorage: { getItem: () => JSON.stringify(saved), setItem: () => {} } } as never;
 
   const result = await greenhouseDemoStore.load();
@@ -195,6 +197,8 @@ test("preserves an intentionally empty greenhouse collection without resurrectin
   assert.deepEqual(result.state.alerts, []);
   assert.deepEqual(result.state.sensors, []);
   assert.deepEqual(result.state.settings.cameras, []);
+  assert.equal(result.state.aiReviewedPlantId, undefined);
+  assert.deepEqual(result.state.aiReviewedEvidence, {});
 });
 
 test("preserves a custom camera display label when its saved binding is valid", async () => {
