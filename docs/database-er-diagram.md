@@ -13,6 +13,7 @@
 erDiagram
     GREENHOUSES ||--o{ EDGE_AGENTS : "มี"
     GREENHOUSES ||--o{ DEVICES : "มี"
+    GREENHOUSES ||--o{ SENSOR_CONFIGS : "ตั้งค่า"
     GREENHOUSES ||--o{ SENSOR_READINGS : "บันทึก"
     GREENHOUSES ||--o{ DEVICE_COMMANDS : "ออกคำสั่ง"
     GREENHOUSES ||--o{ DEVICE_POLICIES : "กำหนดนโยบาย"
@@ -21,6 +22,7 @@ erDiagram
 
     EDGE_AGENTS o|--o{ DEVICES : "ควบคุม"
     DEVICES ||--o{ SENSOR_READINGS : "ส่งค่าจากเซ็นเซอร์"
+    DEVICES ||--o| SENSOR_CONFIGS : "เป็นเซ็นเซอร์"
     DEVICES ||--o{ DEVICE_COMMANDS : "รับคำสั่ง"
     DEVICES ||--o| DEVICE_POLICIES : "มีนโยบายปัจจุบัน"
     DEVICES ||--o{ DEVICE_POLICY_REVISIONS : "มีประวัตินโยบาย"
@@ -56,6 +58,7 @@ erDiagram
 
     SENSOR_READINGS {
         string id PK
+        string reading_id UK "nullable; retry dedupe"
         string greenhouse_id FK
         string sensor_id FK
         string metric
@@ -64,6 +67,26 @@ erDiagram
         string sampled_at
         string received_at
         string quality
+        int config_version "nullable"
+    }
+
+    SENSOR_CONFIGS {
+        string sensor_id PK, FK
+        string greenhouse_id FK
+        string name
+        string metric
+        string unit
+        int sampling_interval_seconds
+        string calibration_scale
+        string calibration_offset
+        int enabled
+        string min_threshold "nullable"
+        string max_threshold "nullable"
+        int config_version
+        string created_by
+        string updated_by
+        string created_at
+        string updated_at
     }
 
     DEVICE_COMMANDS {
@@ -141,6 +164,8 @@ erDiagram
 - อุปกรณ์หนึ่งตัวมีนโยบายปัจจุบันได้สูงสุดหนึ่งรายการ และมี revision history ได้หลายรายการ
 - คำสั่งอุปกรณ์หนึ่งรายการมี event log ได้หลายรายการ
 - `sensor_readings.sensor_id` อ้างถึงอุปกรณ์ประเภทเซ็นเซอร์ใน `devices.id`
+- `sensor_configs` เป็น source of truth สำหรับ metric, calibration, sampling, enable state และ threshold ของ sensor channel
+- `sensor_readings.reading_id` เป็น stable idempotency key สำหรับ retry จาก edge agent
 
 ## ข้อสังเกตจาก schema ปัจจุบัน
 

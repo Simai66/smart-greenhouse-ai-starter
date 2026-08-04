@@ -101,10 +101,67 @@ state change.
 
 `GET /api/agent/config?greenhouseId=GH-01&agentId=PI-GH-01`
 
-Returns policy documents and their versions for the agent's devices. A policy
+Returns policy documents and their versions for the agent's devices plus a
+`sensors` array containing the latest sensor config, calibration, thresholds,
+and `configVersion` for channels assigned to the agent. A policy
 has `mode` (`manual`/`auto`), `manualAllowed`, optional `schedule`, optional
 `threshold`, `maxRuntimeSeconds`, and `cooldownSeconds`; fields are validated
 against the device capability before persistence.
 
 `PUT /api/devices/:deviceId/policy` (admin) creates the next immutable policy
 revision. Request body: `{ "greenhouseId": "GH-01", "policy": { ... } }`.
+
+## Sensor configuration
+
+`GET /api/sensors?greenhouseId=GH-01` is available to viewers. It returns
+registered sensor channels, latest reading, freshness, status, calibration,
+thresholds, and config version. `POST /api/sensors` and
+`PUT /api/sensors/:sensorId/config` require admin role.
+
+```json
+{
+  "greenhouseId": "GH-01",
+  "sensorId": "SEN-ESP32-01-TEMP",
+  "name": "อุณหภูมิแปลง A",
+  "metric": "temperature",
+  "unit": "celsius",
+  "samplingIntervalSeconds": 30,
+  "calibration": { "scale": 1, "offset": 0 },
+  "enabled": true,
+  "thresholds": { "min": 18, "max": 35 },
+  "agentId": "PI-GH-01"
+}
+```
+
+Supported metric/unit pairs are `temperature/celsius`, `humidity/percent`,
+`soil_moisture/percent`, and `light/lux`. Thresholds create or resolve a
+warning alert when valid telemetry crosses the configured range. Threshold
+evaluation never queues a device command.
+
+## LAN ESP32 endpoints
+
+The Pi listens on `POST /v1/telemetry` and `GET /v1/config` over the greenhouse
+LAN. ESP32 requests send `X-Greenhouse-Node` and `X-Greenhouse-Token`; tokens
+are per-node and are unrelated to the cloud HMAC secret. The Pi rejects node
+IDs or sensor IDs outside its local allow-list, persists accepted readings in
+SQLite, and queues cloud delivery before returning.
+
+```json
+{
+  "nodeId": "ESP32-01",
+  "readings": [{
+    "readingId": "ESP32-01-SEN-ESP32-01-TEMP-42",
+    "sensorId": "SEN-ESP32-01-TEMP",
+    "metric": "temperature",
+    "value": 28.5,
+    "unit": "celsius",
+    "sampledAt": "2026-08-04T03:00:00.000Z",
+    "quality": "valid",
+    "configVersion": 3
+  }]
+}
+```
+
+The Pi includes `readingId` and `configVersion` in its signed cloud payload.
+Old cloud agents may omit `readingId`; the Worker derives a deterministic ID
+from agent, sensor, metric, unit, timestamp, and value to make retries safe.
