@@ -3,6 +3,7 @@ import type {
   DemoPlant,
   DemoState,
 } from "./greenhouse-demo-store.ts";
+import type { LiveSensor } from "./sensor-api";
 
 export type GreenhousePageId =
   | "dashboard"
@@ -116,11 +117,14 @@ export const pageMetadata: Record<GreenhousePageId, PageMetadata> = {
 
 export function buildDashboardViewModel(
   state: DemoState,
+  liveSensors: LiveSensor[] = [],
 ): DashboardViewModel {
   const recordedPlants = state.plants.filter((plant) => plant.confidence !== null);
   const hasPlantData = recordedPlants.length > 0;
-  const hasTemperatureSensor = state.sensors.some((sensor) => sensor.metric === "temperature" && sensor.status === "online");
-  const hasHumiditySensor = state.sensors.some((sensor) => sensor.metric === "humidity" && sensor.status === "online");
+  const liveTemperature = liveSensors.find((sensor) => sensor.metric === "temperature");
+  const liveHumidity = liveSensors.find((sensor) => sensor.metric === "humidity");
+  const hasTemperatureSensor = state.sensors.some((sensor) => sensor.metric === "temperature" && sensor.status === "online") || Boolean(liveTemperature);
+  const hasHumiditySensor = state.sensors.some((sensor) => sensor.metric === "humidity" && sensor.status === "online") || Boolean(liveHumidity);
   const healthScore = hasPlantData
     ? Math.round(recordedPlants.reduce((total, plant) => total + (plant.confidence ?? 0), 0) / recordedPlants.length)
     : 0;
@@ -129,7 +133,7 @@ export function buildDashboardViewModel(
   const hasRecordedActivity = state.alerts.length > 0;
 
   return {
-    hasOperationalData: Boolean(state.devices.length || state.sensors.length || state.plants.length || state.settings.cameras.length),
+    hasOperationalData: Boolean(state.devices.length || state.sensors.length || state.plants.length || state.settings.cameras.length || liveSensors.length),
     hasRecordedActivity,
     hasPlantData,
     healthScore,
@@ -147,16 +151,16 @@ export function buildDashboardViewModel(
       {
         id: "temperature",
         label: "อุณหภูมิ",
-        value: "—",
-        note: hasTemperatureSensor ? "ตั้งค่าเซ็นเซอร์แล้ว แต่ยังไม่มีค่าที่บันทึก" : "ยังไม่มีเซ็นเซอร์อุณหภูมิออนไลน์",
-        tone: "neutral",
+        value: liveTemperature?.latest ? `${liveTemperature.latest.value.toLocaleString("th-TH")} ${liveTemperature.unit}` : "—",
+        note: liveTemperature?.latest ? `ค่าล่าสุด · ${liveTemperature.freshness === "fresh" ? "สด" : "stale"} · config v${liveTemperature.configVersion}` : hasTemperatureSensor ? "ตั้งค่าเซ็นเซอร์แล้ว แต่ยังไม่มีค่าที่บันทึก" : "ยังไม่มีเซ็นเซอร์อุณหภูมิออนไลน์",
+        tone: liveTemperature?.latest ? (liveTemperature.freshness === "fresh" && liveTemperature.latest.quality !== "invalid" ? "healthy" : "warning") : "neutral",
       },
       {
         id: "humidity",
         label: "ความชื้นอากาศ",
-        value: "—",
-        note: hasHumiditySensor ? "ตั้งค่าเซ็นเซอร์แล้ว แต่ยังไม่มีค่าที่บันทึก" : "ยังไม่มีเซ็นเซอร์ความชื้นออนไลน์",
-        tone: "neutral",
+        value: liveHumidity?.latest ? `${liveHumidity.latest.value.toLocaleString("th-TH")} ${liveHumidity.unit}` : "—",
+        note: liveHumidity?.latest ? `ค่าล่าสุด · ${liveHumidity.freshness === "fresh" ? "สด" : "stale"} · config v${liveHumidity.configVersion}` : hasHumiditySensor ? "ตั้งค่าเซ็นเซอร์แล้ว แต่ยังไม่มีค่าที่บันทึก" : "ยังไม่มีเซ็นเซอร์ความชื้นออนไลน์",
+        tone: liveHumidity?.latest ? (liveHumidity.freshness === "fresh" && liveHumidity.latest.quality !== "invalid" ? "healthy" : "warning") : "neutral",
       },
       {
         id: "alerts",
