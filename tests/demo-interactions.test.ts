@@ -237,6 +237,12 @@ test("removes legacy mock records from storage without deleting user records", a
   saved.plants.push({ id: "TOM-001", name: "mock", zone: "โซน A", age: "1 วัน", moisture: null, health: "ยังไม่มีข้อมูล", confidence: null, greenhouseId: "GH-01", batchId: "BATCH-TOM-A" });
   saved.sensors.push({ id: "SOIL-A-02", name: "mock", metric: "soilMoisture", greenhouseId: "GH-01", zoneId: "ZONE-A", status: "online" });
   saved.settings.cameras.push({ id: "CAM-A-01", name: "mock", zone: "โซน A", source: "IP camera", status: "online", captureInterval: "15 นาที", enabled: true, greenhouseId: "GH-01", zoneId: "ZONE-A" });
+  saved.alerts.push(
+    { id: "leaf-spot", type: "critical", title: "mock", detail: "mock", time: "mock", resolved: false, greenhouseId: "GH-01" },
+    { id: "soil-moisture", type: "warning", title: "mock", detail: "mock", time: "mock", resolved: false, greenhouseId: "GH-01" },
+    { id: "ventilation", type: "info", title: "mock", detail: "mock", time: "mock", resolved: true, greenhouseId: "GH-01" },
+    { id: "USER-ALERT", type: "warning", title: "บันทึกจริง", detail: "รายละเอียดจริง", time: "ตอนนี้", resolved: false, greenhouseId: "GH-01" },
+  );
   saved.aiReviewedPlantId = "TOM-001";
   saved.aiReviewedEvidence = { "TOM-001": ["CAM-A-01"], "PLANT-001": ["TEST-CAM-A", "CAM-A-01"] };
   globalThis.window = { localStorage: { getItem: () => JSON.stringify(saved), setItem: () => {} } } as never;
@@ -249,6 +255,7 @@ test("removes legacy mock records from storage without deleting user records", a
   assert.equal(result.state.plants.some((item) => item.id === "TOM-001"), false);
   assert.equal(result.state.sensors.some((item) => item.id === "SOIL-A-02"), false);
   assert.equal(result.state.settings.cameras.some((item) => item.id === "CAM-A-01"), false);
+  assert.deepEqual(result.state.alerts.map((item) => item.id), ["USER-ALERT"]);
   assert.equal(result.state.plants.some((item) => item.id === "PLANT-001"), true);
   assert.equal(result.state.aiReviewedPlantId, undefined);
   assert.deepEqual(result.state.aiReviewedEvidence, { "PLANT-001": ["TEST-CAM-A"] });

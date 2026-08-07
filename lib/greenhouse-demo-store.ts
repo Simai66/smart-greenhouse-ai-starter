@@ -88,6 +88,7 @@ const legacyMockIds = {
   sensors: new Set(["SOIL-A-02", "SOIL-B-02", "CLIMATE-01"]),
   devices: new Set(["pump", "fan", "light", "mist"]),
   plants: new Set(["TOM-001", "TOM-002", "TOM-003", "TOM-004"]),
+  alerts: new Set(["leaf-spot", "soil-moisture", "ventilation"]),
   cameras: new Set(["CAM-A-01", "CAM-B-01", "CAM-ENTRY-01"]),
 };
 
@@ -105,6 +106,7 @@ function removeLegacyMockData(state: DemoState): DemoState {
     sensors: (state.sensors ?? []).filter((item) => !legacyMockIds.sensors.has(item.id)),
     devices: state.devices.filter((item) => !legacyMockIds.devices.has(item.id)),
     plants: state.plants.filter((item) => !removedPlantIds.has(item.id)),
+    alerts: state.alerts.filter((item) => !legacyMockIds.alerts.has(item.id)),
     settings: {
       ...state.settings,
       cameras: (state.settings.cameras ?? []).filter((item) => !legacyMockIds.cameras.has(item.id)),
