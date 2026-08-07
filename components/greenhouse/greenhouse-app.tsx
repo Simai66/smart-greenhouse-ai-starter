@@ -11,6 +11,7 @@ import { AlertDialog } from "@/components/greenhouse/alert-dialog";
 import { DeviceCommandDialog, type PendingDevice } from "@/components/greenhouse/device-command-dialog";
 import { GlobalSearch } from "@/components/greenhouse/global-search";
 import { LiveMessage, type LiveMessageValue } from "@/components/greenhouse/live-message";
+import { MobileAppShell, MobileCommandCenter, MobilePageIntro } from "@/components/greenhouse/mobile-command-center";
 import { PageHeader } from "@/components/greenhouse/page-header";
 import { SiteHeader } from "@/components/greenhouse/site-header";
 import { AppLoading, MemoryOnlyNotice, OfflineNotice, StaleDataNotice } from "@/components/greenhouse/view-state";
@@ -42,8 +43,10 @@ import {
   type GreenhousePageId,
 } from "@/lib/greenhouse-presentation";
 import { sensorApi, type LiveSensor } from "@/lib/sensor-api";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export function GreenhouseApp() {
+  const isMobile = useIsMobile();
   const [state, setState] = useState<DemoState>(demoInitialState);
   const [ready, setReady] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState(true);
@@ -618,7 +621,40 @@ export function GreenhouseApp() {
       <a className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-3 focus:text-primary-foreground" href="#main-content">
         ข้ามไปยังเนื้อหาหลัก
       </a>
-      {activeGreenhouse ? <><AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={greenhouseState.devices.length} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
+      {activeGreenhouse ? isMobile ? (
+        <MobileAppShell
+          activePage={activePage}
+          greenhouse={activeGreenhouse}
+          openAlerts={openAlerts}
+          online={online}
+          onNavigate={navigate}
+          onOpenSearch={() => setMobileSearchOpen(true)}
+          onOpenAlerts={() => navigate("alerts")}
+          onNotify={(text) => notify(text, "info")}
+        >
+          {activePage === "dashboard" ? <>
+            {!storageAvailable ? <MemoryOnlyNotice /> : null}
+            {!online && lastUpdated ? <OfflineNotice lastUpdated={lastUpdated} /> : dataStale && lastUpdated ? <StaleDataNotice lastUpdated={lastUpdated} onRefresh={refresh} /> : null}
+            <MobileCommandCenter
+              viewModel={dashboard}
+              devices={greenhouseState.devices}
+              plants={greenhouseState.plants}
+              context={greenhouseContext}
+              lastUpdated={lastUpdated}
+              pendingDeviceId={pendingDevice?.device.id ?? null}
+              online={online}
+              onNavigate={navigate}
+              onDeviceRequest={(device) => setPendingDevice({ device, nextActive: !device.active })}
+              onInspectPlant={(plantId) => { setSelectedPlantId(plantId); navigate("ai"); }}
+            />
+          </> : <section className="space-y-5 px-4 pb-6 pt-4">
+            <MobilePageIntro metadata={pageMetadata[activePage]} greenhouse={activeGreenhouse} refreshing={refreshing} onExport={exportCsv} onRefresh={refresh} />
+            {!storageAvailable ? <MemoryOnlyNotice /> : null}
+            {!online && lastUpdated ? <OfflineNotice lastUpdated={lastUpdated} /> : dataStale && lastUpdated ? <StaleDataNotice lastUpdated={lastUpdated} onRefresh={refresh} /> : null}
+            {page}
+          </section>}
+        </MobileAppShell>
+      ) : <><AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={greenhouseState.devices.length} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
         <SidebarInset>
           <SiteHeader
             pageTitle={pageMetadata[activePage].title}
