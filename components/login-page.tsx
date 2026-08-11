@@ -25,7 +25,7 @@ function GoogleMark() {
 
 function GreenhouseMark() {
   return (
-    <svg className="size-16 text-primary" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+    <svg className="mx-auto size-16 text-primary" viewBox="0 0 64 64" fill="none" aria-hidden="true">
       <path d="M8 27 32 9l24 18v29H8V27Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       <path d="M8 27h48M20 18v38M44 18v38M27 56V39h10v17" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       <path d="M32 48c-5-4-5-9-5-9s5 1 5 6c0-5 5-6 5-6s0 5-5 9Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
