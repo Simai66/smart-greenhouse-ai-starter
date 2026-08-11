@@ -1,4 +1,5 @@
-import { IconLock, IconPlant2 } from "@tabler/icons-react";
+import Image from "next/image";
+import { IconLock } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -47,7 +48,14 @@ export function LoginPage() {
         >
           <span className="absolute inset-0" style={greenhouseOverlay} aria-hidden="true" />
           <article className="relative z-10 max-w-xl p-8 text-primary-foreground sm:p-12">
-            <IconPlant2 className="size-16" stroke={1.2} aria-hidden="true" />
+            <Image
+              src="/images/smart-greenhouse-mark.svg"
+              alt=""
+              width={96}
+              height={96}
+              className="size-24"
+              aria-hidden="true"
+            />
             <h2 className="mt-8 text-3xl font-bold tracking-tight sm:text-4xl">Smart Greenhouse</h2>
             <span className="mt-7 block h-1 w-16 rounded-full bg-sidebar-primary" aria-hidden="true" />
             <p className="mt-7 max-w-md text-lg text-primary-foreground">
