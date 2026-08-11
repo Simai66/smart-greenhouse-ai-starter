@@ -15,7 +15,7 @@ const greenhouseOverlay = {
 
 function GoogleMark() {
   return (
-    <svg className="size-7" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className="size-6" viewBox="0 0 24 24" aria-hidden="true">
       <path fill="#4285F4" d="M21.35 12.27c0-.78-.07-1.54-.22-2.27H12v4.3h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.7 2.91-4.2 2.91-7.42Z" />
       <path fill="#34A853" d="M12 21.5c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.7-1.72-5.47-4.03H3.29v2.53A9.74 9.74 0 0 0 12 21.5Z" />
       <path fill="#FBBC05" d="M6.53 13.58A5.86 5.86 0 0 1 6.22 12c0-.55.1-1.08.31-1.58V7.89H3.29A9.5 9.5 0 0 0 2.25 12c0 1.49.36 2.9 1.04 4.11l3.24-2.53Z" />
@@ -79,7 +79,7 @@ export function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              className="mt-12 h-auto min-h-16 w-full border-border bg-card px-5 text-lg font-semibold shadow-none hover:bg-accent"
+              className="mt-12 h-auto min-h-12 w-full border-border bg-card px-5 text-base font-semibold shadow-none hover:bg-accent"
               aria-label="ดำเนินการต่อด้วย Google"
             >
               <GoogleMark />
