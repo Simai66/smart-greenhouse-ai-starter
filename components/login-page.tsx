@@ -36,9 +36,9 @@ function GreenhouseMark() {
 
 export function LoginPage() {
   return (
-    <main className="flex min-h-svh items-center bg-background px-4 py-4 sm:px-6 md:py-8">
+    <main className="flex min-h-svh min-w-0 items-center overflow-x-clip bg-background px-4 py-4 sm:px-6 md:py-8">
       <section
-        className="login-shell mx-auto grid w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:grid-cols-2"
+        className="login-shell mx-auto grid min-w-0 w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:grid-cols-2"
         style={{ maxWidth: "72rem" }}
       >
         <aside
@@ -66,8 +66,8 @@ export function LoginPage() {
           </article>
         </aside>
 
-        <section className="flex min-h-0 items-center justify-center bg-card px-6 py-12 sm:px-10 md:px-12 lg:px-16">
-          <article className="w-full max-w-md text-center">
+        <section className="flex min-h-0 min-w-0 items-center justify-center bg-card px-6 py-12 sm:px-10 md:px-12 lg:px-16">
+          <article className="min-w-0 w-full max-w-md text-center">
             <GreenhouseMark />
             <h1 className="mt-10 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               ยินดีต้อนรับกลับ
