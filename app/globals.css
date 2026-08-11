@@ -149,7 +149,7 @@
   }
 
   .login-shell {
-    min-height: calc(100svh - 2rem);
+    min-height: auto;
   }
 }
 

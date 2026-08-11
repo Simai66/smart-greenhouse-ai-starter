@@ -13,6 +13,16 @@ const greenhouseOverlay = {
   backgroundColor: "color-mix(in oklab, var(--primary) 65%, transparent)",
 };
 
+const mobileGreenhouseBackground = {
+  backgroundImage: "url('/images/login-greenhouse-mobile-bg.png')",
+  backgroundPosition: "center",
+  backgroundSize: "cover",
+};
+
+const mobileGreenhouseOverlay = {
+  backgroundColor: "color-mix(in oklab, var(--primary) 48%, transparent)",
+};
+
 function GoogleMark() {
   return (
     <svg className="size-7" viewBox="0 0 24 24" aria-hidden="true">
@@ -36,9 +46,19 @@ function GreenhouseMark() {
 
 export function LoginPage() {
   return (
-    <main className="flex min-h-svh min-w-0 items-center overflow-x-clip bg-background px-4 py-4 sm:px-6 md:py-8">
+    <main className="relative flex min-h-svh min-w-0 items-center overflow-x-clip bg-background px-4 py-4 sm:px-6 md:py-8">
+      <span
+        className="pointer-events-none absolute inset-0 md:hidden"
+        style={mobileGreenhouseBackground}
+        aria-hidden="true"
+      />
+      <span
+        className="pointer-events-none absolute inset-0 md:hidden"
+        style={mobileGreenhouseOverlay}
+        aria-hidden="true"
+      />
       <section
-        className="login-shell mx-auto grid min-w-0 w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:grid-cols-2"
+        className="login-shell relative z-10 mx-auto grid min-w-0 w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:grid-cols-2"
         style={{ maxWidth: "72rem" }}
       >
         <aside
