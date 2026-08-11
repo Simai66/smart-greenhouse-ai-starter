@@ -43,7 +43,7 @@ function MetricTile({ metric }: { metric: DashboardMetric }) {
   const { icon: Icon, className } = metricIconMap[metric.id];
   const emphasis = metric.tone === "warning" || metric.tone === "danger";
   return (
-    <Card className="border-border/70 shadow-none">
+    <Card className="gap-0 border-border/70 py-0 shadow-none">
       <CardContent className="p-3.5">
         <span className={`grid size-9 place-items-center rounded-xl ${className}`}>
           <Icon className="size-4" aria-hidden="true" />
