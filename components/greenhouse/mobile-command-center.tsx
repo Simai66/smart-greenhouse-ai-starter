@@ -109,7 +109,7 @@ export function MobileAppShell({
   const moreActive = !bottomNavItems.some((item) => item.id === activePage);
 
   return (
-    <section className="min-h-svh bg-background">
+    <section className="min-h-svh min-w-0 w-full bg-background">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/92 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
         <span className="flex items-center gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
