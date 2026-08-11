@@ -57,7 +57,7 @@ export function LoginPage() {
               aria-hidden="true"
             />
             <h2 className="mt-8 text-3xl font-bold tracking-tight sm:text-4xl">Smart Greenhouse</h2>
-            <span className="mt-7 block h-1 w-16 rounded-full bg-sidebar-primary" aria-hidden="true" />
+            <span className="mt-7 block h-1 w-16 rounded-full bg-sidebar-ring" aria-hidden="true" />
             <p className="mt-7 max-w-md text-lg text-primary-foreground">
               ระบบบริหารจัดการโรงเรือนอัจฉริยะ
               <br />
