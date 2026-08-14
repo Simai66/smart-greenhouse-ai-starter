@@ -1,0 +1,179 @@
+digraph SmartGreenhouseUseCase {
+  graph [
+    layout=neato,
+    bgcolor="white",
+    pad="0.4",
+    outputorder=edgesfirst,
+    labelloc=t,
+    label="แผนภาพ Use Case ระบบ Smart Greenhouse",
+    fontname="Thonburi Bold",
+    fontsize=25
+  ];
+
+  node [
+    fontname="Thonburi",
+    fontsize=10,
+    color="#475569",
+    penwidth=1.2
+  ];
+  edge [
+    color="#64748B",
+    penwidth=1.15,
+    arrowsize=0.75,
+    fontname="Arial",
+    fontsize=8,
+    fontcolor="#475569"
+  ];
+
+  viewer [pos="95,780!", shape=plain, label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="0" CELLSPACING="0">
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">O</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;|&#92;</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;&nbsp;&nbsp;&#92;</FONT></TD></TR>
+      <TR><TD><FONT POINT-SIZE="10"><B>Viewer</B></FONT></TD></TR>
+    </TABLE>
+  >];
+  operator [pos="95,500!", shape=plain, label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="0" CELLSPACING="0">
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">O</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;|&#92;</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;&nbsp;&nbsp;&#92;</FONT></TD></TR>
+      <TR><TD><FONT POINT-SIZE="10"><B>Operator</B></FONT></TD></TR>
+    </TABLE>
+  >];
+  admin [pos="95,220!", shape=plain, label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="0" CELLSPACING="0">
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">O</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;|&#92;</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;&nbsp;&nbsp;&#92;</FONT></TD></TR>
+      <TR><TD><FONT POINT-SIZE="10"><B>Admin</B></FONT></TD></TR>
+    </TABLE>
+  >];
+  edge_agent [pos="1860,700!", shape=plain, label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="0" CELLSPACING="0">
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">O</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;|&#92;</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;&nbsp;&nbsp;&#92;</FONT></TD></TR>
+      <TR><TD><FONT POINT-SIZE="10"><B>Edge Agent</B></FONT></TD></TR>
+      <TR><TD><FONT POINT-SIZE="9">(Raspberry Pi)</FONT></TD></TR>
+    </TABLE>
+  >];
+  hardware [pos="1860,260!", shape=plain, label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="0" CELLSPACING="0">
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">O</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;|&#92;</FONT></TD></TR>
+      <TR><TD><FONT FACE="Courier New" POINT-SIZE="18">&#47;&nbsp;&nbsp;&#92;</FONT></TD></TR>
+      <TR><TD><FONT POINT-SIZE="10"><B>Sensor / Relay</B></FONT></TD></TR>
+      <TR><TD><FONT POINT-SIZE="9">Hardware</FONT></TD></TR>
+    </TABLE>
+  >];
+
+  subgraph cluster_platform {
+    label="Smart Greenhouse Platform";
+    fontname="Thonburi Bold";
+    fontsize=16;
+    color="#94A3B8";
+    penwidth=1.4;
+    style="rounded";
+
+    dashboard [pos="400,820!", shape=ellipse, style="filled", fillcolor="#DCFCE7", label="View dashboard"];
+    readings [pos="400,700!", shape=ellipse, style="filled", fillcolor="#DCFCE7", label="View sensor readings"];
+    analytics [pos="400,580!", shape=ellipse, style="filled", fillcolor="#DCFCE7", label="View analytics"];
+    alerts [pos="400,460!", shape=ellipse, style="filled", fillcolor="#FEE2E2", color="#DC2626", label="View / resolve alerts"];
+    history [pos="400,340!", shape=ellipse, style="filled", fillcolor="#F1F5F9", label="View command history"];
+    policy_history [pos="400,220!", shape=ellipse, style="filled", fillcolor="#F1F5F9", label="View policy history"];
+
+    issue_command [pos="790,780!", shape=ellipse, style="filled", fillcolor="#CFFAFE", color="#0891B2", label="Issue device command"];
+    emergency_stop [pos="790,650!", shape=ellipse, style="filled", fillcolor="#FEE2E2", color="#DC2626", label="Emergency stop"];
+    manage_policy [pos="790,500!", shape=ellipse, style="filled", fillcolor="#FEF3C7", color="#D97706", label="Manage device policy"];
+    manage_assets [pos="790,350!", shape=ellipse, style="filled", fillcolor="#FEF3C7", color="#D97706", label="Manage greenhouse / devices"];
+
+    authenticate [pos="1160,850!", shape=ellipse, style="filled", fillcolor="#EDE9FE", color="#7C3AED", label="Authenticate signed agent request"];
+    telemetry [pos="1160,720!", shape=ellipse, style="filled", fillcolor="#DBEAFE", color="#2563EB", label="Ingest telemetry"];
+    heartbeat [pos="1160,590!", shape=ellipse, style="filled", fillcolor="#DBEAFE", color="#2563EB", label="Record heartbeat"];
+    config [pos="1160,460!", shape=ellipse, style="filled", fillcolor="#DBEAFE", color="#2563EB", label="Fetch device config"];
+    poll_commands [pos="1160,330!", shape=ellipse, style="filled", fillcolor="#CFFAFE", color="#0891B2", label="Poll queued commands"];
+    acknowledge [pos="1160,200!", shape=ellipse, style="filled", fillcolor="#EDE9FE", color="#7C3AED", label="Acknowledge command"];
+
+    authorize [pos="1430,780!", shape=ellipse, style="dashed,filled", fillcolor="#F8FAFC", label="Authorize role / validate input"];
+    store [pos="1430,600!", shape=ellipse, style="dashed,filled", fillcolor="#F8FAFC", label="Persist D1 records"];
+    apply_local [pos="1430,420!", shape=ellipse, style="dashed,filled", fillcolor="#F8FAFC", label="Apply local safety policy"];
+    audit [pos="1430,240!", shape=ellipse, style="dashed,filled", fillcolor="#F8FAFC", label="Append command event"];
+
+    note [pos="930,120!", shape=note, style="dashed,filled", fillcolor="#FDF4FF", color="#C026D3", fontcolor="#701A75", fontsize=8, label="DETECTIONS / ALERTS ingestion API\nยังไม่อยู่ใน implementation ปัจจุบัน"];
+  }
+
+  platform_boundary [
+    pos="1030,500!",
+    shape=box,
+    fixedsize=true,
+    width=18.5,
+    height=11.2,
+    style="rounded,dashed",
+    color="#94A3B8",
+    penwidth=1.5,
+    fontname="Thonburi Bold",
+    fontsize=15,
+    label=""
+  ];
+  platform_title [
+    pos="1030,875!",
+    shape=plain,
+    fontname="Thonburi Bold",
+    fontsize=15,
+    fontcolor="#334155",
+    label="Smart Greenhouse Platform"
+  ];
+
+  viewer -> dashboard;
+  viewer -> readings;
+  viewer -> analytics;
+  viewer -> alerts;
+  viewer -> history;
+  viewer -> policy_history;
+
+  operator -> issue_command;
+  operator -> emergency_stop;
+  operator -> alerts;
+  operator -> dashboard;
+  operator -> readings;
+  operator -> analytics;
+  operator -> history;
+
+  admin -> manage_policy;
+  admin -> manage_assets;
+  admin -> issue_command;
+  admin -> emergency_stop;
+  admin -> dashboard;
+  admin -> readings;
+  admin -> analytics;
+  admin -> alerts;
+  admin -> history;
+  admin -> policy_history;
+
+  edge_agent -> authenticate;
+  edge_agent -> telemetry;
+  edge_agent -> heartbeat;
+  edge_agent -> config;
+  edge_agent -> poll_commands;
+  edge_agent -> acknowledge;
+  hardware -> telemetry;
+  hardware -> heartbeat;
+  hardware -> apply_local;
+
+  issue_command -> authorize [style=dashed, arrowhead=vee, label="include"];
+  issue_command -> store [style=dashed, arrowhead=vee, label="include"];
+  emergency_stop -> authorize [style=dashed, arrowhead=vee, label="include"];
+  manage_policy -> authorize [style=dashed, arrowhead=vee, label="include"];
+  manage_policy -> store [style=dashed, arrowhead=vee, label="include"];
+  telemetry -> authenticate [style=dashed, arrowhead=vee, label="include"];
+  telemetry -> store [style=dashed, arrowhead=vee, label="include"];
+  heartbeat -> authenticate [style=dashed, arrowhead=vee, label="include"];
+  heartbeat -> store [style=dashed, arrowhead=vee, label="include"];
+  config -> authenticate [style=dashed, arrowhead=vee, label="include"];
+  poll_commands -> authenticate [style=dashed, arrowhead=vee, label="include"];
+  acknowledge -> authenticate [style=dashed, arrowhead=vee, label="include"];
+  acknowledge -> audit [style=dashed, arrowhead=vee, label="include"];
+  issue_command -> audit [style=dashed, arrowhead=vee, label="include"];
+  poll_commands -> apply_local [style=dashed, arrowhead=vee, label="include"];
+}

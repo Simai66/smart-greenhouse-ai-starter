@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { demoInitialState } from "../lib/greenhouse-demo-store.ts";
+import { demoTestState as demoInitialState } from "./fixtures/demo-state.ts";
 import {
   buildDashboardViewModel,
   describeSoilMoistureTrend,
@@ -77,8 +77,8 @@ test("uses neutral setup state instead of fabricated device activity without rec
 
 test("filters plants and alerts without mutating source state", () => {
   assert.deepEqual(
-    filterPlants(demoInitialState.plants, "tom-003", "all").map((plant) => plant.id),
-    ["TOM-003"],
+    filterPlants(demoInitialState.plants, "plant-003", "all").map((plant) => plant.id),
+    ["PLANT-003"],
   );
   assert.equal(filterPlants(demoInitialState.plants, "", "ยังไม่มีข้อมูล").length, 4);
   assert.equal(filterAlerts(demoInitialState.alerts, "open").length, 0);

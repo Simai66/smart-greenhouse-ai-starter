@@ -147,6 +147,16 @@
   .data-row {
     @apply border-b border-border/70 py-3 last:border-b-0;
   }
+
+  .login-shell {
+    min-height: auto;
+  }
+}
+
+@media (min-width: 48rem) {
+  .login-shell {
+    min-height: 80svh;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
