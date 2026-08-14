@@ -624,6 +624,7 @@ export function GreenhouseApp() {
       {activeGreenhouse ? isMobile ? (
         <MobileAppShell
           activePage={activePage}
+          pageTitle={pageMetadata[activePage].title}
           greenhouse={activeGreenhouse}
           openAlerts={openAlerts}
           online={online}

@@ -9,6 +9,7 @@ import {
   CircleAlert,
   Droplets,
   Leaf,
+  Lightbulb,
   Menu,
   Search,
   Settings2,
@@ -30,6 +31,13 @@ const metricIconMap: Record<DashboardMetric["id"], { icon: typeof Leaf; classNam
   temperature: { icon: ThermometerSun, className: "bg-orange-50 text-orange-600" },
   humidity: { icon: Droplets, className: "bg-sky-50 text-sky-700" },
   alerts: { icon: CircleAlert, className: "bg-amber-50 text-amber-700" },
+};
+
+const deviceIconMap: Record<DemoDevice["icon"], typeof Wind> = {
+  pump: Droplets,
+  fan: Wind,
+  light: Lightbulb,
+  mist: Droplets,
 };
 
 const bottomNavItems = [
@@ -86,6 +94,7 @@ function MobilePageIntro({
 
 export function MobileAppShell({
   activePage,
+  pageTitle,
   greenhouse,
   openAlerts,
   online,
@@ -96,6 +105,7 @@ export function MobileAppShell({
   onNotify,
 }: {
   activePage: GreenhousePageId;
+  pageTitle: string;
   greenhouse: DemoGreenhouse;
   openAlerts: number;
   online: boolean;
@@ -117,9 +127,12 @@ export function MobileAppShell({
           </span>
           <span className="min-w-0 flex-1">
             <strong className="block truncate text-sm">Smart Greenhouse</strong>
-            <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="shrink-0">{pageTitle}</span>
+              <span aria-hidden="true">·</span>
+              <span className="min-w-0 truncate">{greenhouse.name}</span>
               <span className={online ? "size-1.5 rounded-full bg-emerald-500" : "size-1.5 rounded-full bg-amber-500"} aria-hidden="true" />
-              {greenhouse.name} · {online ? "ออนไลน์" : "ออฟไลน์"}
+              <span className="shrink-0">{online ? "ออนไลน์" : "ออฟไลน์"}</span>
             </span>
           </span>
           <Button variant="ghost" size="icon" className="size-11 shrink-0" aria-label="ค้นหา" onClick={onOpenSearch}>
@@ -132,7 +145,7 @@ export function MobileAppShell({
         </span>
       </header>
 
-      <main className="pb-[calc(5.5rem+env(safe-area-inset-bottom))]">{children}</main>
+      <main id="main-content" tabIndex={-1} className="pb-[calc(5.5rem+env(safe-area-inset-bottom))]">{children}</main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-card/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(24,55,38,.06)] backdrop-blur-xl" aria-label="เมนูหลักบนมือถือ">
         <span className="mx-auto flex max-w-md items-end justify-around gap-1">
@@ -306,16 +319,19 @@ export function MobileCommandCenter({
           <Button variant="ghost" size="sm" className="text-primary" onClick={() => onNavigate("devices")}>จัดการ <ArrowRight aria-hidden="true" /></Button>
         </CardHeader>
         <CardContent className="space-y-1 pt-0">
-          {previewDevices.map((device) => (
-            <span key={device.id} className="flex min-h-14 items-center gap-3 border-b border-border/60 py-2 last:border-0">
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary text-primary"><Wind className="size-4" aria-hidden="true" /></span>
-              <span className="min-w-0 flex-1">
-                <strong className="block truncate text-sm">{device.name}</strong>
-                <span className={device.active ? "text-xs text-primary" : "text-xs text-muted-foreground"}>{device.active ? "กำลังทำงาน" : "หยุดอยู่"}</span>
+          {previewDevices.map((device) => {
+            const DeviceIcon = deviceIconMap[device.icon];
+            return (
+              <span key={device.id} className="flex min-h-14 items-center gap-3 border-b border-border/60 py-2 last:border-0">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary text-primary"><DeviceIcon className="size-4" aria-hidden="true" /></span>
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate text-sm">{device.name}</strong>
+                  <span className={device.active ? "text-xs text-primary" : "text-xs text-muted-foreground"}>{device.active ? "กำลังทำงาน" : "หยุดอยู่"}</span>
+                </span>
+                <Switch aria-label={(device.active ? "ปิด " : "เปิด ") + device.name} aria-describedby="mobile-device-command-note" checked={device.active} disabled={!online || Boolean(pendingDeviceId)} onCheckedChange={() => onDeviceRequest(device)} />
               </span>
-              <Switch aria-label={(device.active ? "ปิด " : "เปิด ") + device.name} aria-describedby="mobile-device-command-note" checked={device.active} disabled={!online || Boolean(pendingDeviceId)} onCheckedChange={() => onDeviceRequest(device)} />
-            </span>
-          ))}
+            );
+          })}
           {!previewDevices.length ? <span className="block py-5 text-center text-sm text-muted-foreground">ยังไม่มีอุปกรณ์ในโรงเรือนนี้</span> : null}
           <span className="sr-only" id="mobile-device-command-note">คำสั่งต้องยืนยันและรอการตอบรับก่อนเปลี่ยนสถานะ</span>
         </CardContent>

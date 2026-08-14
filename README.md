@@ -1,140 +1,190 @@
 # Verdant — Smart Greenhouse AI Dashboard
 
-Starter project สำหรับระบบโรงเรือนอัจฉริยะตาม `design.md` โดยรวมข้อมูลเซ็นเซอร์ ผลตรวจสุขภาพพืชจาก AI การแจ้งเตือน และการควบคุมอุปกรณ์ IoT ไว้ในเว็บเดียว
+เว็บ workspace สำหรับผู้ดูแลและผู้ปฏิบัติงานโรงเรือน ใช้ดู telemetry, หลักฐานพืช,
+การแจ้งเตือน และสถานะอุปกรณ์ โดยเน้นข้อมูลที่ตรวจสอบได้และการควบคุมที่ปลอดภัย
 
-## สิ่งที่มีในเวอร์ชันนี้
+> สถานะปัจจุบัน: browser dashboard เป็น demo ที่ติดป้ายชัดเจน ยังไม่ใช่หลักฐานว่า
+> sensor หรือ relay จริงทำงาน จนกว่า D1, Cloudflare Access, Pi, gateway และ QA
+> safety gate จะผ่าน
 
-- Dashboard: Temperature, Humidity, Soil Moisture, Light Intensity, กราฟแนวโน้ม, Plant Health และ Alerts
-- Plant Monitoring: รองรับรายการพืช ตัวกรองสถานะ และค้นหาพืชเมื่อเพิ่มรอบปลูก
-- AI Detection: รองรับหลักฐานภาพ Confidence, Severity และ Recommendation เมื่อมีข้อมูลจริง
-- Device Control: Auto/Manual mode, Pending → Acknowledged, Schedule, Toast และ Emergency Stop confirmation
-- Analytics, Alerts และ Settings สำหรับใช้เป็นฐานพัฒนาต่อ
-- Responsive shell: Sidebar บน Desktop, Drawer/Bottom navigation บน Mobile
-- API route เริ่มต้นแบบไม่มีข้อมูล พร้อมเปลี่ยนเป็น Cloudflare D1, MQTT หรือ Raspberry Pi gateway
+## สิ่งที่มีใน repository
+
+- shadcn/Radix/Tailwind dashboard แบบ responsive สำหรับ 7 หน้า: dashboard, plants,
+  AI evidence, devices, analytics, alerts และ settings
+- Browser demo state ที่ไม่เติม operational readings หรือ actuator success ปลอม
+- API foundation สำหรับ telemetry, heartbeat, sensor config, policy และ command queue
+- Signed Pi edge-agent พร้อม local queue, dedupe, retry และ simulator
+- ESP32 reference firmware สำหรับส่งข้อมูลเข้า Pi ภายใน LAN
+- D1 schema และ additive migrations สำหรับ telemetry, policy, alert และ command audit
+
+## ขอบเขตที่ยังไม่พร้อม production
+
+- Dashboard ยังอ่าน demo store เป็นหลัก; live API ยังไม่ถูกนำมาแทนที่ทั้งหมด
+- Command gateway จริงยัง fail closed จนกว่าจะมี signed, allow-listed gateway
+- Simulator ไม่ใช่หลักฐาน relay จริง
+- ยังไม่มีการยืนยัน Cloudflare Access, deployment secrets, D1 environment หรือ Pi จริง
+- R2/camera image evidence, GPIO และ hardware emergency interlock ยังต้อง review
 
 ## เริ่มต้นใช้งาน
 
-ต้องมี Node.js 22.13 ขึ้นไป
+ต้องมี Node.js >=22.13.0 และ npm
 
-```bash
+~~~bash
 npm install
 npm run dev
-```
+~~~
 
-ตรวจ production build:
+คำสั่งตรวจสอบ:
 
-```bash
+~~~bash
+npm run lint
+npm run typecheck
+npm test
+~~~
+
+npm test รวม unit tests, Python edge-agent tests, typecheck, production build
+และ rendered HTML smoke tests
+
+คำสั่งเสริม:
+
+~~~bash
 npm run build
-```
+npm run validate:artifact
+npm run db:generate
+~~~
 
-## Active UI structure
+ใช้ db:generate เฉพาะเมื่อแก้ schema และต้อง review migration ก่อน apply จริง
 
-- `app/page.tsx` renders the Smart Greenhouse client.
-- `components/greenhouse/greenhouse-app.tsx` owns navigation, demo-store
-  lifecycle, search, dialogs, export, and feedback.
-- `components/greenhouse/app-sidebar.tsx` and `site-header.tsx` provide the
-  responsive shadcn application shell.
-- `components/greenhouse/views/` contains the seven task-specific page views.
-- `components/greenhouse/charts/` contains accessible Recharts views.
-- `components/ui/` contains CLI-managed shadcn primitives.
-- `lib/greenhouse-demo-store.ts` remains the browser demo source of truth.
-- `lib/mock-data.ts` keeps empty typed collections for the protected sensors API.
+## โครงสร้างสำคัญ
 
+- app/ — page routes และ API routes
+- components/greenhouse/ — active dashboard UI และ page views
+- components/ui/ — shadcn primitives ที่ใช้ร่วมกัน
+- lib/greenhouse-demo-store.ts — source of truth ของ browser demo
+- lib/greenhouse-presentation.ts — presentation/view-model adapter
+- lib/server/ — auth, validation, policy และ command safety
+- db/ — Drizzle schema และ D1 access
+- drizzle/ — migrations ที่ต้อง apply ตามลำดับ
+- edge-agent/ — Pi agent, local queue และ simulator tests
+- firmware/esp32/ — ESP32 reference firmware
+- docs/api/edge-agent-v1.md — API contract สำหรับ Pi/Worker
+- docs/feature-cards/ — acceptance criteria, backlog และ release gate
 
-## จุดเชื่อมระบบจริง
+## Demo, live telemetry และ physical state
 
-1. เปลี่ยน `lib/greenhouse-api.ts` ให้เรียก Cloudflare Worker API หรือ MQTT gateway
-2. เปลี่ยน empty data provider ใน `lib/mock-data.ts` เป็นผลจาก API / D1
-3. Sensor gateway ส่งค่า Temperature, Humidity, Soil Moisture และ Light ตามช่วงเวลาที่กำหนด
-4. Raspberry Pi ส่งรูปหรือ URL ของภาพ พร้อมผลโมเดล `classification`, `confidence`, `condition`, `severity` และ `recommendation`
-5. Device command ต้องตอบกลับด้วย acknowledgement ก่อนเปลี่ยนสถานะ UI เป็นสำเร็จ
+ระบบแยกข้อมูลสามชั้น:
 
-ตัวอย่าง sensor endpoint:
+1. Demo state — local browser state สำหรับพัฒนาและสาธิต
+2. Live telemetry — ค่าจาก API พร้อม fresh, stale, missing, quality และ config version
+3. Physical state — สถานะที่ Pi/อุปกรณ์รายงานหลังคำสั่งได้รับ acknowledgement
 
-```text
-GET /api/sensors
-```
+ห้ามใช้ demo value หรือ simulator output เป็นหลักฐานอุปกรณ์จริง
+Command ต้องเดินตาม pending → acknowledged หรือ failed; timeout, offline
+และ rejection ต้องไม่เปลี่ยน UI เป็น success
 
-ตัวอย่าง command contract ที่แนะนำ:
+## Cloudflare bindings และ D1
 
-```json
-{
-  "deviceId": "DEV-PUMP-01",
-  "command": "turn_on",
-  "requestedAt": "2026-07-17T03:00:00.000Z"
-}
-```
+ไฟล์ .openai/hosting.json ระบุชื่อ binding ที่ runtime ใช้:
 
-ผลตอบกลับ:
+- DB — Cloudflare D1 สำหรับ telemetry, policy, alert และ command audit
+- IMAGES — Cloudflare R2 สำหรับภาพกล้อง/AI เมื่อ image evidence พร้อม
 
-```json
-{
-  "deviceId": "DEV-PUMP-01",
-  "status": "on",
-  "acknowledgedAt": "2026-07-17T03:00:00.700Z"
-}
-```
+ไฟล์นี้ระบุชื่อ binding เท่านั้น ไม่ได้สร้าง resource หรือยืนยันว่า account เชื่อมแล้ว
+ต้องแยก database ระหว่าง staging กับ production และห้ามใส่ token, secret หรือข้อมูล
+ส่วนตัวลงใน source control
 
-## แนวทางพัฒนาต่อ
+### สร้างและตรวจ D1
 
-- Cloudflare D1: เก็บ sensor readings, AI detections, alerts และ device command logs
-- Cloudflare R2: เก็บภาพพืชจากกล้อง
-- Raspberry Pi 5: รัน OpenCV / TFLite แล้วส่งผลเข้า Worker API
-- ESP32 / ESP8266: ส่ง telemetry และรับคำสั่งผ่าน MQTT หรือ gateway ภายใน
-- Authentication: แยกสิทธิ์ Administrator, Operator และ Viewer
-- Tests: เพิ่ม unit test สำหรับ API adapter และ end-to-end test สำหรับ command acknowledgement
+Login ด้วย Wrangler แล้วตรวจ database ที่มีอยู่:
 
-หน้าเว็บไม่เติมข้อมูลปฏิบัติการจำลอง ผู้ใช้ต้องเพิ่มข้อมูลเองหรือเชื่อมแหล่งข้อมูลจริง
+~~~bash
+npx wrangler login
+npx wrangler d1 list
+~~~
 
-## Real-operation foundation (Pi → Cloud only)
+ตัวอย่างสร้าง staging database ชื่อด้านล่างเท่านั้น ไม่ใช่ชื่อ production ที่บังคับใช้:
 
-The P0/P1 edge protocol, D1 migration, and reference Pi agent are included in
-this repository. Read [the API contract](docs/api/edge-agent-v1.md) before
-provisioning a device. The current rendered dashboard intentionally remains a
-clearly labelled demo until a provisioned Pi is integrated; it must not be
-used as evidence that a relay changed state.
+~~~bash
+npx wrangler d1 create smart-greenhouse-staging --binding DB --location apac
+~~~
 
-1. Apply `drizzle/0000_p0_foundation.sql`,
-   `drizzle/0001_edge_agent_and_policies.sql`, then
-   `drizzle/0002_sensor_configs_and_reading_ids.sql` to the production D1
-   database.
-2. Insert one `edge_agents` row per Pi and assign each device its `agent_id`,
-   capability document, and an initial versioned `device_policies` row. Do not
-   queue commands before these records exist.
-3. Set a distinct Worker secret for each agent, named
-   `GREENHOUSE_AGENT_SECRET_<AGENT_ID>` (at least 32 characters). Set browser
-   roles with `GREENHOUSE_ADMIN_EMAILS` and `GREENHOUSE_OPERATOR_EMAILS`.
-4. Configure Cloudflare Access in the Cloudflare dashboard: protect the public
-   hostname, use Google as an identity provider, and let only approved email
-   addresses/groups reach the application. This cannot be safely represented
-   by a source-controlled application secret.
-5. On the Pi, copy `edge-agent/docker-compose.example.yml`, set its four
-   required cloud values plus LAN node token/allow-list values, and start it
-   with Docker Compose. Its persistent volume is the recoverable outbound
-   queue, inbound reading dedupe, sensor config cache, and local-policy state.
-6. Flash `firmware/esp32` with PlatformIO after assigning each ESP32 a unique
-   LAN node token. Firmware calls Pi only; it contains no cloud HMAC secret.
+หลังเลือก target database แล้ว apply migrations ผ่าน remote database:
 
-The supplied edge relay and sensor adapters are simulators. Before substituting
-GPIO code, have an electrician/hardware owner review the pin map, relay logic
-level, fused power path, maximum load runtime, and physical emergency stop.
-The Docker image exposes only the LAN sensor HTTP port, defaults every relay to
-off, and the cloud cannot initiate a connection to the Pi. To roll back an application
-release, deploy the previous Worker/image; do not drop the additive D1 tables
-because they contain audit history and queued command evidence.
+~~~bash
+npx wrangler d1 migrations apply smart-greenhouse-staging --remote
+npx wrangler d1 execute smart-greenhouse-staging --remote --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+~~~
 
-## P0 safety configuration
+เปลี่ยน smart-greenhouse-staging เป็นชื่อ database ของ environment ที่อนุมัติ
+Migration ปัจจุบันคือ drizzle/0000_p0_foundation.sql,
+0001_edge_agent_and_policies.sql และ 0002_sensor_configs_and_reading_ids.sql ตามลำดับ
 
-Device commands now use `POST /api/device-commands` and require the hosted
-ChatGPT identity headers plus a server-side role mapping. Configure these as
-deployment secrets (comma-separated email addresses):
+migrations apply ต้องผ่าน review ก่อน production; Wrangler จะขอ confirmation และ
+สร้าง backup ก่อน apply. ห้าม drop ตาราง audit/history/queue เพื่อ rollback ให้ deploy
+Worker/image รุ่นก่อนแทน
 
-```text
-GREENHOUSE_ADMIN_EMAILS=admin@example.com
-GREENHOUSE_OPERATOR_EMAILS=operator@example.com
-```
+### R2
 
-The command gateway adapter is deliberately fail-closed until it is replaced
-with a signed, allow-listed gateway integration. A failed or missing gateway
-never changes the UI to show that an actuator has been switched off. The
-physical emergency interlock remains a required hardware responsibility.
+ยังไม่ต้องสร้าง R2 สำหรับ dashboard demo. สร้างและผูก bucket เป็น IMAGES เมื่อมี
+camera upload, image retention, access policy และ QA สำหรับ image evidence แล้ว
+
+## Real-operation checklist
+
+ทำตาม dependency order:
+
+1. สร้าง D1 target และ apply migrations 0000 → 0001 → 0002
+2. ผูก D1 จริงเข้ากับ binding DB ของ deployment environment
+3. เพิ่ม edge_agents, devices, capabilities และ versioned device policies
+4. ตั้ง secrets ใน deployment environment เท่านั้น:
+   - GREENHOUSE_AGENT_SECRET_<AGENT_ID> — secret แยกต่อ Pi ความยาวอย่างน้อย 32 ตัวอักษร
+   - GREENHOUSE_ADMIN_EMAILS — รายชื่อ admin คั่นด้วย comma
+   - GREENHOUSE_OPERATOR_EMAILS — รายชื่อ operator คั่นด้วย comma
+5. ตั้ง Cloudflare Access ป้องกัน public hostname และจำกัด identity/group ที่อนุมัติ
+6. ตั้งค่า Pi agent และ LAN node tokens; ห้ามใส่ cloud HMAC secret ใน ESP32
+7. ทดสอบ bad HMAC, stale telemetry, duplicate/expired command, delayed ACK, offline Pi,
+   policy rejection และ emergency-stop rejection
+8. ให้ QA ตรวจ keyboard, responsive, accessibility, negative paths และ security input
+
+อ่าน edge-agent API contract และ real-greenhouse roadmap ก่อน provision:
+
+- docs/api/edge-agent-v1.md
+- docs/roadmaps/real-greenhouse-next-steps.md
+
+## Safety และ rollback
+
+- Auth และ authorization ต้อง fail closed
+- Device command สำเร็จได้เมื่อมี acknowledgement จริงเท่านั้น
+- Secret อยู่ใน Cloudflare/Pi environment ไม่อยู่ใน client, source หรือ log
+- Migration ต้อง additive และรักษา audit evidence กับ queued command evidence
+- ก่อนใช้ GPIO จริง ต้อง review pin map, relay logic level, fuse, load limit, watchdog
+  และ physical emergency stop โดย hardware owner/electrician
+- หาก release มีปัญหา ให้ deploy Worker/image รุ่นก่อน; ห้ามลบ D1 tables เพื่อ rollback
+
+## Troubleshooting
+
+### Cloudflare D1 binding DB is unavailable
+
+ตรวจว่า deployment environment ผูก database จริงกับ binding ชื่อ DB แล้ว
+การมี d1: DB ใน .openai/hosting.json อย่างเดียวไม่พอ
+
+### Wrangler บอกว่า login หมดอายุ
+
+รัน npx wrangler login ใหม่ หรือใช้ CLOUDFLARE_API_TOKEN ใน environment ที่ปลอดภัย
+ห้ามส่ง token ผ่าน chat หรือ commit ลง repository
+
+### หน้าเว็บไม่มี telemetry หรือ actuator state
+
+เป็น behavior ที่คาดไว้ของ demo จนกว่าจะเชื่อม live API, Pi และ gateway ที่ผ่าน safety gate
+
+## Contribution checklist
+
+ก่อนส่งงาน:
+
+1. อ่าน AGENTS.md, rule.md และ active feature card
+2. ตรวจ git status และแก้เฉพาะไฟล์ใน scope
+3. ไม่เพิ่มข้อมูล operation ปลอม หรือเคลม physical state จาก simulator
+4. รัน npm test, npm run lint และ git diff --check ตามความเสี่ยง
+5. บันทึก command, ผลจริง, residual risk และงานที่ role อื่นต้องทำต่อ
+
+รายละเอียด product, design และ operation อยู่ใน PRODUCT.md, design.md,
+docs/feature-cards/ และ docs/api/
