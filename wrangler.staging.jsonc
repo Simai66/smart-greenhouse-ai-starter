@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "smart-greenhouse-ai-staging",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-08-05",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["0 20 * * *"] },
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "smart-greenhouse-staging",
+      "database_id": "370e1b0f-6456-45e6-a399-f0ea5f358439",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}

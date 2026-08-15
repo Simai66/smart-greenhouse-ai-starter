@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * P0 domain storage. Times are ISO-8601 UTC strings so gateway sample time and
@@ -34,6 +34,7 @@ export const edgeAgents = sqliteTable("edge_agents", {
 
 export const sensorReadings = sqliteTable("sensor_readings", {
   id: text("id").primaryKey(),
+  readingId: text("reading_id"),
   greenhouseId: text("greenhouse_id").notNull(),
   sensorId: text("sensor_id").notNull(),
   metric: text("metric").notNull(),
@@ -42,9 +43,33 @@ export const sensorReadings = sqliteTable("sensor_readings", {
   sampledAt: text("sampled_at").notNull(),
   receivedAt: text("received_at").notNull(),
   quality: text("quality").notNull().default("valid"),
+  configVersion: integer("config_version"),
 }, (table) => [
   index("sensor_readings_greenhouse_sampled_idx").on(table.greenhouseId, table.sampledAt),
   index("sensor_readings_sensor_sampled_idx").on(table.sensorId, table.sampledAt),
+  uniqueIndex("sensor_readings_reading_id_unique").on(table.readingId),
+]);
+
+export const sensorConfigs = sqliteTable("sensor_configs", {
+  sensorId: text("sensor_id").primaryKey(),
+  greenhouseId: text("greenhouse_id").notNull(),
+  name: text("name").notNull(),
+  metric: text("metric").notNull(),
+  unit: text("unit").notNull(),
+  samplingIntervalSeconds: integer("sampling_interval_seconds").notNull().default(30),
+  calibrationScale: text("calibration_scale").notNull().default("1"),
+  calibrationOffset: text("calibration_offset").notNull().default("0"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  minThreshold: text("min_threshold"),
+  maxThreshold: text("max_threshold"),
+  configVersion: integer("config_version").notNull().default(1),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("sensor_configs_greenhouse_idx").on(table.greenhouseId),
+  index("sensor_configs_greenhouse_enabled_idx").on(table.greenhouseId, table.enabled),
 ]);
 
 export const deviceCommands = sqliteTable("device_commands", {
@@ -99,6 +124,7 @@ export const detections = sqliteTable("detections", {
   id: text("id").primaryKey(),
   greenhouseId: text("greenhouse_id").notNull(),
   plantId: text("plant_id").notNull(),
+  imageId: text("image_id"),
   imageKey: text("image_key").notNull(),
   modelVersion: text("model_version").notNull(),
   classification: text("classification").notNull(),
@@ -106,6 +132,30 @@ export const detections = sqliteTable("detections", {
   severity: text("severity").notNull(),
   detectedAt: text("detected_at").notNull(),
 });
+
+export const inspectionImages = sqliteTable("inspection_images", {
+  id: text("id").primaryKey(),
+  greenhouseId: text("greenhouse_id").notNull(),
+  source: text("source").notNull(),
+  cameraId: text("camera_id"),
+  plantId: text("plant_id"),
+  bucket: text("bucket").notNull(),
+  objectPath: text("object_path").notNull().unique(),
+  publicUrl: text("public_url"),
+  contentType: text("content_type").notNull(),
+  byteSize: integer("byte_size").notNull(),
+  capturedAt: text("captured_at"),
+  uploadedAt: text("uploaded_at"),
+  expiresAt: text("expires_at"),
+  status: text("status").notNull().default("pending"),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  expiredAt: text("expired_at"),
+}, (table) => [
+  index("inspection_images_greenhouse_created_idx").on(table.greenhouseId, table.createdAt),
+  index("inspection_images_greenhouse_camera_idx").on(table.greenhouseId, table.cameraId, table.createdAt),
+  index("inspection_images_expiry_idx").on(table.status, table.expiresAt),
+]);
 
 export const alerts = sqliteTable("alerts", {
   id: text("id").primaryKey(),

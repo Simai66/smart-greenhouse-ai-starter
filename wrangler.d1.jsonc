@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "smart-greenhouse-d1-admin",
+  "compatibility_date": "2026-08-05",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "smart-greenhouse-staging",
+      "database_id": "370e1b0f-6456-45e6-a399-f0ea5f358439",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}

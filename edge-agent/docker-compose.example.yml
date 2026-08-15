@@ -7,7 +7,24 @@ services:
       GREENHOUSE_ID: GH-01
       GREENHOUSE_AGENT_ID: PI-GH-01
       GREENHOUSE_AGENT_SECRET: replace-with-the-per-agent-secret
+      # JSON maps ESP32 node IDs to LAN-only tokens. Never use the cloud secret here.
+      GREENHOUSE_NODE_TOKENS: '{"ESP32-01":"replace-with-lan-token"}'
+      # Optional JSON allow-list. Missing entries inherit all cached sensor IDs.
+      GREENHOUSE_NODE_SENSORS: '{"ESP32-01":["SEN-ESP32-01-TEMP"]}'
+      GREENHOUSE_LISTEN_HOST: 0.0.0.0
+      GREENHOUSE_LISTEN_PORT: 8080
       GREENHOUSE_STATE_DIR: /var/lib/greenhouse-agent
+      GREENHOUSE_CAMERA_ID: CAM-A-01
+      GREENHOUSE_CAMERA_PLANT_ID: ""
+      GREENHOUSE_CAPTURE_INTERVAL_SECONDS: 300
+      # Use one option. Command must include {output}; fixture is for tests.
+      GREENHOUSE_CAPTURE_COMMAND: ""
+      GREENHOUSE_CAPTURE_FIXTURE: ""
+      # Optional command prints a JSON array of detections for captured image.
+      GREENHOUSE_AI_COMMAND: ""
+      GREENHOUSE_DETECTIONS_JSON: "[]"
+    ports:
+      - "8080:8080"
     volumes:
       - greenhouse_agent_state:/var/lib/greenhouse-agent
 volumes:

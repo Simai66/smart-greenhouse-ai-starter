@@ -41,6 +41,7 @@ import {
   type ChartPeriod,
   type GreenhousePageId,
 } from "@/lib/greenhouse-presentation";
+import { sensorApi, type LiveSensor } from "@/lib/sensor-api";
 
 export function GreenhouseApp() {
   const [state, setState] = useState<DemoState>(demoInitialState);
@@ -61,6 +62,11 @@ export function GreenhouseApp() {
   const [commandPending, setCommandPending] = useState(false);
   const [selectedPlantId, setSelectedPlantId] = useState("TOM-003");
   const [selectedAlert, setSelectedAlert] = useState<DemoAlert | null>(null);
+  const [liveSensors, setLiveSensors] = useState<LiveSensor[]>([]);
+  const [liveSensorGreenhouseId, setLiveSensorGreenhouseId] = useState<string | null>(null);
+  const [liveSensorsLoading, setLiveSensorsLoading] = useState(true);
+  const [liveSensorsError, setLiveSensorsError] = useState("");
+  const [liveSensorsFetchedAt, setLiveSensorsFetchedAt] = useState<string | null>(null);
   const messageTimer = useRef<number | null>(null);
   const staleTimer = useRef<number | null>(null);
 
@@ -115,6 +121,29 @@ export function GreenhouseApp() {
     });
   }, [ready, state]);
 
+  const refreshLiveSensors = useCallback(async (greenhouseId = activeGreenhouseId) => {
+    if (!greenhouseId) return;
+    setLiveSensorsLoading(true);
+    try {
+      setLiveSensors(await sensorApi.list(greenhouseId));
+      setLiveSensorGreenhouseId(greenhouseId);
+      setLiveSensorsError("");
+      setLiveSensorsFetchedAt(new Date().toISOString());
+    } catch (caught) {
+      setLiveSensors([]);
+      setLiveSensorsError(caught instanceof Error ? caught.message : "ไม่สามารถโหลดเซ็นเซอร์จริงได้");
+    } finally {
+      setLiveSensorsLoading(false);
+    }
+  }, [activeGreenhouseId]);
+
+  useEffect(() => {
+    if (!ready || !activeGreenhouseId) return;
+    // Network synchronization belongs in callback promise; initial load is not render state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshLiveSensors(activeGreenhouseId);
+  }, [activeGreenhouseId, activePage, ready, refreshLiveSensors]);
+
   const activeGreenhouse = useMemo(
     () => state.greenhouses.find((greenhouse) => greenhouse.id === activeGreenhouseId && greenhouse.status === "active"),
     [activeGreenhouseId, state.greenhouses],
@@ -132,7 +161,7 @@ export function GreenhouseApp() {
     cropBatches: greenhouseContext.cropBatches,
     settings: { ...state.settings, cameras: greenhouseContext.cameras },
   }), [greenhouseContext, state]);
-  const dashboard = useMemo(() => buildDashboardViewModel(greenhouseState), [greenhouseState]);
+  const dashboard = useMemo(() => buildDashboardViewModel(greenhouseState, liveSensorGreenhouseId === activeGreenhouseId ? liveSensors : []), [activeGreenhouseId, greenhouseState, liveSensorGreenhouseId, liveSensors]);
   const openAlerts = dashboard.openAlerts;
   const searchResults = useMemo(
     () => buildDashboardSearchResults(greenhouseState, search),
@@ -287,6 +316,7 @@ export function GreenhouseApp() {
     ) : activePage === "ai" ? (
       selectedPlant ? (
       <AiDetectionView
+        greenhouseId={activeGreenhouse?.id ?? ""}
         plant={selectedPlant}
         cameras={greenhouseState.settings.cameras}
         reviewedCameraIds={state.aiReviewedEvidence?.[selectedPlant.id] ?? []}
@@ -305,7 +335,7 @@ export function GreenhouseApp() {
           notify("บันทึกผลตรวจแล้ว การแจ้งเตือนยังคงเปิดอยู่");
         }}
       />
-      ) : <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center"><p className="font-semibold">ยังไม่มีพืชสำหรับตรวจด้วย AI</p><p className="max-w-md text-sm text-muted-foreground">เพิ่มรอบปลูกและข้อมูลพืชของ {activeGreenhouse.name} ก่อน แล้วจึงเริ่มตรวจหลักฐานจากกล้องได้</p><Button variant="outline" onClick={() => navigate("settings")}>ไปที่ตั้งค่า</Button></CardContent></Card>
+      ) : <Card className="shadow-none"><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center"><p className="font-semibold">ยังไม่มีพืชสำหรับตรวจด้วย AI</p><p className="max-w-md text-sm text-muted-foreground">เพิ่มรอบปลูกและข้อมูลพืชของ {activeGreenhouse?.name ?? "โรงเรือนที่เลือก"} ก่อน แล้วจึงเริ่มตรวจหลักฐานจากกล้องได้</p><Button variant="outline" onClick={() => navigate("settings")}>ไปที่ตั้งค่า</Button></CardContent></Card>
     ) : activePage === "devices" ? (
       <DevicesView
         key={activeGreenhouse?.id ?? "no-greenhouse"}
@@ -328,6 +358,11 @@ export function GreenhouseApp() {
         activeGreenhouseId={activeGreenhouse?.id ?? ""}
         devices={state.devices}
         sensors={state.sensors}
+        liveSensors={liveSensorGreenhouseId === activeGreenhouseId ? liveSensors : []}
+        liveSensorsLoading={liveSensorsLoading}
+        liveSensorsError={liveSensorsError}
+        liveSensorsFetchedAt={liveSensorsFetchedAt}
+        onRefreshLiveSensors={() => refreshLiveSensors()}
         onSave={(settings) => {
           setState((current) => ({ ...current, settings }));
           notify("บันทึกการตั้งค่าแล้ว");
@@ -522,6 +557,7 @@ export function GreenhouseApp() {
           notify(value.kind === "device" ? "เพิ่มอุปกรณ์ใหม่แล้ว" : value.kind === "sensor" ? "เพิ่มเซ็นเซอร์ใหม่แล้ว" : "เพิ่มกล้องใหม่แล้ว");
         }}
         onMoveResource={(kind, id, zoneId) => {
+          if (!activeGreenhouse) { notify("เลือกโรงเรือนก่อนจึงจะย้ายทรัพยากรได้", "error"); return; }
           const zoneName = activeGreenhouse.zones.find((zone) => zone.id === zoneId)?.name ?? "ไม่ระบุโซน";
           setState((current) => {
             if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, zoneId, detail: `ผูกกับ ${zoneName}` } : item) };
@@ -531,6 +567,7 @@ export function GreenhouseApp() {
           notify(`ย้ายทรัพยากรไป${zoneName}แล้ว`);
         }}
         onRenameResource={(kind, id, name) => {
+          if (!activeGreenhouse) { notify("เลือกโรงเรือนก่อนจึงจะแก้ไขทรัพยากรได้", "error"); return; }
           setState((current) => {
             if (kind === "device") return { ...current, devices: current.devices.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, name } : item) };
             if (kind === "sensor") return { ...current, sensors: current.sensors.map((item) => item.id === id && item.greenhouseId === activeGreenhouse.id ? { ...item, name } : item) };
@@ -539,6 +576,7 @@ export function GreenhouseApp() {
           notify("แก้ไขชื่อทรัพยากรแล้ว");
         }}
         onUpdateResourceStatus={(kind, id, { enabled, status }) => {
+          if (!activeGreenhouse) { notify("เลือกโรงเรือนก่อนจึงจะเปลี่ยนสถานะทรัพยากรได้", "error"); return; }
           setState((current) => {
             if (kind === "device") return {
               ...current,
@@ -561,6 +599,7 @@ export function GreenhouseApp() {
           notify("อัปเดตสถานะทรัพยากรแล้ว");
         }}
         onDeleteResource={(kind, id) => {
+          if (!activeGreenhouse) { notify("เลือกโรงเรือนก่อนจึงจะลบทรัพยากรได้", "error"); return; }
           setState((current) => {
             if (kind === "device") return { ...current, devices: current.devices.filter((item) => item.id !== id || item.greenhouseId !== activeGreenhouse.id) };
             if (kind === "sensor") return { ...current, sensors: current.sensors.filter((item) => item.id !== id || item.greenhouseId !== activeGreenhouse.id) };
