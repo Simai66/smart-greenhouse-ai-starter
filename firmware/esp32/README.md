@@ -1,9 +1,16 @@
-# ESP32 protocol skeleton
+# ESP32 greenhouse sensor node
 
-This PlatformIO/Arduino firmware is a protocol harness until sensor models and
-pin maps are commissioned. `MockSensorAdapter` supplies deterministic values;
-replace it with reviewed adapters without changing LAN auth or telemetry
-envelope code.
+This PlatformIO/Arduino firmware reads the commissioned SHT30 sensor and keeps
+the LAN auth and telemetry envelope unchanged.
+
+Hardware used by staging test:
+
+- SHT30 temperature/humidity over I2C address `0x44`
+- SDA `GPIO21`, SCL `GPIO22`
+- greenhouse P0 channel: `SEN-ESP32-01-TEMP` / `temperature` / `celsius`
+
+BH1750 and AB142 are physically present in the test setup, but remain outside
+P0 until their registry channels and calibration rules are added.
 
 The node calls the Pi only:
 
@@ -11,8 +18,8 @@ The node calls the Pi only:
 - `POST /v1/telemetry` with stable `readingId`, `configVersion`, and quality
 
 `Preferences` keeps config, calibration, config version, and sequence across
-restart. Wi-Fi reconnects and task watchdog are enabled. A sensor read failure
-emits `quality: "invalid"` and never emits that value as `valid`.
+restart. Wi-Fi reconnects and task watchdog are enabled. A missing or failed
+SHT30 read emits `quality: "invalid"` and never emits that value as `valid`.
 
 Build-time values are Wi-Fi credentials, Pi URL, node ID, and LAN token only.
 Do not add cloud HMAC credentials to firmware.

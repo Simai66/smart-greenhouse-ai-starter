@@ -5,6 +5,7 @@ export type LiveSensorFreshness = "fresh" | "stale" | "missing";
 export type LiveSensor = {
   sensorId: string;
   greenhouseId: string;
+  source: "edge-agent";
   name: string;
   metric: LiveSensorMetric;
   unit: string;
@@ -19,6 +20,7 @@ export type LiveSensor = {
   lastSeenAt: string | null;
   latest: {
     readingId: string;
+    source: "edge-agent";
     value: number;
     metric: string;
     unit: string;
@@ -76,7 +78,7 @@ function isSensor(value: unknown): value is LiveSensor {
   const calibration = sensor.calibration;
   const thresholds = sensor.thresholds;
   const latest = sensor.latest;
-  return typeof sensor.sensorId === "string" && typeof sensor.greenhouseId === "string" && typeof sensor.name === "string" && isMetric(sensor.metric) && typeof sensor.unit === "string" && typeof interval === "number" && Number.isInteger(interval) && interval > 0 && typeof sensor.configVersion === "number" && typeof sensor.enabled === "boolean" && (sensor.agentId === null || typeof sensor.agentId === "string") && ["online", "offline", "disabled"].includes(String(sensor.status)) && ["fresh", "stale", "missing"].includes(String(sensor.freshness)) && (sensor.lastSeenAt === null || typeof sensor.lastSeenAt === "string") && (calibration !== null && typeof calibration === "object" && isFiniteNumber(calibration.scale) && isFiniteNumber(calibration.offset)) && (thresholds !== null && typeof thresholds === "object" && (thresholds.min === null || isFiniteNumber(thresholds.min)) && (thresholds.max === null || isFiniteNumber(thresholds.max))) && (latest === null || (typeof latest === "object" && typeof latest.readingId === "string" && isFiniteNumber(latest.value) && typeof latest.sampledAt === "string" && typeof latest.receivedAt === "string" && ["valid", "suspect", "invalid"].includes(String(latest.quality))));
+  return typeof sensor.sensorId === "string" && typeof sensor.greenhouseId === "string" && sensor.source === "edge-agent" && typeof sensor.name === "string" && isMetric(sensor.metric) && typeof sensor.unit === "string" && typeof interval === "number" && Number.isInteger(interval) && interval > 0 && typeof sensor.configVersion === "number" && typeof sensor.enabled === "boolean" && (sensor.agentId === null || typeof sensor.agentId === "string") && ["online", "offline", "disabled"].includes(String(sensor.status)) && ["fresh", "stale", "missing"].includes(String(sensor.freshness)) && (sensor.lastSeenAt === null || typeof sensor.lastSeenAt === "string") && (calibration !== null && typeof calibration === "object" && isFiniteNumber(calibration.scale) && isFiniteNumber(calibration.offset)) && (thresholds !== null && typeof thresholds === "object" && (thresholds.min === null || isFiniteNumber(thresholds.min)) && (thresholds.max === null || isFiniteNumber(thresholds.max))) && (latest === null || (typeof latest === "object" && typeof latest.readingId === "string" && latest.source === "edge-agent" && isFiniteNumber(latest.value) && typeof latest.sampledAt === "string" && typeof latest.receivedAt === "string" && ["valid", "suspect", "invalid"].includes(String(latest.quality))));
 }
 
 async function request(path: string, init?: RequestInit): Promise<LiveSensor[]> {

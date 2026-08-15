@@ -78,7 +78,7 @@ GET /api/sensors
 ## แนวทางพัฒนาต่อ
 
 - Cloudflare D1: เก็บ sensor readings, AI detections, alerts และ device command logs
-- Cloudflare R2: เก็บภาพพืชจากกล้อง
+- Supabase Storage: เก็บภาพพืชจากกล้องใน bucket `greenhouse-images`
 - Raspberry Pi 5: รัน OpenCV / TFLite แล้วส่งผลเข้า Worker API
 - ESP32 / ESP8266: ส่ง telemetry และรับคำสั่งผ่าน MQTT หรือ gateway ภายใน
 - Authentication: แยกสิทธิ์ Administrator, Operator และ Viewer
@@ -102,7 +102,9 @@ used as evidence that a relay changed state.
    capability document, and an initial versioned `device_policies` row. Do not
    queue commands before these records exist.
 3. Set a distinct Worker secret for each agent, named
-   `GREENHOUSE_AGENT_SECRET_<AGENT_ID>` (at least 32 characters). Set browser
+   `GREENHOUSE_AGENT_SECRET_<AGENT_ID>` with non-alphanumeric characters
+   changed to `_` (for example `PI-GH-01` becomes
+   `GREENHOUSE_AGENT_SECRET_PI_GH_01`; at least 32 characters). Set browser
    roles with `GREENHOUSE_ADMIN_EMAILS` and `GREENHOUSE_OPERATOR_EMAILS`.
 4. Configure Cloudflare Access in the Cloudflare dashboard: protect the public
    hostname, use Google as an identity provider, and let only approved email
@@ -115,13 +117,56 @@ used as evidence that a relay changed state.
 6. Flash `firmware/esp32` with PlatformIO after assigning each ESP32 a unique
    LAN node token. Firmware calls Pi only; it contains no cloud HMAC secret.
 
-The supplied edge relay and sensor adapters are simulators. Before substituting
-GPIO code, have an electrician/hardware owner review the pin map, relay logic
-level, fused power path, maximum load runtime, and physical emergency stop.
+### Staging deployment
+
+`wrangler.staging.jsonc` binds Worker `smart-greenhouse-ai-staging` to the
+remote D1 database `smart-greenhouse-staging`. Verify the Cloudflare account
+email and register a `workers.dev` subdomain before publishing:
+
+```bash
+npx wrangler deploy --config wrangler.staging.jsonc
+npx wrangler secret put GREENHOUSE_AGENT_SECRET_PI_GH_01 --config wrangler.staging.jsonc
+```
+
+The secret must be at least 32 characters. Configure Cloudflare Access and
+browser role variables before exposing `/api/sensors` publicly. Do not commit
+the secret or put it in ESP32 firmware.
+
+The Pi relay adapter remains a simulator. The staging ESP32 firmware reads the
+SHT30 on I2C `0x44` (`SDA=21`, `SCL=22`) for the temperature channel; BH1750 and
+AB142 remain out of P0. Before adding actuator GPIO code, have an
+electrician/hardware owner review the pin map, relay logic level, fused power
+path, maximum load runtime, and physical emergency stop.
 The Docker image exposes only the LAN sensor HTTP port, defaults every relay to
 off, and the cloud cannot initiate a connection to the Pi. To roll back an application
 release, deploy the previous Worker/image; do not drop the additive D1 tables
 because they contain audit history and queued command evidence.
+
+### Supabase Storage image setup
+
+Create bucket `greenhouse-images` in the existing Supabase project. Set it to
+Public read, allow `image/jpeg`, `image/png`, and `image/webp`, and set the file
+limit to 10 MiB. Public URLs expose images until the 15-day cleanup cron removes
+them; use a private bucket with signed read URLs before handling sensitive
+commercial imagery.
+
+Apply D1 and set Worker secrets without committing them:
+
+```bash
+npx wrangler d1 migrations apply smart-greenhouse-staging --remote --config wrangler.staging.jsonc
+npx wrangler secret put SUPABASE_URL --config wrangler.staging.jsonc
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.staging.jsonc
+npx wrangler secret put SUPABASE_STORAGE_BUCKET --config wrangler.staging.jsonc
+npx wrangler secret put GREENHOUSE_ADMIN_EMAILS --config wrangler.staging.jsonc
+npx wrangler secret put GREENHOUSE_OPERATOR_EMAILS --config wrangler.staging.jsonc
+npx wrangler deploy --config wrangler.staging.jsonc
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` is used only by Worker. Browser and Pi receive
+short-lived signed upload URLs, never this key. Configure Supabase Storage CORS
+for the staging hostname so browser `PUT` requests to signed URLs are allowed.
+See [the image API contract](docs/api/images-v1.md) and [the edge API
+contract](docs/api/edge-agent-v1.md).
 
 ## P0 safety configuration
 

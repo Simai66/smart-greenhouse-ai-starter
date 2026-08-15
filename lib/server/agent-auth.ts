@@ -18,6 +18,10 @@ function equalSignature(actual: string, expected: string) {
 
 export type SignedAgentRequest = { agentId: string; rawBody: string };
 
+function secretBindingName(agentId: string) {
+  return `GREENHOUSE_AGENT_SECRET_${agentId.replace(/[^A-Za-z0-9_]/g, "_")}`;
+}
+
 /** Verifies the edge identity before any request JSON is parsed or persisted. */
 export async function authenticateAgentRequest(request: Request): Promise<SignedAgentRequest | Response> {
   const agentId = request.headers.get("X-Greenhouse-Agent") ?? "";
@@ -30,7 +34,7 @@ export async function authenticateAgentRequest(request: Request): Promise<Signed
     return Response.json({ error: "Invalid edge-agent authentication headers." }, { status: 401 });
   }
 
-  const secretName = `GREENHOUSE_AGENT_SECRET_${agentId}`;
+  const secretName = secretBindingName(agentId);
   const secret = (env as unknown as Record<string, unknown>)[secretName];
   if (typeof secret !== "string" || secret.length < 32) {
     return Response.json({ error: "This edge agent is not provisioned." }, { status: 401 });

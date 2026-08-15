@@ -16,12 +16,16 @@ import json
 import math
 import os
 import re
+import shlex
 import sqlite3
+import shutil
+import subprocess
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -36,8 +40,18 @@ STATE_DIR = Path(os.environ.get("GREENHOUSE_STATE_DIR", "/var/lib/greenhouse-age
 POLL_SECONDS = max(5, int(os.environ.get("GREENHOUSE_POLL_SECONDS", "15")))
 LOCAL_HOST = os.environ.get("GREENHOUSE_LISTEN_HOST", "0.0.0.0")
 LOCAL_PORT = max(1, int(os.environ.get("GREENHOUSE_LISTEN_PORT", "8080")))
+CAMERA_ID = os.environ.get("GREENHOUSE_CAMERA_ID", "CAM-A-01")
+CAMERA_PLANT_ID = os.environ.get("GREENHOUSE_CAMERA_PLANT_ID", "")
+CAPTURE_COMMAND = os.environ.get("GREENHOUSE_CAPTURE_COMMAND", "")
+CAPTURE_FIXTURE = os.environ.get("GREENHOUSE_CAPTURE_FIXTURE", "")
+AI_COMMAND = os.environ.get("GREENHOUSE_AI_COMMAND", "")
+DETECTIONS_JSON = os.environ.get("GREENHOUSE_DETECTIONS_JSON", "[]")
+CAPTURE_INTERVAL_SECONDS = max(0, int(os.environ.get("GREENHOUSE_CAPTURE_INTERVAL_SECONDS", "300")))
 METRICS = {"temperature": "celsius", "humidity": "percent", "soil_moisture": "percent", "light": "lux"}
 QUALITIES = {"valid", "suspect", "invalid"}
+IMAGE_MAX_BYTES = 10 * 1024 * 1024
+IMAGE_CONTENT_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+IMAGE_QUEUE_PATH = "__image_upload__"
 NODE_ID_PATTERN = re.compile(r"^[A-Z0-9_-]{3,64}$")
 READING_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{2,159}$")
 
@@ -116,8 +130,12 @@ class SensorDriver:
     """Simulator input. Replace with reviewed sensor adapters in commissioning."""
 
     def readings(self, configs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        raw = os.environ.get("GREENHOUSE_SIMULATED_READINGS")
+        if raw is not None and raw.strip().lower() in {"", "disabled", "off"}:
+            return []
         try:
-            values = json.loads(os.environ.get("GREENHOUSE_SIMULATED_READINGS", '{"temperature":28.0,"humidity":65.0,"soil_moisture":42.0,"light":12500.0}'))
+            parsed = json.loads(raw if raw is not None else '{"temperature":28.0,"humidity":65.0,"soil_moisture":42.0,"light":12500.0}')
+            values = parsed if isinstance(parsed, dict) else {}
         except json.JSONDecodeError:
             values = {}
         sampled_at = iso()
@@ -140,6 +158,48 @@ class SensorDriver:
                 "configVersion": int(config.get("configVersion", 1)),
             })
         return readings
+
+
+class CameraCapture:
+    """Capture from a configured command or copy a fixture for hardware-free tests."""
+
+    def capture(self) -> tuple[Path, str] | None:
+        if not CAPTURE_COMMAND and not CAPTURE_FIXTURE:
+            return None
+        image_dir = STATE_DIR / "images"
+        image_dir.mkdir(parents=True, exist_ok=True)
+        output = image_dir / f"capture-{uuid.uuid4()}.jpg"
+        if CAPTURE_FIXTURE:
+            fixture = Path(CAPTURE_FIXTURE)
+            if not fixture.is_file():
+                raise FileNotFoundError(f"Camera fixture was not found: {fixture}")
+            shutil.copyfile(fixture, output)
+        else:
+            if "{output}" not in CAPTURE_COMMAND:
+                raise ValueError("GREENHOUSE_CAPTURE_COMMAND must include {output}.")
+            command = CAPTURE_COMMAND.format(output=str(output), cameraId=CAMERA_ID)
+            subprocess.run(shlex.split(command), check=True, timeout=60, capture_output=True)
+        content_type = IMAGE_CONTENT_TYPES.get(output.suffix.lower())
+        size = output.stat().st_size
+        if not content_type:
+            output.unlink(missing_ok=True)
+            raise ValueError("Captured image must use JPEG, PNG, or WebP extension.")
+        if size < 1 or size > IMAGE_MAX_BYTES:
+            output.unlink(missing_ok=True)
+            raise ValueError("Captured image must not exceed 10 MiB.")
+        return output, content_type
+
+    def detections(self, image_path: Path) -> list[dict[str, Any]]:
+        raw = DETECTIONS_JSON
+        if AI_COMMAND:
+            command = AI_COMMAND.format(image=str(image_path), cameraId=CAMERA_ID)
+            result = subprocess.run(shlex.split(command), check=True, timeout=120, capture_output=True, text=True)
+            raw = result.stdout
+        try:
+            value = json.loads(raw or "[]")
+        except json.JSONDecodeError:
+            return []
+        return value if isinstance(value, list) else []
 
 
 @dataclass(frozen=True)
@@ -170,6 +230,9 @@ class Store:
         with self.lock:
             self.db.execute("INSERT INTO outbound_queue(path, body, created_at) VALUES (?, ?, ?)", (path, json.dumps(body, separators=(",", ":")), iso()))
             self.db.commit()
+
+    def queue_image(self, image_path: Path, metadata: dict[str, Any], detections: list[dict[str, Any]]) -> None:
+        self.queue(IMAGE_QUEUE_PATH, {"localPath": str(image_path), "metadata": metadata, "detections": detections})
 
     def queued(self) -> list[tuple[int, str, dict[str, Any]]]:
         with self.lock:
@@ -262,9 +325,27 @@ class CloudClient:
         raw = json.dumps(body, separators=(",", ":"), ensure_ascii=False) if body is not None else ""
         timestamp = iso()
         signature = base64.b64encode(hmac.new(self.agent_secret.encode(), f"{timestamp}.{raw}".encode(), hashlib.sha256).digest()).decode()
-        request = urllib.request.Request(f"{self.api_url}{path}", data=raw.encode() if method != "GET" else None, method=method, headers={"Content-Type": "application/json", "X-Greenhouse-Agent": self.agent_id, "X-Greenhouse-Timestamp": timestamp, "X-Greenhouse-Signature": signature})
+        request = urllib.request.Request(f"{self.api_url}{path}", data=raw.encode() if method != "GET" else None, method=method, headers={"Content-Type": "application/json", "User-Agent": "smart-greenhouse-edge-agent/1.0", "X-Greenhouse-Agent": self.agent_id, "X-Greenhouse-Timestamp": timestamp, "X-Greenhouse-Signature": signature})
         with urllib.request.urlopen(request, timeout=10) as response:
             return json.loads(response.read() or b"{}")
+
+    def upload_image(self, image_path: Path, metadata: dict[str, Any], detections: list[dict[str, Any]]) -> dict[str, Any]:
+        upload = self.signed_request("/api/agent/images/upload-url", "POST", metadata)
+        upload_url = upload.get("uploadUrl")
+        image_id = upload.get("imageId")
+        if not isinstance(upload_url, str) or not isinstance(image_id, str):
+            raise RuntimeError("Image upload URL response is invalid.")
+        content_type = metadata.get("contentType")
+        if not isinstance(content_type, str):
+            raise RuntimeError("Image content type is missing.")
+        data = image_path.read_bytes()
+        request = urllib.request.Request(upload_url, data=data, method="PUT", headers={"Content-Type": content_type, "Content-Length": str(len(data)), "User-Agent": "smart-greenhouse-edge-agent/1.0"})
+        with urllib.request.urlopen(request, timeout=60):
+            pass
+        complete = self.signed_request("/api/agent/images/complete", "POST", {"imageId": image_id})
+        if detections:
+            self.signed_request("/api/agent/detections", "POST", {"greenhouseId": self.greenhouse_id, "imageId": image_id, "modelVersion": "configured-agent", "detectedAt": metadata.get("capturedAt", iso()), "results": detections})
+        return complete
 
 
 class Agent:
@@ -273,6 +354,8 @@ class Agent:
         self.cloud = CloudClient()
         self.relays = RelayDriver()
         self.sensors = SensorDriver()
+        self.camera = CameraCapture()
+        self.last_capture_at: datetime | None = None
         self.node_tokens = parse_node_tokens(os.environ.get("GREENHOUSE_NODE_TOKENS", ""))
         self.node_sensors = parse_node_sensors(os.environ.get("GREENHOUSE_NODE_SENSORS", ""))
         self.relays.all_off()
@@ -351,14 +434,46 @@ class Agent:
     def flush_queue(self) -> None:
         for queue_id, path, body in self.store.queued():
             try:
-                self.cloud.signed_request(path, "POST", body)
+                if path == IMAGE_QUEUE_PATH:
+                    image_path = Path(str(body["localPath"]))
+                    self.cloud.upload_image(image_path, body["metadata"], body.get("detections", []))
+                    image_path.unlink(missing_ok=True)
+                else:
+                    self.cloud.signed_request(path, "POST", body)
                 self.store.remove_queued(queue_id)
             except urllib.error.HTTPError as error:
                 if error.code < 500:
+                    if path == IMAGE_QUEUE_PATH:
+                        Path(str(body.get("localPath", ""))).unlink(missing_ok=True)
                     self.store.remove_queued(queue_id)
                 return
             except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
                 return
+
+    def capture_once(self, force: bool = False) -> None:
+        captured_at = now()
+        if not force and (CAPTURE_INTERVAL_SECONDS < 1 or (self.last_capture_at and captured_at < self.last_capture_at + timedelta(seconds=CAPTURE_INTERVAL_SECONDS))):
+            return
+        self.last_capture_at = captured_at
+        try:
+            captured = self.camera.capture()
+            if not captured:
+                return
+            image_path, content_type = captured
+            metadata: dict[str, Any] = {"greenhouseId": GREENHOUSE_ID, "cameraId": CAMERA_ID, "plantId": CAMERA_PLANT_ID or None, "capturedAt": iso(captured_at), "contentType": content_type, "byteSize": image_path.stat().st_size}
+            detections = self.camera.detections(image_path)
+            try:
+                self.cloud.upload_image(image_path, metadata, detections)
+                image_path.unlink(missing_ok=True)
+            except urllib.error.HTTPError as error:
+                if error.code >= 500:
+                    self.store.queue_image(image_path, metadata, detections)
+                else:
+                    image_path.unlink(missing_ok=True)
+            except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
+                self.store.queue_image(image_path, metadata, detections)
+        except (FileNotFoundError, OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as error:
+            print(f"camera capture unavailable: {error}")
 
     def apply_command(self, command: Command) -> None:
         if self.store.seen(command.idempotency_key):
@@ -468,6 +583,7 @@ class Agent:
                 self.apply_command(Command(item["commandId"], item["deviceId"], item["action"], item["idempotencyKey"], item["expiresAt"], item.get("maxRuntimeSeconds")))
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, RuntimeError) as error:
             print(f"cloud unavailable: {error}")
+        self.capture_once()
 
     def start_local_server(self) -> ThreadingHTTPServer:
         agent = self

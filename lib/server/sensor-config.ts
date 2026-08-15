@@ -105,6 +105,7 @@ export function sensorConfigPayload(row: SensorConfigRow, latest: {
   return {
     sensorId: row.sensorId,
     greenhouseId: row.greenhouseId,
+    source: "edge-agent",
     name: row.name,
     metric: row.metric,
     unit: row.unit,
@@ -119,6 +120,7 @@ export function sensorConfigPayload(row: SensorConfigRow, latest: {
     lastSeenAt: latest?.sampledAt ?? null,
     latest: latest && Number.isFinite(latestValue) ? {
       readingId: latest.readingId ?? latest.id,
+      source: "edge-agent",
       value: latestValue,
       metric: latest.metric,
       unit: latest.unit,
