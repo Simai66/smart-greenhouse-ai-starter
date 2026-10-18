@@ -15,6 +15,7 @@ export type SensorConfigRow = typeof sensorConfigs.$inferSelect;
 
 export type SensorConfigInput = {
   sensorId: string;
+  measurementPointId: string | null;
   greenhouseId: string;
   name: string;
   metric: SensorMetric;
@@ -46,6 +47,7 @@ export function parseSensorConfigInput(payload: unknown, fallback?: Partial<Sens
   if (!body) return { error: "Request body must be an object." };
   const greenhouseId = body.greenhouseId ?? fallback?.greenhouseId;
   const sensorId = body.sensorId ?? fallback?.sensorId;
+  const measurementPointId = body.measurementPointId === undefined ? fallback?.measurementPointId ?? null : body.measurementPointId;
   const name = body.name ?? fallback?.name;
   const metric = body.metric ?? fallback?.metric;
   const unit = body.unit ?? fallback?.unit;
@@ -64,6 +66,7 @@ export function parseSensorConfigInput(payload: unknown, fallback?: Partial<Sens
   const max = numberOrNull(thresholdMax);
   if (!stringValue(greenhouseId, 64) || !stringValue(sensorId, 128) || !isValidSensorId(sensorId)) return { error: "greenhouseId and a valid sensorId are required." };
   if (!stringValue(name)) return { error: "name is required." };
+  if (measurementPointId !== null && (!stringValue(measurementPointId, 63) || !/^[A-Z0-9][A-Z0-9_-]{2,60}-[AB]$/.test(measurementPointId))) return { error: "measurementPointId is invalid." };
   if (!isSensorMetric(metric) || typeof unit !== "string") return { error: "metric and unit are required." };
   if (typeof enabled !== "boolean") return { error: "enabled must be boolean." };
   if (body.agentId !== undefined && (!stringValue(body.agentId, 64) || !/^[A-Z0-9_-]{3,64}$/.test(body.agentId))) return { error: "agentId is invalid." };
@@ -72,6 +75,7 @@ export function parseSensorConfigInput(payload: unknown, fallback?: Partial<Sens
   return {
     value: {
       sensorId,
+      measurementPointId: measurementPointId as string | null,
       greenhouseId,
       name: name.trim(),
       metric,
@@ -95,7 +99,7 @@ export function sensorConfigPayload(row: SensorConfigRow, latest: {
   receivedAt: string;
   quality: string;
   configVersion: number | null;
-} | null, agentId: string | null = null) {
+} | null, agentId: string | null = null, measurementPointPortKey: string | null = null) {
   const min = row.minThreshold === null ? null : Number(row.minThreshold);
   const max = row.maxThreshold === null ? null : Number(row.maxThreshold);
   const thresholds = { min: Number.isFinite(min) ? min : null, max: Number.isFinite(max) ? max : null };
@@ -104,6 +108,7 @@ export function sensorConfigPayload(row: SensorConfigRow, latest: {
   const freshness = freshnessFor(latest?.sampledAt ?? null, row.samplingIntervalSeconds);
   return {
     sensorId: row.sensorId,
+    measurementPointId: row.measurementPointId ?? null,
     greenhouseId: row.greenhouseId,
     source: "edge-agent",
     name: row.name,
@@ -131,6 +136,7 @@ export function sensorConfigPayload(row: SensorConfigRow, latest: {
     } : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    measurementPointPortKey,
   };
 }
 

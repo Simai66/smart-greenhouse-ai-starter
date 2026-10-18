@@ -94,10 +94,15 @@ provisioning a device. The current rendered dashboard intentionally remains a
 clearly labelled demo until a provisioned Pi is integrated; it must not be
 used as evidence that a relay changed state.
 
-1. Apply `drizzle/0000_p0_foundation.sql`,
-   `drizzle/0001_edge_agent_and_policies.sql`, then
-   `drizzle/0002_sensor_configs_and_reading_ids.sql` to the production D1
-   database.
+1. Apply additive D1 migrations in order: `0000_p0_foundation.sql`,
+   `0001_edge_agent_and_policies.sql`,
+   `0002_sensor_configs_and_reading_ids.sql`,
+   `0003_supabase_storage_images.sql`, then
+   `0004_dual_measurement_points_and_plant_assignments.sql`.
+   Back up staging D1 before applying. App rollback is safe because migration
+   `0004` only adds tables, columns, and indexes; retain the added schema and
+   assignment history when rolling back the Worker. Recover incorrect mappings
+   with a new audited assignment rather than deleting history.
 2. Insert one `edge_agents` row per Pi and assign each device its `agent_id`,
    capability document, and an initial versioned `device_policies` row. Do not
    queue commands before these records exist.
