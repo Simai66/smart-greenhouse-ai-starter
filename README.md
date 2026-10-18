@@ -102,12 +102,33 @@ GET /api/sensors
 
 The P0/P1 edge protocol, D1 migration, and reference Pi agent are included in this repository. Read [the API contract](docs/api/edge-agent-v1.md) before provisioning a device. The current rendered dashboard intentionally remains a clearly labelled demo until a provisioned Pi is integrated; it must not be used as evidence that a relay changed state.
 
-1. Apply `drizzle/0000_p0_foundation.sql`, `drizzle/0001_edge_agent_and_policies.sql`, then `drizzle/0002_sensor_configs_and_reading_ids.sql` to the production D1 database.
-2. Insert one `edge_agents` row per Pi and assign each device its `agent_id`, capability document, and an initial versioned `device_policies` row. Do not queue commands before these records exist.
-3. Set a distinct Worker secret for each agent, named `GREENHOUSE_AGENT_SECRET_<AGENT_ID>` with non-alphanumeric characters changed to `_` (for example `PI-GH-01` becomes `GREENHOUSE_AGENT_SECRET_PI_GH_01`; at least 32 characters). Set browser roles with `GREENHOUSE_ADMIN_EMAILS` and `GREENHOUSE_OPERATOR_EMAILS`.
-4. Configure Cloudflare Access in the Cloudflare dashboard: protect the public hostname, use Google as an identity provider, and let only approved email addresses/groups reach the application. This cannot be safely represented by a source-controlled application secret.
-5. On the Pi, copy `edge-agent/docker-compose.example.yml`, set its four required cloud values plus LAN node token/allow-list values, and start it with Docker Compose. Its persistent volume is the recoverable outbound queue, inbound reading dedupe, sensor config cache, and local-policy state.
-6. Flash `firmware/esp32` with PlatformIO after assigning each ESP32 a unique LAN node token. Firmware calls Pi only; it contains no cloud HMAC secret.
+1. Apply additive D1 migrations in order: `0000_p0_foundation.sql`,
+   `0001_edge_agent_and_policies.sql`,
+   `0002_sensor_configs_and_reading_ids.sql`,
+   `0003_supabase_storage_images.sql`, then
+   `0004_dual_measurement_points_and_plant_assignments.sql`.
+   Back up staging D1 before applying. App rollback is safe because migration
+   `0004` only adds tables, columns, and indexes; retain the added schema and
+   assignment history when rolling back the Worker. Recover incorrect mappings
+   with a new audited assignment rather than deleting history.
+2. Insert one `edge_agents` row per Pi and assign each device its `agent_id`,
+   capability document, and an initial versioned `device_policies` row. Do not
+   queue commands before these records exist.
+3. Set a distinct Worker secret for each agent, named
+   `GREENHOUSE_AGENT_SECRET_<AGENT_ID>` with non-alphanumeric characters
+   changed to `_` (for example `PI-GH-01` becomes
+   `GREENHOUSE_AGENT_SECRET_PI_GH_01`; at least 32 characters). Set browser
+   roles with `GREENHOUSE_ADMIN_EMAILS` and `GREENHOUSE_OPERATOR_EMAILS`.
+4. Configure Cloudflare Access in the Cloudflare dashboard: protect the public
+   hostname, use Google as an identity provider, and let only approved email
+   addresses/groups reach the application. This cannot be safely represented
+   by a source-controlled application secret.
+5. On the Pi, copy `edge-agent/docker-compose.example.yml`, set its four
+   required cloud values plus LAN node token/allow-list values, and start it
+   with Docker Compose. Its persistent volume is the recoverable outbound
+   queue, inbound reading dedupe, sensor config cache, and local-policy state.
+6. Flash `firmware/esp32` with PlatformIO after assigning each ESP32 a unique
+   LAN node token. Firmware calls Pi only; it contains no cloud HMAC secret.
 
 ### Staging deployment
 
