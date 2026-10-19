@@ -60,11 +60,7 @@ export async function POST(request: Request) {
       if (!point) return Response.json({ error: "Measurement point was not found or is disabled." }, { status: 404 });
       const pointDevice = await db.select({ agentId: devices.agentId }).from(devices).where(eq(devices.id, point.deviceId)).limit(1).get();
       if (!agentId || pointDevice?.agentId !== agentId) return Response.json({ error: "Sensor channel and measurement point must use the same edge agent." }, { status: 409 });
-    }
-    if (existing) {
-      await db.update(devices).set({ name: value.name, category: "sensor", agentId, capabilitiesJson: JSON.stringify(sensorCapabilities(value.metric, value.unit)), updatedAt: now }).where(eq(devices.id, value.sensorId)).run();
-    } else {
-      await db.insert(devices).values({ id: value.sensorId, greenhouseId: value.greenhouseId, agentId, name: value.name, category: "sensor", capabilitiesJson: JSON.stringify(sensorCapabilities(value.metric, value.unit)), reportedStatus: "offline", updatedAt: now }).run();
+      if (await db.select({ sensorId: sensorConfigs.sensorId }).from(sensorConfigs).where(and(eq(sensorConfigs.measurementPointId, value.measurementPointId), eq(sensorConfigs.metric, value.metric))).limit(1).get()) return Response.json({ error: "Measurement point already has a sensor for this metric." }, { status: 409 });
     }
     const row = {
       sensorId: value.sensorId,
@@ -85,7 +81,10 @@ export async function POST(request: Request) {
       createdAt: now,
       updatedAt: now,
     };
-    await db.insert(sensorConfigs).values(row).run();
+    const deviceWrite = existing
+      ? db.update(devices).set({ name: value.name, category: "sensor", agentId, capabilitiesJson: JSON.stringify(sensorCapabilities(value.metric, value.unit)), updatedAt: now }).where(eq(devices.id, value.sensorId))
+      : db.insert(devices).values({ id: value.sensorId, greenhouseId: value.greenhouseId, agentId, name: value.name, category: "sensor", capabilitiesJson: JSON.stringify(sensorCapabilities(value.metric, value.unit)), reportedStatus: "offline", updatedAt: now });
+    await db.batch([deviceWrite, db.insert(sensorConfigs).values(row)]);
     const point = value.measurementPointId ? await db.select({ portKey: measurementPoints.portKey }).from(measurementPoints).where(eq(measurementPoints.id, value.measurementPointId)).limit(1).get() : null;
     return Response.json({ sensor: sensorConfigPayload(row, null, agentId, point?.portKey ?? null) }, { status: 201 });
   } catch {

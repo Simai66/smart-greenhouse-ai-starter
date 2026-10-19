@@ -224,6 +224,7 @@ bool getConfigFromPi() {
     config.offset = item["calibration"]["offset"] | 0.0f;
     if (config.portKey.length() && config.portKey != "A" && config.portKey != "B") continue;
     if (!config.measurementPointId.isEmpty() && config.portKey.isEmpty()) continue;
+    if (!config.measurementPointId.isEmpty() && config.measurementPointId != String(NODE_ID) + "-" + config.portKey) continue;
     if (!config.sensorId.isEmpty() && config.metric.length() > 0 && config.intervalSeconds > 0) next.push_back(config);
   }
   sensorConfigs = next;
