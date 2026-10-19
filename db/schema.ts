@@ -15,6 +15,8 @@ export const devices = sqliteTable("devices", {
   id: text("id").primaryKey(),
   greenhouseId: text("greenhouse_id").notNull(),
   agentId: text("agent_id"),
+  assignmentVersion: integer("assignment_version").notNull().default(0),
+  lastAssignmentRequestId: text("last_assignment_request_id"),
   name: text("name").notNull(),
   category: text("category").notNull(),
   capabilitiesJson: text("capabilities_json").notNull().default("{}"),
@@ -53,6 +55,7 @@ export const sensorReadings = sqliteTable("sensor_readings", {
 export const sensorConfigs = sqliteTable("sensor_configs", {
   sensorId: text("sensor_id").primaryKey(),
   greenhouseId: text("greenhouse_id").notNull(),
+  measurementPointId: text("measurement_point_id"),
   name: text("name").notNull(),
   metric: text("metric").notNull(),
   unit: text("unit").notNull(),
@@ -70,6 +73,48 @@ export const sensorConfigs = sqliteTable("sensor_configs", {
 }, (table) => [
   index("sensor_configs_greenhouse_idx").on(table.greenhouseId),
   index("sensor_configs_greenhouse_enabled_idx").on(table.greenhouseId, table.enabled),
+  index("sensor_configs_measurement_point_idx").on(table.measurementPointId),
+]);
+
+export const plants = sqliteTable("plants", {
+  id: text("id").primaryKey(),
+  greenhouseId: text("greenhouse_id").notNull(),
+  displayName: text("display_name").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("plants_id_greenhouse_unique").on(table.id, table.greenhouseId),
+  index("plants_greenhouse_status_idx").on(table.greenhouseId, table.status),
+]);
+
+export const measurementPoints = sqliteTable("measurement_points", {
+  id: text("id").primaryKey(),
+  greenhouseId: text("greenhouse_id").notNull(),
+  deviceId: text("device_id").notNull(),
+  portKey: text("port_key").notNull(),
+  displayName: text("display_name").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("measurement_points_device_port_unique").on(table.deviceId, table.portKey),
+  uniqueIndex("measurement_points_id_greenhouse_unique").on(table.id, table.greenhouseId),
+  index("measurement_points_greenhouse_device_idx").on(table.greenhouseId, table.deviceId),
+]);
+
+export const plantAssignments = sqliteTable("plant_assignments", {
+  id: text("id").primaryKey(),
+  greenhouseId: text("greenhouse_id").notNull(),
+  pointId: text("point_id").notNull(),
+  plantId: text("plant_id").notNull(),
+  assignedAt: text("assigned_at").notNull(),
+  unassignedAt: text("unassigned_at"),
+  assignedBy: text("assigned_by").notNull(),
+  reason: text("reason"),
+}, (table) => [
+  index("plant_assignments_point_time_idx").on(table.pointId, table.assignedAt),
+  index("plant_assignments_plant_time_idx").on(table.plantId, table.assignedAt),
 ]);
 
 export const deviceCommands = sqliteTable("device_commands", {

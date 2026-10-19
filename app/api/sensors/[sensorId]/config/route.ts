@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { devices, sensorConfigs, sensorReadings } from "@/db/schema";
+import { devices, measurementPoints, sensorConfigs, sensorReadings } from "@/db/schema";
 import { authorizeApiRole } from "@/lib/server/access-control";
 import { parseSensorConfigInput, sensorCapabilities, sensorConfigPayload } from "@/lib/server/sensor-config";
 import type { SensorMetric } from "@/lib/server/sensor-telemetry";
@@ -21,6 +21,7 @@ export async function PUT(request: Request, context: { params: Promise<{ sensorI
     const parsed = parseSensorConfigInput({ ...body, greenhouseId: current.greenhouseId, sensorId }, {
       greenhouseId: current.greenhouseId,
       sensorId,
+      measurementPointId: current.measurementPointId,
       name: current.name,
       metric: current.metric as SensorMetric,
       unit: current.unit,
@@ -31,15 +32,28 @@ export async function PUT(request: Request, context: { params: Promise<{ sensorI
     });
     if (!parsed.value) return Response.json({ error: parsed.error }, { status: 400 });
     const value = parsed.value;
+    if (current.measurementPointId && current.measurementPointId !== value.measurementPointId) return Response.json({ error: "A sensor channel's physical point is stable; register a new channel ID to move hardware." }, { status: 409 });
     const now = new Date().toISOString();
     const device = await db.select({ agentId: devices.agentId }).from(devices).where(and(eq(devices.id, sensorId), eq(devices.greenhouseId, current.greenhouseId))).limit(1).get();
     if (!device) return Response.json({ error: "Sensor registry entry was not found." }, { status: 409 });
     if (body.agentId !== undefined && body.agentId !== device.agentId) return Response.json({ error: "Sensor agent assignment is managed during registration." }, { status: 409 });
-    await db.update(sensorConfigs).set({ name: value.name, metric: value.metric, unit: value.unit, samplingIntervalSeconds: value.samplingIntervalSeconds, calibrationScale: String(value.calibration.scale), calibrationOffset: String(value.calibration.offset), enabled: value.enabled, minThreshold: value.thresholds.min === null ? null : String(value.thresholds.min), maxThreshold: value.thresholds.max === null ? null : String(value.thresholds.max), configVersion: current.configVersion + 1, updatedBy: authorization.user.email, updatedAt: now }).where(eq(sensorConfigs.sensorId, sensorId)).run();
+    let pointPortKey: string | null = null;
+    if (value.measurementPointId) {
+      const point = await db.select({ deviceId: measurementPoints.deviceId, portKey: measurementPoints.portKey }).from(measurementPoints).where(and(eq(measurementPoints.id, value.measurementPointId), eq(measurementPoints.greenhouseId, current.greenhouseId), eq(measurementPoints.enabled, true))).limit(1).get();
+      if (!point) return Response.json({ error: "Measurement point was not found or is disabled." }, { status: 404 });
+      const pointDevice = await db.select({ agentId: devices.agentId }).from(devices).where(eq(devices.id, point.deviceId)).limit(1).get();
+      if (!device.agentId || pointDevice?.agentId !== device.agentId) return Response.json({ error: "Sensor channel and measurement point must use the same edge agent." }, { status: 409 });
+      pointPortKey = point.portKey;
+    }
+    if (value.measurementPointId) {
+      const metricOwner = await db.select({ sensorId: sensorConfigs.sensorId }).from(sensorConfigs).where(and(eq(sensorConfigs.measurementPointId, value.measurementPointId), eq(sensorConfigs.metric, value.metric))).limit(1).get();
+      if (metricOwner && metricOwner.sensorId !== sensorId) return Response.json({ error: "Measurement point already has a sensor for this metric." }, { status: 409 });
+    }
+    await db.update(sensorConfigs).set({ name: value.name, measurementPointId: value.measurementPointId, metric: value.metric, unit: value.unit, samplingIntervalSeconds: value.samplingIntervalSeconds, calibrationScale: String(value.calibration.scale), calibrationOffset: String(value.calibration.offset), enabled: value.enabled, minThreshold: value.thresholds.min === null ? null : String(value.thresholds.min), maxThreshold: value.thresholds.max === null ? null : String(value.thresholds.max), configVersion: current.configVersion + 1, updatedBy: authorization.user.email, updatedAt: now }).where(eq(sensorConfigs.sensorId, sensorId)).run();
     await db.update(devices).set({ name: value.name, capabilitiesJson: JSON.stringify(sensorCapabilities(value.metric, value.unit)), updatedAt: now }).where(eq(devices.id, sensorId)).run();
-    const updated = { ...current, name: value.name, metric: value.metric, unit: value.unit, samplingIntervalSeconds: value.samplingIntervalSeconds, calibrationScale: String(value.calibration.scale), calibrationOffset: String(value.calibration.offset), enabled: value.enabled, minThreshold: value.thresholds.min === null ? null : String(value.thresholds.min), maxThreshold: value.thresholds.max === null ? null : String(value.thresholds.max), configVersion: current.configVersion + 1, updatedBy: authorization.user.email, updatedAt: now };
+    const updated = { ...current, name: value.name, measurementPointId: value.measurementPointId, metric: value.metric, unit: value.unit, samplingIntervalSeconds: value.samplingIntervalSeconds, calibrationScale: String(value.calibration.scale), calibrationOffset: String(value.calibration.offset), enabled: value.enabled, minThreshold: value.thresholds.min === null ? null : String(value.thresholds.min), maxThreshold: value.thresholds.max === null ? null : String(value.thresholds.max), configVersion: current.configVersion + 1, updatedBy: authorization.user.email, updatedAt: now };
     const latest = await db.select().from(sensorReadings).where(and(eq(sensorReadings.sensorId, sensorId), eq(sensorReadings.greenhouseId, current.greenhouseId))).orderBy(desc(sensorReadings.sampledAt)).limit(1).get();
-    return Response.json({ sensor: sensorConfigPayload(updated, latest ?? null, device.agentId) });
+    return Response.json({ sensor: sensorConfigPayload(updated, latest ?? null, device.agentId, pointPortKey) });
   } catch {
     return Response.json({ error: "Sensor configuration could not be updated." }, { status: 503 });
   }

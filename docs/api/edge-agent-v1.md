@@ -145,6 +145,61 @@ Supported metric/unit pairs are `temperature/celsius`, `humidity/percent`,
 warning alert when valid telemetry crosses the configured range. Threshold
 evaluation never queues a device command.
 
+### Dual measurement points and plant assignment
+
+Board IDs use `ESP32-01` format (uppercase letters, digits, `_` or `-`, 3–61
+characters). Stable point IDs are `{deviceId}-A` and `{deviceId}-B`.
+Suggested sensor channel IDs are `SEN-{deviceId}-{A|B}-{TEMP|HUM|SOIL|LIGHT}`.
+Existing sensor IDs remain valid and do not change when a plant is reassigned.
+Plant IDs use uppercase letters, digits, `_` or `-`, 3–64 characters.
+Each point can have one active plant; one plant may have multiple points.
+Once a channel is linked to a physical point, that link is immutable. Register
+a new channel identity when hardware moves to another point so old samples keep
+their physical attribution.
+
+`POST /api/devices/:deviceId/points` (admin) registers the board under a
+greenhouse and Pi agent and idempotently creates points A and B:
+
+```json
+{ "greenhouseId": "GH-01", "agentId": "PI-GH-01" }
+```
+
+`GET /api/devices/:deviceId/points?greenhouseId=GH-01` returns both points,
+their current plant assignment, linked sensor channels, and board-level
+`assignmentVersion`. `POST /api/plants` (admin) registers a plant with
+`greenhouseId`, `plantId`, and `displayName`; `GET /api/plants?greenhouseId=GH-01`
+lists active plants for selection.
+
+`PUT /api/devices/:deviceId/assignments` (admin) saves both A/B choices as one
+version-checked operation. A `plantId` may be `null` to unassign. A change is
+effective at server receipt time unless a known physical move time is provided
+as UTC `effectiveAt`; backdated changes require `reason`.
+
+```json
+{
+  "greenhouseId": "GH-01",
+  "expectedVersion": 4,
+  "assignments": [
+    { "pointId": "ESP32-01-A", "plantId": "PLANT-03" },
+    { "pointId": "ESP32-01-B", "plantId": "PLANT-02" }
+  ],
+  "reason": "Move point A to Plant-03"
+}
+```
+
+The endpoint returns `409 VERSION_CONFLICT` when another update won the race.
+Assignment history uses half-open intervals `[assignedAt, unassignedAt)`.
+`GET /api/devices/:deviceId/assignments?greenhouseId=GH-01&sampledAt=...`
+resolves a reading against its `sampledAt`, not current assignment. Readings
+before first known assignment or inside an unknown move interval remain
+unattributed. Existing sensor configs get a nullable point link; old sensor IDs
+and historical readings are not rewritten.
+
+Agent config includes `measurementPointId` and `measurementPointPortKey` for
+linked channels. ESP32 telemetry envelope is unchanged: it still sends stable
+`sensorId`, metric, reading ID, quality, and timestamps. Plant IDs never go in
+firmware or telemetry.
+
 ## LAN ESP32 endpoints
 
 The Pi listens on `POST /v1/telemetry` and `GET /v1/config` over the greenhouse
