@@ -1,0 +1,189 @@
+digraph SmartGreenhouseERD {
+  graph [
+    layout=neato,
+    bgcolor="white",
+    pad="0.35",
+    nodesep="0.45",
+    ranksep="1.05",
+    splines=ortho,
+    outputorder=edgesfirst,
+    labelloc=t,
+    label="แผนภาพโครงสร้างฐานข้อมูลระบบ Smart Greenhouse",
+    fontname="Thonburi Bold",
+    fontsize=25
+  ];
+
+  node [shape=plain, fontname="Arial", fontsize=10];
+  edge [
+    color="#64748B",
+    penwidth=1.25,
+    arrowsize=0.8,
+    fontname="Arial",
+    fontsize=9,
+    fontcolor="#334155",
+    dir=both,
+    arrowtail=tee,
+    arrowhead=crow
+  ];
+
+  greenhouses [pos="100,400!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#2E8B57">
+      <TR><TD BGCOLOR="#2E8B57"><FONT COLOR="white"><B>GREENHOUSES</B></FONT></TD></TR>
+      <TR><TD PORT="id" ALIGN="LEFT"><B>PK</B> id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">name : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">timezone : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">created_at : TEXT</TD></TR>
+    </TABLE>
+  >];
+
+  edge_agents [pos="350,650!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#2563C9">
+      <TR><TD BGCOLOR="#2563C9"><FONT COLOR="white"><B>EDGE_AGENTS</B></FONT></TD></TR>
+      <TR><TD PORT="id" ALIGN="LEFT"><B>PK</B> id : TEXT</TD></TR>
+      <TR><TD PORT="greenhouse_id" ALIGN="LEFT"><B>FK</B> greenhouse_id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">name : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">status : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">last_seen_at : TEXT (NULL)</TD></TR>
+      <TR><TD ALIGN="LEFT">created_at : TEXT</TD></TR>
+    </TABLE>
+  >];
+
+  devices [pos="570,575!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#149B96">
+      <TR><TD BGCOLOR="#149B96"><FONT COLOR="white"><B>DEVICES</B></FONT></TD></TR>
+      <TR><TD PORT="id" ALIGN="LEFT"><B>PK</B> id : TEXT</TD></TR>
+      <TR><TD PORT="greenhouse_id" ALIGN="LEFT"><B>FK</B> greenhouse_id : TEXT</TD></TR>
+      <TR><TD PORT="agent_id" ALIGN="LEFT"><B>FK</B> agent_id : TEXT (NULL)</TD></TR>
+      <TR><TD ALIGN="LEFT">name : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">category : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">capabilities_json : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">reported_status : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">last_seen_at : TEXT (NULL)</TD></TR>
+      <TR><TD ALIGN="LEFT">updated_at : TEXT</TD></TR>
+    </TABLE>
+  >];
+
+  sensor_readings [pos="835,650!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#7C4DCC">
+      <TR><TD BGCOLOR="#7C4DCC"><FONT COLOR="white"><B>SENSOR_READINGS</B></FONT></TD></TR>
+      <TR><TD PORT="id" ALIGN="LEFT"><B>PK</B> id : TEXT</TD></TR>
+      <TR><TD PORT="greenhouse_id" ALIGN="LEFT"><B>FK</B> greenhouse_id : TEXT</TD></TR>
+      <TR><TD PORT="sensor_id" ALIGN="LEFT"><B>FK</B> sensor_id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">metric : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">value : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">unit : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">sampled_at : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">received_at : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">quality : TEXT</TD></TR>
+    </TABLE>
+  >];
+
+  device_commands [pos="760,250!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#089DC4">
+      <TR><TD BGCOLOR="#089DC4"><FONT COLOR="white"><B>DEVICE_COMMANDS</B></FONT></TD></TR>
+      <TR><TD PORT="id" ALIGN="LEFT"><B>PK</B> id : TEXT</TD></TR>
+      <TR><TD PORT="greenhouse_id" ALIGN="LEFT"><B>FK</B> greenhouse_id : TEXT</TD></TR>
+      <TR><TD PORT="device_id" ALIGN="LEFT"><B>FK</B> device_id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">action : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">state : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT"><B>UK</B> idempotency_key : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">requested_by : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">requested_at : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">correlation_id : TEXT (NULL)</TD></TR>
+      <TR><TD ALIGN="LEFT">expires_at : TEXT (NULL)</TD></TR>
+      <TR><TD ALIGN="LEFT">max_runtime_seconds : INTEGER (NULL)</TD></TR>
+      <TR><TD ALIGN="LEFT">dispatched_at : TEXT (NULL)</TD></TR>
+      <TR><TD ALIGN="LEFT">acknowledged_at : TEXT (NULL)</TD></TR>
+      <TR><TD ALIGN="LEFT">failure_reason : TEXT (NULL)</TD></TR>
+    </TABLE>
+  >];
+
+  device_command_events [pos="1080,250!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#4D93D8">
+      <TR><TD BGCOLOR="#4D93D8"><FONT COLOR="white"><B>DEVICE_COMMAND_EVENTS</B></FONT></TD></TR>
+      <TR><TD PORT="id" ALIGN="LEFT"><B>PK</B> id : TEXT</TD></TR>
+      <TR><TD PORT="command_id" ALIGN="LEFT"><B>FK</B> command_id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">state : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">occurred_at : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">metadata_json : TEXT (NULL)</TD></TR>
+    </TABLE>
+  >];
+
+  device_policies [pos="1110,650!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#E8751A">
+      <TR><TD BGCOLOR="#E8751A"><FONT COLOR="white"><B>DEVICE_POLICIES</B></FONT></TD></TR>
+      <TR><TD PORT="device_id" ALIGN="LEFT"><B>PK FK</B> device_id : TEXT</TD></TR>
+      <TR><TD PORT="greenhouse_id" ALIGN="LEFT"><B>FK</B> greenhouse_id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">version : INTEGER</TD></TR>
+      <TR><TD ALIGN="LEFT">policy_json : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">updated_by : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">updated_at : TEXT</TD></TR>
+    </TABLE>
+  >];
+
+  device_policy_revisions [pos="1385,650!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#8A4A16">
+      <TR><TD BGCOLOR="#8A4A16"><FONT COLOR="white"><B>DEVICE_POLICY_REVISIONS</B></FONT></TD></TR>
+      <TR><TD PORT="id" ALIGN="LEFT"><B>PK</B> id : TEXT</TD></TR>
+      <TR><TD PORT="device_id" ALIGN="LEFT"><B>FK</B> device_id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">version : INTEGER</TD></TR>
+      <TR><TD ALIGN="LEFT">policy_json : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">updated_by : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">updated_at : TEXT</TD></TR>
+    </TABLE>
+  >];
+
+  detections [pos="350,365!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#D5006D">
+      <TR><TD BGCOLOR="#D5006D"><FONT COLOR="white"><B>DETECTIONS</B></FONT></TD></TR>
+      <TR><TD PORT="id" ALIGN="LEFT"><B>PK</B> id : TEXT</TD></TR>
+      <TR><TD PORT="greenhouse_id" ALIGN="LEFT"><B>FK</B> greenhouse_id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">plant_id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">image_key : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">model_version : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">classification : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">confidence : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">severity : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">detected_at : TEXT</TD></TR>
+    </TABLE>
+  >];
+
+  alerts [pos="350,120!", label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="5" COLOR="#D52B2B">
+      <TR><TD BGCOLOR="#D52B2B"><FONT COLOR="white"><B>ALERTS</B></FONT></TD></TR>
+      <TR><TD PORT="id" ALIGN="LEFT"><B>PK</B> id : TEXT</TD></TR>
+      <TR><TD PORT="greenhouse_id" ALIGN="LEFT"><B>FK</B> greenhouse_id : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">source : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">severity : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">title : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">status : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">opened_at : TEXT</TD></TR>
+      <TR><TD ALIGN="LEFT">resolved_at : TEXT (NULL)</TD></TR>
+      <TR><TD ALIGN="LEFT">resolved_by : TEXT (NULL)</TD></TR>
+    </TABLE>
+  >];
+
+  greenhouses:id:e -> edge_agents:greenhouse_id:w [xlabel="1 : M"];
+  greenhouses:id:e -> devices:greenhouse_id:w [xlabel="1 : M"];
+  greenhouses:id:e -> sensor_readings:greenhouse_id:w [xlabel="1 : M"];
+  greenhouses:id:e -> device_commands:greenhouse_id:w [xlabel="1 : M"];
+  greenhouses:id:e -> device_policies:greenhouse_id:w [xlabel="1 : M"];
+  greenhouses:id:e -> detections:greenhouse_id:w [xlabel="1 : M"];
+  greenhouses:id:e -> alerts:greenhouse_id:w [xlabel="1 : M"];
+
+  edge_agents:id:e -> devices:agent_id:w [xlabel="0..1 : M", arrowtail=odottee];
+  devices:id:e -> sensor_readings:sensor_id:w [xlabel="1 : M"];
+  devices:id:e -> device_commands:device_id:w [xlabel="1 : M"];
+  devices:id:e -> device_policies:device_id:w [xlabel="1 : 0..1", arrowhead=odottee];
+  devices:id:e -> device_policy_revisions:device_id:w [xlabel="1 : M"];
+  device_commands:id:e -> device_command_events:command_id:w [xlabel="1 : M"];
+
+  footer [
+    shape=plain,
+    fontname="Arial",
+    fontsize=9,
+    fontcolor="#475569",
+    pos="760,20!",
+    label="Logical relationships — SQLite FOREIGN KEY constraints are not yet enforced"
+  ];
+}

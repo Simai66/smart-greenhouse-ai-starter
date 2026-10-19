@@ -23,5 +23,6 @@ export class CommandGatewayUnavailableError extends Error {
 export async function dispatchDeviceCommand(
   _command: GatewayCommand,
 ): Promise<{ acknowledgedAt: string }> {
+  void _command;
   throw new CommandGatewayUnavailableError();
 }

@@ -187,6 +187,7 @@ export function updateResource(state: DemoState, input: UpdateResourceInput): De
   switch (input.kind) {
     case "device": {
       const { kind: _kind, id, deviceKind, ...changes } = input;
+      void _kind;
       return {
         ...state,
         devices: state.devices.map((item) => item.id === id
@@ -196,6 +197,7 @@ export function updateResource(state: DemoState, input: UpdateResourceInput): De
     }
     case "camera": {
       const { kind: _kind, id, ...changes } = input;
+      void _kind;
       return {
         ...state,
         settings: {
@@ -221,6 +223,7 @@ export function updateResource(state: DemoState, input: UpdateResourceInput): De
     }
     case "sensor": {
       const { kind: _kind, id, ...changes } = input;
+      void _kind;
       return { ...state, sensors: state.sensors.map((item) => item.id === id ? { ...item, ...changes } : item) };
     }
   }

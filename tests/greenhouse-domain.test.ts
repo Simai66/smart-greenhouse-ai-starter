@@ -14,7 +14,7 @@ import {
   selectResourcesForGreenhouse,
   updateResource,
 } from "../lib/greenhouse-domain.ts";
-import { demoInitialState } from "../lib/greenhouse-demo-store.ts";
+import { demoTestState as demoInitialState } from "./fixtures/demo-state.ts";
 
 test("creates, updates, moves, and deletes a device", () => {
   const created = createResource(demoInitialState, {
@@ -198,16 +198,16 @@ test("refuses to permanently delete a zone with archived history without mutatin
 test("permanently deletes one archived batch, its owned plants, and AI references", () => {
   const state = structuredClone(demoInitialState);
   state.cropBatches[0]!.status = "archived";
-  state.aiReviewedPlantId = "TOM-001";
-  state.aiReviewedEvidence = { "TOM-001": ["CAM-A-01"], "TOM-003": ["CAM-B-01"] };
+  state.aiReviewedPlantId = "PLANT-001";
+  state.aiReviewedEvidence = { "PLANT-001": ["TEST-CAM-A"], "PLANT-003": ["TEST-CAM-B"] };
   const before = structuredClone(state);
 
-  const next = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" });
+  const next = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TEST-A" });
 
-  assert.equal(next.cropBatches.some((batch) => batch.id === "BATCH-TOM-A"), false);
-  assert.deepEqual(next.plants.map((plant) => plant.id), ["TOM-003", "TOM-004"]);
+  assert.equal(next.cropBatches.some((batch) => batch.id === "BATCH-TEST-A"), false);
+  assert.deepEqual(next.plants.map((plant) => plant.id), ["PLANT-003", "PLANT-004"]);
   assert.equal(next.aiReviewedPlantId, undefined);
-  assert.deepEqual(next.aiReviewedEvidence, { "TOM-003": ["CAM-B-01"] });
+  assert.deepEqual(next.aiReviewedEvidence, { "PLANT-003": ["TEST-CAM-B"] });
   assert.deepEqual(state, before);
 });
 
@@ -218,14 +218,14 @@ test("keeps same-ID batch and plants in another greenhouse when deleting an arch
   state.cropBatches.push({ ...state.cropBatches[0]!, greenhouseId: "GH-02", status: "archived" });
   state.plants.push({ ...state.plants[0]!, id: "TOM-OTHER", greenhouseId: "GH-02" });
   state.aiReviewedPlantId = "TOM-OTHER";
-  state.aiReviewedEvidence = { "TOM-001": ["CAM-A-01"], "TOM-OTHER": ["CAM-A-01"] };
+  state.aiReviewedEvidence = { "PLANT-001": ["TEST-CAM-A"], "TOM-OTHER": ["TEST-CAM-A"] };
 
-  const next = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" });
+  const next = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TEST-A" });
 
-  assert.deepEqual(next.cropBatches.filter((batch) => batch.id === "BATCH-TOM-A").map((batch) => batch.greenhouseId), ["GH-02"]);
+  assert.deepEqual(next.cropBatches.filter((batch) => batch.id === "BATCH-TEST-A").map((batch) => batch.greenhouseId), ["GH-02"]);
   assert.equal(next.plants.some((plant) => plant.id === "TOM-OTHER"), true);
   assert.equal(next.aiReviewedPlantId, "TOM-OTHER");
-  assert.deepEqual(next.aiReviewedEvidence, { "TOM-OTHER": ["CAM-A-01"] });
+  assert.deepEqual(next.aiReviewedEvidence, { "TOM-OTHER": ["TEST-CAM-A"] });
 });
 
 test("refuses deletion when an owned plant ID collides outside the target batch", () => {
@@ -233,12 +233,12 @@ test("refuses deletion when an owned plant ID collides outside the target batch"
   state.cropBatches[0]!.status = "archived";
   state.greenhouses.push({ id: "GH-02", name: "โรงเรือนที่สอง", code: "GREENHOUSE 02", status: "active", zones: [{ id: "ZONE-C", name: "โซน C", status: "active" }] });
   state.plants.push({ ...state.plants[0]!, greenhouseId: "GH-02", batchId: "BATCH-OTHER" });
-  state.aiReviewedPlantId = "TOM-001";
-  state.aiReviewedEvidence = { "TOM-001": ["CAM-A-01"] };
+  state.aiReviewedPlantId = "PLANT-001";
+  state.aiReviewedEvidence = { "PLANT-001": ["TEST-CAM-A"] };
   const before = structuredClone(state);
 
   assert.throws(
-    () => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" }),
+    () => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TEST-A" }),
     { message: /รหัสพืชซ้ำ/ },
   );
   assert.deepEqual(state, before);
@@ -251,7 +251,7 @@ test("refuses to permanently delete an ambiguous duplicate crop batch without mu
   const before = structuredClone(state);
 
   assert.throws(
-    () => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" }),
+    () => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TEST-A" }),
     { message: /รอบปลูกซ้ำ/ },
   );
   assert.deepEqual(state, before);
@@ -262,7 +262,7 @@ test("refuses to permanently delete a missing or active crop batch without mutat
   const before = structuredClone(state);
 
   assert.throws(() => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "missing" }), { message: /ไม่พบรอบปลูก/ });
-  assert.throws(() => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" }), { message: /ต้องเก็บหรือจบรอบปลูก/ });
+  assert.throws(() => permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TEST-A" }), { message: /ต้องเก็บหรือจบรอบปลูก/ });
   assert.deepEqual(state, before);
 });
 
@@ -270,12 +270,12 @@ test("allows permanent zone deletion after its archived batch and owned plants a
   const state = structuredClone(demoInitialState);
   state.greenhouses = [{ id: "GH-01", name: "โรงเรือนหนึ่ง", code: "ONE", status: "archived", zones: [{ id: "ZONE-A", name: "โซน A", status: "archived" }] }];
   state.cropBatches = [{ ...state.cropBatches[0]!, status: "archived" }];
-  state.plants = state.plants.filter((plant) => plant.batchId === "BATCH-TOM-A");
+  state.plants = state.plants.filter((plant) => plant.batchId === "BATCH-TEST-A");
   state.devices = [];
   state.settings.cameras = [];
   state.sensors = [];
 
-  const withoutBatch = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TOM-A" });
+  const withoutBatch = permanentlyDeleteCropBatch(state, { greenhouseId: "GH-01", id: "BATCH-TEST-A" });
   const next = permanentlyDeleteZone(withoutBatch, { greenhouseId: "GH-01", zoneId: "ZONE-A" });
 
   assert.deepEqual(next.greenhouses[0]?.zones, []);
