@@ -15,12 +15,18 @@ X-Greenhouse-Signature: base64(HMAC-SHA-256(secret, timestamp + "." + raw-body))
 ```
 
 The timestamp must be within five minutes of the Worker clock. The Worker
-looks up the secret named `GREENHOUSE_AGENT_SECRET_<agentId>`; agent IDs are
-restricted to uppercase letters, digits, `_`, and `-`. `GET` signatures use an
-empty body. The agent must never send this secret as a request field.
+looks up `GREENHOUSE_AGENT_SECRET_<agentId>` with non-alphanumeric characters
+normalised to `_`; for example, `PI-GH-01` uses
+`GREENHOUSE_AGENT_SECRET_PI_GH_01`. Agent IDs are restricted to uppercase
+letters, digits, `_`, and `-`. `GET` signatures use an empty body. The agent
+must never send this secret as a request field.
 
 Errors use `{ "error": "..." }`. Authentication errors are `401`, invalid
 or unauthorised input is `400`/`403`, unavailable storage is `503`.
+
+Image capture and AI result routes are documented in
+[Image and AI evidence API v1](images-v1.md). They reuse the same HMAC headers;
+the Pi uploads bytes directly to the returned Supabase signed URL.
 
 ## Browser command queue
 
@@ -115,7 +121,8 @@ revision. Request body: `{ "greenhouseId": "GH-01", "policy": { ... } }`.
 
 `GET /api/sensors?greenhouseId=GH-01` is available to viewers. It returns
 registered sensor channels, latest reading, freshness, status, calibration,
-thresholds, and config version. `POST /api/sensors` and
+thresholds, config version, and provenance (`agentId` plus `source: "edge-agent"`).
+`POST /api/sensors` and
 `PUT /api/sensors/:sensorId/config` require admin role.
 
 ```json

@@ -23,7 +23,7 @@
 - Command gateway จริงยัง fail closed จนกว่าจะมี signed, allow-listed gateway
 - Simulator ไม่ใช่หลักฐาน relay จริง
 - ยังไม่มีการยืนยัน Cloudflare Access, deployment secrets, D1 environment หรือ Pi จริง
-- R2/camera image evidence, GPIO และ hardware emergency interlock ยังต้อง review
+- Camera image upload uses Supabase Storage; GPIO และ hardware emergency interlock ยังต้อง review
 
 ## เริ่มต้นใช้งาน
 
@@ -38,11 +38,10 @@ npm run dev
 
 ~~~bash
 npm run lint
-npm run typecheck
 npm test
 ~~~
 
-npm test รวม unit tests, Python edge-agent tests, typecheck, production build
+npm test รวม unit tests, Python edge-agent tests, production build
 และ rendered HTML smoke tests
 
 คำสั่งเสริม:
@@ -87,7 +86,7 @@ Command ต้องเดินตาม pending → acknowledged หรือ 
 ไฟล์ .openai/hosting.json ระบุชื่อ binding ที่ runtime ใช้:
 
 - DB — Cloudflare D1 สำหรับ telemetry, policy, alert และ command audit
-- IMAGES — Cloudflare R2 สำหรับภาพกล้อง/AI เมื่อ image evidence พร้อม
+- ภาพกล้อง/AI — Supabase Storage bucket `greenhouse-images`; Worker ใช้ service role key
 
 ไฟล์นี้ระบุชื่อ binding เท่านั้น ไม่ได้สร้าง resource หรือยืนยันว่า account เชื่อมแล้ว
 ต้องแยก database ระหว่าง staging กับ production และห้ามใส่ token, secret หรือข้อมูล
@@ -116,23 +115,28 @@ npx wrangler d1 execute smart-greenhouse-staging --remote --command "SELECT name
 ~~~
 
 เปลี่ยน smart-greenhouse-staging เป็นชื่อ database ของ environment ที่อนุมัติ
-Migration ปัจจุบันคือ drizzle/0000_p0_foundation.sql,
-0001_edge_agent_and_policies.sql และ 0002_sensor_configs_and_reading_ids.sql ตามลำดับ
+Migration ปัจจุบันคือ `drizzle/0000_p0_foundation.sql` ถึง
+`drizzle/0003_supabase_storage_images.sql` ตามลำดับ
 
 migrations apply ต้องผ่าน review ก่อน production; Wrangler จะขอ confirmation และ
 สร้าง backup ก่อน apply. ห้าม drop ตาราง audit/history/queue เพื่อ rollback ให้ deploy
 Worker/image รุ่นก่อนแทน
 
-### R2
+### Supabase Storage
 
-ยังไม่ต้องสร้าง R2 สำหรับ dashboard demo. สร้างและผูก bucket เป็น IMAGES เมื่อมี
-camera upload, image retention, access policy และ QA สำหรับ image evidence แล้ว
+สร้าง bucket `greenhouse-images` ใน Supabase project ที่อนุมัติ ตั้ง Public read,
+อนุญาต JPEG/PNG/WebP และจำกัดไฟล์ 10 MiB. Public URL เปิดภาพได้จน cron ลบไฟล์
+อายุ 15 วัน; ใช้ private bucket และ signed read URL ก่อนเก็บภาพอ่อนไหว
+
+ตั้ง `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` และ
+`SUPABASE_STORAGE_BUCKET` เป็น Worker secrets. ห้ามใส่ service role key ใน browser,
+Pi, log หรือ source control. ดู `docs/api/images-v1.md` สำหรับ CORS และ upload flow.
 
 ## Real-operation checklist
 
 ทำตาม dependency order:
 
-1. สร้าง D1 target และ apply migrations 0000 → 0001 → 0002
+1. สร้าง D1 target และ apply migrations 0000 → 0001 → 0002 → 0003
 2. ผูก D1 จริงเข้ากับ binding DB ของ deployment environment
 3. เพิ่ม edge_agents, devices, capabilities และ versioned device policies
 4. ตั้ง secrets ใน deployment environment เท่านั้น:

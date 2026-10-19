@@ -124,6 +124,7 @@ export const detections = sqliteTable("detections", {
   id: text("id").primaryKey(),
   greenhouseId: text("greenhouse_id").notNull(),
   plantId: text("plant_id").notNull(),
+  imageId: text("image_id"),
   imageKey: text("image_key").notNull(),
   modelVersion: text("model_version").notNull(),
   classification: text("classification").notNull(),
@@ -131,6 +132,30 @@ export const detections = sqliteTable("detections", {
   severity: text("severity").notNull(),
   detectedAt: text("detected_at").notNull(),
 });
+
+export const inspectionImages = sqliteTable("inspection_images", {
+  id: text("id").primaryKey(),
+  greenhouseId: text("greenhouse_id").notNull(),
+  source: text("source").notNull(),
+  cameraId: text("camera_id"),
+  plantId: text("plant_id"),
+  bucket: text("bucket").notNull(),
+  objectPath: text("object_path").notNull().unique(),
+  publicUrl: text("public_url"),
+  contentType: text("content_type").notNull(),
+  byteSize: integer("byte_size").notNull(),
+  capturedAt: text("captured_at"),
+  uploadedAt: text("uploaded_at"),
+  expiresAt: text("expires_at"),
+  status: text("status").notNull().default("pending"),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  expiredAt: text("expired_at"),
+}, (table) => [
+  index("inspection_images_greenhouse_created_idx").on(table.greenhouseId, table.createdAt),
+  index("inspection_images_greenhouse_camera_idx").on(table.greenhouseId, table.cameraId, table.createdAt),
+  index("inspection_images_expiry_idx").on(table.status, table.expiresAt),
+]);
 
 export const alerts = sqliteTable("alerts", {
   id: text("id").primaryKey(),

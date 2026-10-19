@@ -2,6 +2,8 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
+#include <Adafruit_SHT31.h>
+#include <Wire.h>
 #include <WiFi.h>
 #include <cmath>
 #include <ctime>
@@ -9,6 +11,10 @@
 
 #include "esp_idf_version.h"
 #include "esp_task_wdt.h"
+
+#if __has_include("local_config.h")
+#include "local_config.h"
+#endif
 
 #ifndef WIFI_SSID
 #define WIFI_SSID "replace-me"
@@ -26,6 +32,9 @@
 #define NODE_TOKEN "replace-with-lan-token"
 #endif
 
+constexpr uint8_t SHT30_SDA_PIN = 21;
+constexpr uint8_t SHT30_SCL_PIN = 22;
+constexpr uint8_t SHT30_ADDRESS = 0x44;
 constexpr uint32_t DEFAULT_INTERVAL_SECONDS = 30;
 constexpr uint32_t CONFIG_REFRESH_MS = 60UL * 1000UL;
 constexpr uint32_t WIFI_RETRY_MS = 10UL * 1000UL;
@@ -43,26 +52,38 @@ struct SensorConfig {
 
 enum class SensorQuality { kValid, kSuspect, kInvalid };
 
+Adafruit_SHT31 sht30;
+bool sht30Ready = false;
+
 class SensorAdapter {
  public:
   virtual ~SensorAdapter() = default;
   virtual SensorQuality readRaw(const SensorConfig& config, float& value) = 0;
 };
 
-class MockSensorAdapter final : public SensorAdapter {
+class Sht30SensorAdapter final : public SensorAdapter {
  public:
+  void begin() {
+    Wire.begin(SHT30_SDA_PIN, SHT30_SCL_PIN);
+    sht30Ready = sht30.begin(SHT30_ADDRESS);
+    Serial.printf("[SHT30] %s | SDA=%u SCL=%u address=0x%02X\n",
+                  sht30Ready ? "Connected" : "Not found",
+                  SHT30_SDA_PIN,
+                  SHT30_SCL_PIN,
+                  SHT30_ADDRESS);
+  }
+
   SensorQuality readRaw(const SensorConfig& config, float& value) override {
-    if (config.metric == "temperature") value = 28.0f;
-    else if (config.metric == "humidity") value = 65.0f;
-    else if (config.metric == "soil_moisture") value = 42.0f;
-    else if (config.metric == "light") value = 12500.0f;
+    if (!sht30Ready) return SensorQuality::kInvalid;
+    if (config.metric == "temperature") value = sht30.readTemperature();
+    else if (config.metric == "humidity") value = sht30.readHumidity();
     else return SensorQuality::kInvalid;
     return std::isfinite(value) ? SensorQuality::kValid : SensorQuality::kInvalid;
   }
 };
 
 std::vector<SensorConfig> sensorConfigs;
-MockSensorAdapter sensorAdapter;
+Sht30SensorAdapter sensorAdapter;
 Preferences preferences;
 uint32_t sequenceNumber = 0;
 uint32_t lastConfigRefresh = 0;
@@ -146,6 +167,10 @@ String sampledAtUtc() {
   return String(output);
 }
 
+bool clockReady() {
+  return time(nullptr) >= 1700000000;
+}
+
 String readingId(const SensorConfig& config, uint32_t sequence) {
   return String(NODE_ID) + "-" + config.sensorId + "-" + String(sequence);
 }
@@ -196,7 +221,7 @@ bool getConfigFromPi() {
 }
 
 bool publishTelemetry() {
-  if (WiFi.status() != WL_CONNECTED || sensorConfigs.empty()) return false;
+  if (WiFi.status() != WL_CONNECTED || sensorConfigs.empty() || !clockReady()) return false;
   if (lastPublishedAt.size() != sensorConfigs.size()) lastPublishedAt.assign(sensorConfigs.size(), 0);
   std::vector<size_t> due;
   for (size_t index = 0; index < sensorConfigs.size(); index += 1) {
@@ -246,7 +271,9 @@ bool publishTelemetry() {
 
 void setup() {
   Serial.begin(115200);
+  delay(1000);
   setupWatchdog();
+  sensorAdapter.begin();
   loadConfig();
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   connectWifi();

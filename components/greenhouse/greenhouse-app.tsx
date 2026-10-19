@@ -319,6 +319,7 @@ export function GreenhouseApp() {
     ) : activePage === "ai" ? (
       selectedPlant ? (
       <AiDetectionView
+        greenhouseId={activeGreenhouse?.id ?? ""}
         plant={selectedPlant}
         cameras={greenhouseState.settings.cameras}
         reviewedCameraIds={state.aiReviewedEvidence?.[selectedPlant.id] ?? []}
