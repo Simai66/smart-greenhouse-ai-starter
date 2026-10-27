@@ -619,7 +619,7 @@ export function GreenhouseApp() {
       <a className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-3 focus:text-primary-foreground" href="#main-content">
         ข้ามไปยังเนื้อหาหลัก
       </a>
-      {activeGreenhouse ? <><AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={greenhouseState.devices.length} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
+      {activeGreenhouse ? <><AppSidebar activePage={activePage} openAlerts={openAlerts} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
         <SidebarInset>
           <SiteHeader
             pageTitle={pageMetadata[activePage].title}

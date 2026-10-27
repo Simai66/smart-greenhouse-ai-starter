@@ -13,7 +13,6 @@ import {
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -43,14 +42,12 @@ const iconMap = {
 export function AppSidebar({
   activePage,
   openAlerts,
-  deviceCount,
   online,
   onNavigate,
   greenhouse,
 }: {
   activePage: GreenhousePageId;
   openAlerts: number;
-  deviceCount: number;
   online: boolean;
   onNavigate: (page: GreenhousePageId) => void;
   greenhouse: DemoGreenhouse;
@@ -81,9 +78,6 @@ export function AppSidebar({
           <SidebarGroupContent><SidebarMenu><SidebarMenuItem><SidebarMenuButton tooltip="ตั้งค่า" isActive={activePage === "settings"} onClick={() => navigate("settings")}><Settings aria-hidden="true" /><span>ตั้งค่า</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border">
-        <div className="px-2 py-2 text-xs text-sidebar-foreground/75 group-data-[collapsible=icon]:hidden"><span className="mb-1 flex items-center gap-2"><i className={online ? "size-2 rounded-full bg-emerald-300" : "size-2 rounded-full bg-amber-300"} />{online ? "เดโมพร้อมใช้งาน" : "เดโมออฟไลน์"}</span><span>อุปกรณ์จำลอง {online ? deviceCount : 0}/{deviceCount}</span></div>
-      </SidebarFooter>
     </Sidebar>
   );
 }
