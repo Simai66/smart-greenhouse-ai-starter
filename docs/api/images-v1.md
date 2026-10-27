@@ -10,6 +10,11 @@ All new errors use:
 
 ## Browser image flow
 
+Browser and Pi image operations are limited to the `GH-01` pilot. Other
+greenhouse IDs receive HTTP 403 `GREENHOUSE_FORBIDDEN`. Image completion uses
+the reserved image's greenhouse and rejects off-pilot records before Storage
+access.
+
 `POST /api/images/upload-url` requires `operator` or `admin`. Request:
 
 ```json
@@ -64,6 +69,11 @@ duplicate rows. Deleting an image object never deletes its D1 detections.
 ```text
 {greenhouseId}/{source}/{cameraId-or-dashboard}/{yyyy}/{mm}/{uuid}.{extension}
 ```
+
+All browser-facing greenhouse endpoints and signed agent endpoints are scoped
+to `GH-01` during this pilot. Foreign greenhouse requests return HTTP 403
+`GREENHOUSE_FORBIDDEN`; sensor configuration addressed by opaque sensor ID
+returns 404 when no GH-01 sensor matches.
 
 ## Retention
 

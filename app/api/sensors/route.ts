@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { devices, edgeAgents, greenhouses, measurementPoints, sensorConfigs, sensorReadings } from "@/db/schema";
 import { authorizeApiRole } from "@/lib/server/access-control";
+import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
 import { parseSensorConfigInput, sensorCapabilities, sensorConfigPayload } from "@/lib/server/sensor-config";
 
 function greenhouseIdFrom(request: Request): string | null {
@@ -29,6 +30,8 @@ export async function GET(request: Request) {
   if ("response" in authorization) return authorization.response;
   const greenhouseId = greenhouseIdFrom(request);
   if (!greenhouseId) return Response.json({ error: "greenhouseId is required." }, { status: 400 });
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   try {
     return Response.json({ greenhouseId, collectedAt: new Date().toISOString(), sensors: await sensorRows(greenhouseId) }, { headers: { "Cache-Control": "no-store" } });
   } catch {
@@ -44,6 +47,8 @@ export async function POST(request: Request) {
   const parsed = parseSensorConfigInput(payload);
   if (!parsed.value) return Response.json({ error: parsed.error }, { status: 400 });
   const value = parsed.value;
+  const forbidden = authorizeGreenhouseScope(value.greenhouseId);
+  if (forbidden) return forbidden;
   const now = new Date().toISOString();
   try {
     const db = getDb();

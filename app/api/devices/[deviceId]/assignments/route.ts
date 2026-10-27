@@ -5,6 +5,7 @@ import { devices, measurementPoints, plantAssignments, plants } from "@/db/schem
 import { isDeviceIdentity, isPlantIdentity, plantForSample } from "@/lib/measurement-identity";
 import { authorizeApiRole } from "@/lib/server/access-control";
 import { apiError } from "@/lib/server/api-error";
+import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
 
 type AssignmentChange = { pointId: string; plantId: string | null };
 
@@ -16,6 +17,8 @@ export async function GET(request: Request, context: { params: Promise<{ deviceI
   const greenhouseId = url.searchParams.get("greenhouseId");
   const rawSampledAt = url.searchParams.get("sampledAt");
   if (!greenhouseId || !isDeviceIdentity(deviceId) || (rawSampledAt !== null && !Number.isFinite(Date.parse(rawSampledAt)))) return apiError("INVALID_SCOPE", "Valid deviceId, greenhouseId, and sampledAt are required.", 400);
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   const sampledAt = rawSampledAt === null ? null : new Date(rawSampledAt).toISOString();
   try {
     const db = getDb();
@@ -67,6 +70,8 @@ export async function PUT(request: Request, context: { params: Promise<{ deviceI
   }
 
   const greenhouseId = value.greenhouseId as string;
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   const expectedVersion = value.expectedVersion as number;
   const requestId = crypto.randomUUID();
   try {

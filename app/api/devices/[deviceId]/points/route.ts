@@ -5,6 +5,7 @@ import { devices, edgeAgents, greenhouses, measurementPoints, plantAssignments, 
 import { isDeviceIdentity, isMeasurementPortKey, measurementPointId } from "@/lib/measurement-identity";
 import { authorizeApiRole } from "@/lib/server/access-control";
 import { apiError } from "@/lib/server/api-error";
+import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
 
 async function loadPoints(deviceId: string, greenhouseId: string) {
   const db = getDb();
@@ -30,6 +31,8 @@ export async function GET(request: Request, context: { params: Promise<{ deviceI
   const { deviceId } = await context.params;
   const greenhouseId = new URL(request.url).searchParams.get("greenhouseId");
   if (!greenhouseId || !isDeviceIdentity(deviceId)) return apiError("INVALID_SCOPE", "Valid deviceId and greenhouseId are required.", 400);
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   try {
     const result = await loadPoints(deviceId, greenhouseId);
     if (!result) return apiError("DEVICE_NOT_FOUND", "Registered sensor node was not found.", 404);
@@ -52,6 +55,8 @@ export async function POST(request: Request, context: { params: Promise<{ device
   if (typeof greenhouseId !== "string" || greenhouseId.length > 64 || typeof agentId !== "string" || !/^[A-Z0-9_-]{3,64}$/.test(agentId) || (value.portKeys !== undefined && (!Array.isArray(value.portKeys) || value.portKeys.length !== 2 || new Set(value.portKeys).size !== 2 || !value.portKeys.every(isMeasurementPortKey)))) {
     return apiError("INVALID_NODE", "greenhouseId, registered agentId, and ports A/B are required.", 400);
   }
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   const now = new Date().toISOString();
   try {
     const db = getDb();

@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import { deviceCommandEvents, deviceCommands, devicePolicies, devices, edgeAgents } from "@/db/schema";
 import { authorizeApiRole } from "@/lib/server/access-control";
 import { policyAllowsManualCommand } from "@/lib/server/device-policy";
+import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
 import type { DeviceCommandAction, DeviceCommandResult, DeviceCommandState } from "@/types/greenhouse";
 
 const actions = new Set<DeviceCommandAction>(["turn_on", "turn_off", "emergency_stop"]);
@@ -20,6 +21,8 @@ export async function GET(request: Request) {
   if ("response" in authorization) return authorization.response;
   const greenhouseId = new URL(request.url).searchParams.get("greenhouseId");
   if (!string(greenhouseId)) return Response.json({ error: "greenhouseId is required." }, { status: 400 });
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   try {
     const rows = await getDb().select().from(deviceCommands).where(eq(deviceCommands.greenhouseId, greenhouseId)).orderBy(desc(deviceCommands.requestedAt)).limit(50).all();
     return Response.json({ commands: rows.map(commandResult) }, { headers: { "Cache-Control": "no-store" } });
@@ -36,6 +39,8 @@ export async function POST(request: Request) {
   if (!string(payload.greenhouseId) || !string(payload.deviceId) || !actions.has(payload.command as DeviceCommandAction) || (payload.maxRuntimeSeconds !== undefined && (!Number.isInteger(payload.maxRuntimeSeconds) || (payload.maxRuntimeSeconds as number) < 1 || (payload.maxRuntimeSeconds as number) > 3600))) return Response.json({ error: "Invalid device command payload." }, { status: 400 });
   const action = payload.command as DeviceCommandAction;
   if ((action === "emergency_stop") !== (payload.deviceId === "ALL")) return Response.json({ error: "The command and device target do not match." }, { status: 400 });
+  const forbidden = authorizeGreenhouseScope(payload.greenhouseId);
+  if (forbidden) return forbidden;
   try {
     const db = getDb();
     const existing = await db.select().from(deviceCommands).where(eq(deviceCommands.idempotencyKey, idempotencyKey)).limit(1).get();
