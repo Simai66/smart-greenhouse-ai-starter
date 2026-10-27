@@ -19,6 +19,16 @@ test("keeps the approved accessible step-area chart contract", async () => {
   assert.match(source, /คำแนะนำ/);
 });
 
+test("does not present demo device readiness in the sidebar", async () => {
+  const sidebar = await readFile(
+    new URL("../components/greenhouse/app-sidebar.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(sidebar, /เดโมพร้อมใช้งาน|เดโมออฟไลน์|อุปกรณ์จำลอง/);
+  assert.doesNotMatch(sidebar, /SidebarFooter/);
+});
+
 test("keeps evidence, detail, and analytics contracts in the page views", async () => {
   const [plants, ai, analytics] = await Promise.all([
     readFile(new URL("../components/greenhouse/views/plants-view.tsx", import.meta.url), "utf8"),
