@@ -111,10 +111,10 @@ used as evidence that a relay changed state.
    changed to `_` (for example `PI-GH-01` becomes
    `GREENHOUSE_AGENT_SECRET_PI_GH_01`; at least 32 characters). Set browser
    roles with `GREENHOUSE_ADMIN_EMAILS` and `GREENHOUSE_OPERATOR_EMAILS`.
-4. Configure Cloudflare Access in the Cloudflare dashboard: protect the public
-   hostname, use Google as an identity provider, and let only approved email
-   addresses/groups reach the application. This cannot be safely represented
-   by a source-controlled application secret.
+4. Configure Cloudflare Access in the dashboard before exposing browser APIs.
+   The staging Worker uses Google sign-in and validates Access JWTs itself; see
+   [Google login setup](#cloudflare-access-google-login) below. Keep OAuth
+   credentials and approved-user policy in Cloudflare, never in source.
 5. On the Pi, copy `edge-agent/docker-compose.example.yml`, set its four
    required cloud values plus LAN node token/allow-list values, and start it
    with Docker Compose. Its persistent volume is the recoverable outbound
@@ -133,9 +133,10 @@ npx wrangler deploy --config wrangler.staging.jsonc
 npx wrangler secret put GREENHOUSE_AGENT_SECRET_PI_GH_01 --config wrangler.staging.jsonc
 ```
 
-The secret must be at least 32 characters. Configure Cloudflare Access and
-browser role variables before exposing `/api/sensors` publicly. Do not commit
-the secret or put it in ESP32 firmware.
+The agent secret must be at least 32 characters. Staging config sets
+`GREENHOUSE_AUTH_MODE=cloudflare-access`; the app returns 503 until the Access
+team domain and audience are configured. Complete the Access setup below before
+exposing browser APIs. Do not commit secrets or put them in ESP32 firmware.
 
 The Pi relay adapter remains a simulator. The staging ESP32 firmware reads the
 SHT30 on I2C `0x44` (`SDA=21`, `SCL=22`) for the temperature channel; BH1750 and
@@ -173,11 +174,61 @@ for the staging hostname so browser `PUT` requests to signed URLs are allowed.
 See [the image API contract](docs/api/images-v1.md) and [the edge API
 contract](docs/api/edge-agent-v1.md).
 
+## Cloudflare Access Google login
+
+Cloudflare Access performs the Google login and protects the entire staging
+hostname, including browser APIs. The Worker separately verifies
+`Cf-Access-Jwt-Assertion` against the Access signing keys, issuer, audience, and
+time claims; direct requests to the public `workers.dev` origin cannot bypass
+API identity checks.
+
+1. In Google Cloud Console, create a Web OAuth client. Add
+   `https://<team>.cloudflareaccess.com` as an authorized JavaScript origin and
+   `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback` as an authorized
+   redirect URI.
+2. In Cloudflare Zero Trust → Integrations → Identity providers, add Google
+   using that client ID and client secret. Keep the client secret in Cloudflare.
+3. In Access → Applications, create a self-hosted application for the exact
+   staging hostname `smart-greenhouse-ai-staging.smart-greenhouse-ai.workers.dev`.
+   Set Google as the login method and add an Allow policy containing only
+   approved email addresses. Add a more specific application path for
+   `/api/agent/*` with a Bypass policy for Everyone: the Pi cannot use Google
+   login, and every agent endpoint still requires its existing timestamped
+   HMAC signature. Bypass removes Access enforcement and logging on that path,
+   so keep it limited to `/api/agent/*`.
+4. Copy the Access team domain (`https://<team>.cloudflareaccess.com`) and this
+   application's AUD tag. Store the app values as Worker secrets, so a later
+   Wrangler deploy cannot replace dashboard-only variables:
+
+   ```bash
+   npx wrangler secret put CLOUDFLARE_ACCESS_TEAM_DOMAIN --config wrangler.staging.jsonc
+   npx wrangler secret put CLOUDFLARE_ACCESS_AUD --config wrangler.staging.jsonc
+   npx wrangler secret put GREENHOUSE_ADMIN_EMAILS --config wrangler.staging.jsonc
+   npx wrangler secret put GREENHOUSE_OPERATOR_EMAILS --config wrangler.staging.jsonc
+   ```
+
+   Enter the values only at the interactive prompts. A user allowed by Access
+   but absent from both role lists is a viewer. Keep values out of client code
+   and logs.
+5. Deploy staging with `npx wrangler deploy --config wrangler.staging.jsonc`.
+   Open the staging hostname in a private browser window, complete Google
+   login, then request `/api/sensors?greenhouseId=GH-01`. Confirm an approved
+   viewer receives 200, an unauthenticated request is redirected or denied by
+   Access, and a Google identity outside the allow policy is blocked. Unit
+   tests cover verifier outcomes for missing or invalid assertions. Confirm
+   actual browser/API response codes during the staging smoke test.
+   Do not treat successful login alone as evidence that telemetry or hardware
+   is commissioned.
+
+The code change protects API routes even when someone calls the `workers.dev`
+origin directly. The Access application is still required to provide the Google
+login screen and block the whole site before it reaches the Worker.
+
 ## P0 safety configuration
 
-Device commands now use `POST /api/device-commands` and require the hosted
-ChatGPT identity headers plus a server-side role mapping. Configure these as
-deployment secrets (comma-separated email addresses):
+Device commands use `POST /api/device-commands` and require the active server
+identity provider plus a server-side role mapping. Configure these as
+comma-separated deployment variables/secrets:
 
 ```text
 GREENHOUSE_ADMIN_EMAILS=admin@example.com
