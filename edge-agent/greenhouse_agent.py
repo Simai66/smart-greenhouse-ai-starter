@@ -69,6 +69,10 @@ def parse_time(value: str) -> datetime:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
+def retryable_http(error: urllib.error.HTTPError) -> bool:
+    return error.code in (408, 429) or error.code >= 500
+
+
 def stable_reading_id(*parts: object) -> str:
     raw = "\x1f".join(str(part) for part in parts).encode()
     return "reading-" + hashlib.sha256(raw).hexdigest()
@@ -232,11 +236,16 @@ class Store:
             self.db.commit()
 
     def queue_image(self, image_path: Path, metadata: dict[str, Any], detections: list[dict[str, Any]]) -> None:
-        self.queue(IMAGE_QUEUE_PATH, {"localPath": str(image_path), "metadata": metadata, "detections": detections})
+        self.queue(IMAGE_QUEUE_PATH, {"localPath": str(image_path), "metadata": {**metadata, "imageId": f"img_{uuid.uuid4()}"}, "detections": detections})
 
     def queued(self) -> list[tuple[int, str, dict[str, Any]]]:
         with self.lock:
             return [(row[0], row[1], json.loads(row[2])) for row in self.db.execute("SELECT id, path, body FROM outbound_queue ORDER BY id LIMIT 100")]
+
+    def update_queued(self, queue_id: int, body: dict[str, Any]) -> None:
+        with self.lock:
+            self.db.execute("UPDATE outbound_queue SET body = ? WHERE id = ?", (json.dumps(body, separators=(",", ":")), queue_id))
+            self.db.commit()
 
     def remove_queued(self, queue_id: int) -> None:
         with self.lock:
@@ -331,20 +340,34 @@ class CloudClient:
 
     def upload_image(self, image_path: Path, metadata: dict[str, Any], detections: list[dict[str, Any]]) -> dict[str, Any]:
         upload = self.signed_request("/api/agent/images/upload-url", "POST", metadata)
-        upload_url = upload.get("uploadUrl")
         image_id = upload.get("imageId")
-        if not isinstance(upload_url, str) or not isinstance(image_id, str):
-            raise RuntimeError("Image upload URL response is invalid.")
-        content_type = metadata.get("contentType")
-        if not isinstance(content_type, str):
-            raise RuntimeError("Image content type is missing.")
-        data = image_path.read_bytes()
-        request = urllib.request.Request(upload_url, data=data, method="PUT", headers={"Content-Type": content_type, "Content-Length": str(len(data)), "User-Agent": "smart-greenhouse-edge-agent/1.0"})
-        with urllib.request.urlopen(request, timeout=60):
-            pass
-        complete = self.signed_request("/api/agent/images/complete", "POST", {"imageId": image_id})
+        if not isinstance(image_id, str) or image_id != metadata.get("imageId"):
+            raise RuntimeError("Image upload API must preserve the queued imageId.")
+        complete = upload
+        if upload.get("status") not in ("ready", "expired"):
+            upload_url = upload.get("uploadUrl")
+            content_type = metadata.get("contentType")
+            if not isinstance(upload_url, str) or not isinstance(content_type, str):
+                raise RuntimeError("Image upload URL response is invalid.")
+            # A previous PUT may have succeeded even when its response was lost.
+            try:
+                complete = self.signed_request("/api/agent/images/complete", "POST", {"imageId": image_id})
+            except urllib.error.HTTPError as error:
+                if error.code != 409:
+                    raise
+                try:
+                    missing = json.load(error).get("error", {}).get("code") == "UPLOAD_NOT_FOUND"
+                except (ValueError, AttributeError):
+                    missing = False
+                if not missing:
+                    raise
+                data = image_path.read_bytes()
+                request = urllib.request.Request(upload_url, data=data, method="PUT", headers={"Content-Type": content_type, "Content-Length": str(len(data)), "User-Agent": "smart-greenhouse-edge-agent/1.0"})
+                with urllib.request.urlopen(request, timeout=60):
+                    pass
+                complete = self.signed_request("/api/agent/images/complete", "POST", {"imageId": image_id})
         if detections:
-            self.signed_request("/api/agent/detections", "POST", {"greenhouseId": self.greenhouse_id, "imageId": image_id, "modelVersion": "configured-agent", "detectedAt": metadata.get("capturedAt", iso()), "results": detections})
+            self.signed_request("/api/agent/detections", "POST", {"greenhouseId": self.greenhouse_id, "imageId": image_id, "modelVersion": "configured-agent", "detectedAt": metadata["capturedAt"], "results": detections})
         return complete
 
 
@@ -426,7 +449,7 @@ class Agent:
         try:
             self.cloud.signed_request(path, "POST", body)
         except urllib.error.HTTPError as error:
-            if error.code >= 500:
+            if retryable_http(error):
                 self.store.queue(path, body)
         except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
             self.store.queue(path, body)
@@ -435,6 +458,9 @@ class Agent:
         for queue_id, path, body in self.store.queued():
             try:
                 if path == IMAGE_QUEUE_PATH:
+                    if not body["metadata"].get("imageId"):
+                        body["metadata"]["imageId"] = f"img_{uuid.uuid4()}"
+                        self.store.update_queued(queue_id, body)
                     image_path = Path(str(body["localPath"]))
                     self.cloud.upload_image(image_path, body["metadata"], body.get("detections", []))
                     image_path.unlink(missing_ok=True)
@@ -442,7 +468,7 @@ class Agent:
                     self.cloud.signed_request(path, "POST", body)
                 self.store.remove_queued(queue_id)
             except urllib.error.HTTPError as error:
-                if error.code < 500:
+                if not retryable_http(error):
                     if path == IMAGE_QUEUE_PATH:
                         Path(str(body.get("localPath", ""))).unlink(missing_ok=True)
                     self.store.remove_queued(queue_id)
@@ -462,16 +488,8 @@ class Agent:
             image_path, content_type = captured
             metadata: dict[str, Any] = {"greenhouseId": GREENHOUSE_ID, "cameraId": CAMERA_ID, "plantId": CAMERA_PLANT_ID or None, "capturedAt": iso(captured_at), "contentType": content_type, "byteSize": image_path.stat().st_size}
             detections = self.camera.detections(image_path)
-            try:
-                self.cloud.upload_image(image_path, metadata, detections)
-                image_path.unlink(missing_ok=True)
-            except urllib.error.HTTPError as error:
-                if error.code >= 500:
-                    self.store.queue_image(image_path, metadata, detections)
-                else:
-                    image_path.unlink(missing_ok=True)
-            except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
-                self.store.queue_image(image_path, metadata, detections)
+            self.store.queue_image(image_path, metadata, detections)
+            self.flush_queue()
         except (FileNotFoundError, OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as error:
             print(f"camera capture unavailable: {error}")
 
@@ -551,7 +569,7 @@ class Agent:
         try:
             self.cloud.signed_request("/api/agent/telemetry", "POST", body)
         except urllib.error.HTTPError as error:
-            if error.code >= 500:
+            if retryable_http(error):
                 self.store.queue("/api/agent/telemetry", body)
         except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
             self.store.queue("/api/agent/telemetry", body)

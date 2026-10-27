@@ -103,6 +103,10 @@ export async function createImageUpload(payload: unknown, source: ImageSource, a
   const parsed = parseImageUploadInput(payload);
   if (!parsed.value) return { response: apiError("INVALID_IMAGE_REQUEST", parsed.error ?? "Invalid image upload request.", 400) };
   const input = parsed.value;
+  const requestedId = actor.kind === "agent" ? (payload as Record<string, unknown>).imageId : undefined;
+  if (requestedId !== undefined && !isImageId(requestedId)) return { response: apiError("INVALID_IMAGE_ID", "imageId is invalid.", 400) };
+  const id = requestedId ?? `img_${crypto.randomUUID()}`;
+  const createdBy = actor.kind === "agent" ? `agent:${actor.agentId}` : actor.createdBy;
   const forbidden = authorizeGreenhouseScope(input.greenhouseId);
   if (forbidden) return { response: forbidden };
   const db = getDb();
@@ -112,8 +116,6 @@ export async function createImageUpload(payload: unknown, source: ImageSource, a
   const capturedAt = input.capturedAt ?? createdAt;
   const objectPath = buildImageObjectPath(input, source, capturedAt);
   const bucket = supabaseStorageBucket();
-  const signed = await createSignedUploadUrl(objectPath);
-  const id = `img_${crypto.randomUUID()}`;
   await db.insert(inspectionImages).values({
     id,
     greenhouseId: input.greenhouseId,
@@ -129,11 +131,19 @@ export async function createImageUpload(payload: unknown, source: ImageSource, a
     uploadedAt: null,
     expiresAt: null,
     status: "pending",
-    createdBy: actor.kind === "agent" ? `agent:${actor.agentId}` : actor.createdBy,
+    createdBy,
     createdAt,
     expiredAt: null,
-  }).run();
-  return { data: { imageId: id, greenhouseId: input.greenhouseId, objectPath, uploadUrl: signed.uploadUrl, uploadExpiresAt: signed.expiresAt, publicUrl: publicObjectUrl(bucket, objectPath), status: "pending" } };
+  }).onConflictDoNothing({ target: inspectionImages.id }).run();
+  const row = await db.select().from(inspectionImages).where(eq(inspectionImages.id, id)).limit(1).get();
+  if (!row) throw new Error("Image reservation was not persisted.");
+  if (row.createdBy !== createdBy || row.source !== source || row.greenhouseId !== input.greenhouseId || row.cameraId !== input.cameraId || row.plantId !== input.plantId || row.contentType !== input.contentType || row.byteSize !== input.byteSize || (input.capturedAt !== null && row.capturedAt !== input.capturedAt)) {
+    return { response: apiError("IMAGE_ID_CONFLICT", "imageId is already reserved with different ownership or metadata.", 409) };
+  }
+  if (row.status === "failed") return { response: apiError("IMAGE_UPLOAD_FAILED", "Image upload has already failed.", 409) };
+  if (row.status === "ready" || row.status === "expired") return { data: responseFor(row) };
+  const signed = await createSignedUploadUrl(row.objectPath);
+  return { data: { imageId: row.id, greenhouseId: row.greenhouseId, objectPath: row.objectPath, uploadUrl: signed.uploadUrl, uploadExpiresAt: signed.expiresAt, publicUrl: row.publicUrl, status: "pending" } };
 }
 
 export async function completeImageUpload(rawImageId: unknown, actor: ImageActor): Promise<ServiceResult<Record<string, unknown>>> {

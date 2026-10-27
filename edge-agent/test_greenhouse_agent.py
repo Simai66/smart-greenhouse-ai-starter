@@ -1,10 +1,13 @@
 import importlib.util
+import io
+import json
 import os
 import pathlib
 import sys
 import tempfile
 import unittest
 from datetime import timedelta
+from unittest.mock import MagicMock, patch
 
 
 MODULE_PATH = pathlib.Path(__file__).with_name("greenhouse_agent.py")
@@ -68,6 +71,97 @@ class EdgeAgentTest(unittest.TestCase):
             agent_module.CAPTURE_FIXTURE = previous_fixture
             agent_module.CAPTURE_COMMAND = previous_command
             agent_module.CAPTURE_INTERVAL_SECONDS = previous_interval
+
+    def test_capture_retains_transient_http_failures_and_discards_invalid_uploads(self):
+        for status in (408, 429, 503, 400):
+            with self.subTest(status=status):
+                image = pathlib.Path(self.tempdir.name) / f"capture-{status}.jpg"
+                image.write_bytes(b"jpeg")
+                failure = agent_module.urllib.error.HTTPError("https://storage.invalid", status, "failure", {}, None)
+                self.addCleanup(failure.close)
+                with patch.object(self.agent.camera, "capture", return_value=(image, "image/jpeg")), patch.object(self.agent.camera, "detections", return_value=[]), patch.object(self.agent.cloud, "upload_image", side_effect=failure):
+                    self.agent.capture_once(force=True)
+                if status == 400:
+                    self.assertFalse(image.exists())
+                    self.assertEqual(self.agent.store.queued(), [])
+                else:
+                    self.assertTrue(image.exists())
+                    self.assertEqual(len(self.agent.store.queued()), 1)
+                    with patch.object(self.agent.cloud, "upload_image", return_value={"status": "ready"}):
+                        self.agent.flush_queue()
+                    self.assertFalse(image.exists())
+                    self.assertEqual(self.agent.store.queued(), [])
+
+    def test_upload_retries_resume_same_image_after_lost_response_and_restart(self):
+        for lost_at in ("reservation", "put", "complete", "detections"):
+            with self.subTest(lost_at=lost_at):
+                image = pathlib.Path(self.tempdir.name) / f"{lost_at}.jpg"
+                image.write_bytes(b"jpeg")
+                metadata = {"greenhouseId": "GH-01", "cameraId": "CAM-A-01", "contentType": "image/jpeg", "byteSize": 4, "capturedAt": "2026-09-25T00:00:00.000Z"}
+                results = [{"plantId": "PLANT-01", "classification": "healthy", "confidence": 98, "severity": "none"}]
+                self.agent.store.queue_image(image, metadata, results)
+                queued_id = self.agent.store.queued()[0][2]["metadata"]["imageId"]
+                server = {"status": "pending", "object": False, "lost": False}
+                reservations, put_calls, detection_calls = [], [], []
+
+                def lose(stage):
+                    if stage == lost_at and not server["lost"]:
+                        server["lost"] = True
+                        raise TimeoutError("response lost after server commit")
+
+                def signed(route, method="GET", body=None):
+                    if route.endswith("/upload-url"):
+                        self.assertEqual(body["imageId"], queued_id)
+                        reservations.append(body["imageId"])
+                        lose("reservation")
+                        return {"imageId": queued_id, "status": server["status"], "uploadUrl": "https://storage.invalid/upload"}
+                    self.assertEqual(body["imageId"], queued_id)
+                    if route.endswith("/complete"):
+                        if not server["object"]:
+                            error = agent_module.urllib.error.HTTPError("https://api.invalid", 409, "missing", {}, io.BytesIO(b'{"error":{"code":"UPLOAD_NOT_FOUND"}}'))
+                            self.addCleanup(error.close)
+                            raise error
+                        server["status"] = "ready"
+                        lose("complete")
+                        return {"imageId": queued_id, "status": "ready"}
+                    self.assertTrue(route.endswith("/detections"))
+                    detection_calls.append(json.dumps(body, sort_keys=True))
+                    lose("detections")
+                    return {"insertedCount": 1}
+
+                def put(request, **kwargs):
+                    put_calls.append(request.full_url)
+                    server["object"] = True
+                    lose("put")
+                    return MagicMock()
+
+                with patch.object(agent_module.CloudClient, "signed_request", side_effect=signed), patch.object(agent_module.urllib.request, "urlopen", side_effect=put):
+                    self.agent.flush_queue()
+                    self.assertTrue(image.exists())
+                    self.assertEqual(len(self.agent.store.queued()), 1)
+                    self.agent.store.db.close()
+                    self.agent = agent_module.Agent()
+                    self.agent.flush_queue()
+                self.assertEqual(self.agent.store.queued(), [])
+                self.assertFalse(image.exists())
+                self.assertEqual(len(reservations), 2)
+                self.assertEqual(len(set(reservations)), 1)
+                self.assertEqual(len(put_calls), 1)
+                self.assertEqual(len(set(detection_calls)), 1)
+                self.assertEqual(len(detection_calls), 2 if lost_at == "detections" else 1)
+
+    def test_legacy_image_queue_persists_id_before_network_request(self):
+        image = pathlib.Path(self.tempdir.name) / "legacy.jpg"
+        image.write_bytes(b"jpeg")
+        self.agent.store.queue(agent_module.IMAGE_QUEUE_PATH, {"localPath": str(image), "metadata": {"capturedAt": agent_module.iso()}, "detections": []})
+        def offline(path, metadata, detections):
+            self.assertEqual(metadata["imageId"], self.agent.store.queued()[0][2]["metadata"]["imageId"])
+            raise TimeoutError("offline")
+        with patch.object(self.agent.cloud, "upload_image", side_effect=offline):
+            self.agent.flush_queue()
+            first_id = self.agent.store.queued()[0][2]["metadata"]["imageId"]
+            self.agent.flush_queue()
+            self.assertEqual(self.agent.store.queued()[0][2]["metadata"]["imageId"], first_id)
 
     def reading(self, **changes):
         value = {
