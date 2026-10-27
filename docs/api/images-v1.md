@@ -44,6 +44,20 @@ Response contains `imageId`, `objectPath`, `uploadUrl`,
 `edge-agent-v1.md`. Request fields match the browser flow; source is forced to
 `pi` and the created record is tied to the authenticated agent identity.
 
+Pi clients may supply `imageId` (`img_<UUID>`) generated and saved before the
+first request. Reusing that ID with the same agent and metadata returns the
+same record and object path, including after a lost response or restart.
+Keep `capturedAt` identical on retries; if omitted, the first reservation's
+timestamp is reused. Conflicting ownership or metadata returns
+`409 IMAGE_ID_CONFLICT`; malformed IDs return `400 INVALID_IMAGE_ID`.
+
+A `pending` reservation returns a fresh signed upload URL. Before uploading,
+retry completion: only `409 UPLOAD_NOT_FOUND` requires a PUT, then completion.
+A `ready` or `expired` reservation returns existing metadata without an upload
+URL; proceed directly to posting detections. `failed` returns
+`409 IMAGE_UPLOAD_FAILED`. Preserve queued work on HTTP 408/429, server errors,
+and network failures. Clients omitting `imageId` still receive a new ID.
+
 ## Batch detections
 
 `POST /api/agent/detections` uses HMAC and accepts at most 100 results:
