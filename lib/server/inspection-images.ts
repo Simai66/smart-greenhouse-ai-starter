@@ -2,6 +2,8 @@ import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/db";
 import { detections, greenhouses, inspectionImages } from "@/db/schema";
 import { apiError } from "@/lib/server/api-error";
+import { assertRegisteredAgent } from "@/lib/server/agent-registry";
+import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
 import {
   buildImageObjectPath,
   IMAGE_MAX_BYTES,
@@ -101,6 +103,8 @@ export async function createImageUpload(payload: unknown, source: ImageSource, a
   const parsed = parseImageUploadInput(payload);
   if (!parsed.value) return { response: apiError("INVALID_IMAGE_REQUEST", parsed.error ?? "Invalid image upload request.", 400) };
   const input = parsed.value;
+  const forbidden = authorizeGreenhouseScope(input.greenhouseId);
+  if (forbidden) return { response: forbidden };
   const db = getDb();
   const greenhouse = await db.select({ id: greenhouses.id }).from(greenhouses).where(eq(greenhouses.id, input.greenhouseId)).limit(1).get();
   if (!greenhouse) return { response: apiError("GREENHOUSE_NOT_FOUND", "Greenhouse was not found.", 404) };
@@ -138,7 +142,13 @@ export async function completeImageUpload(rawImageId: unknown, actor: ImageActor
   const db = getDb();
   const row = await db.select().from(inspectionImages).where(eq(inspectionImages.id, id)).limit(1).get();
   if (!row) return { response: apiError("IMAGE_NOT_FOUND", "Image was not found.", 404) };
-  if (actor.kind === "agent" && row.createdBy !== `agent:${actor.agentId}`) return { response: apiError("IMAGE_AGENT_MISMATCH", "Image was not created by this agent.", 403) };
+  const forbidden = authorizeGreenhouseScope(row.greenhouseId);
+  if (forbidden) return { response: forbidden };
+  if (actor.kind === "agent") {
+    const unregistered = await assertRegisteredAgent(actor.agentId, row.greenhouseId);
+    if (unregistered) return { response: unregistered };
+    if (row.createdBy !== `agent:${actor.agentId}`) return { response: apiError("IMAGE_AGENT_MISMATCH", "Image was not created by this agent.", 403) };
+  }
   if (row.status === "expired") return { response: apiError("IMAGE_EXPIRED", "Image retention period has ended.", 409) };
   if (row.status === "failed") return { response: apiError("IMAGE_UPLOAD_FAILED", "Image upload has already failed.", 409) };
   if (row.status === "ready") return { data: responseFor(row) };

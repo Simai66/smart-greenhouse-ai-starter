@@ -4,12 +4,15 @@ import { greenhouses, plants } from "@/db/schema";
 import { authorizeApiRole } from "@/lib/server/access-control";
 import { apiError } from "@/lib/server/api-error";
 import { isPlantIdentity } from "@/lib/measurement-identity";
+import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
 
 export async function GET(request: Request) {
   const authorization = await authorizeApiRole("viewer");
   if ("response" in authorization) return authorization.response;
   const greenhouseId = new URL(request.url).searchParams.get("greenhouseId");
   if (!greenhouseId || greenhouseId.length > 64) return apiError("GREENHOUSE_REQUIRED", "A valid greenhouseId is required.", 400);
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   try {
     const rows = await getDb().select().from(plants)
       .where(and(eq(plants.greenhouseId, greenhouseId), eq(plants.status, "active")))
@@ -30,6 +33,8 @@ export async function POST(request: Request) {
   if (typeof value.greenhouseId !== "string" || value.greenhouseId.length < 1 || value.greenhouseId.length > 64 || !isPlantIdentity(value.plantId) || typeof value.displayName !== "string" || !value.displayName.trim() || value.displayName.trim().length > 120) {
     return apiError("INVALID_PLANT", "greenhouseId, plantId, and displayName are required and must be valid.", 400);
   }
+  const forbidden = authorizeGreenhouseScope(value.greenhouseId);
+  if (forbidden) return forbidden;
   const now = new Date().toISOString();
   try {
     const db = getDb();

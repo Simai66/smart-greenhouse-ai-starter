@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import { devicePolicies, devicePolicyRevisions, devices } from "@/db/schema";
 import { authorizeApiRole } from "@/lib/server/access-control";
 import { parseCapabilities, validateDevicePolicy } from "@/lib/server/device-policy";
+import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
 
 type PolicyPayload = { greenhouseId?: unknown; policy?: unknown };
 
@@ -16,6 +17,8 @@ export async function GET(request: Request, context: { params: Promise<{ deviceI
   const greenhouseId = new URL(request.url).searchParams.get("greenhouseId");
   const { deviceId } = await context.params;
   if (!greenhouseId) return Response.json({ error: "greenhouseId is required." }, { status: 400 });
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   try {
     if (!await registeredDevice(deviceId, greenhouseId)) return Response.json({ error: "Device was not found." }, { status: 404 });
     const revisions = await getDb().select().from(devicePolicyRevisions).where(eq(devicePolicyRevisions.deviceId, deviceId)).orderBy(desc(devicePolicyRevisions.version)).limit(50).all();
@@ -30,6 +33,8 @@ export async function PUT(request: Request, context: { params: Promise<{ deviceI
   let payload: PolicyPayload;
   try { payload = await request.json(); } catch { return Response.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
   if (typeof payload.greenhouseId !== "string") return Response.json({ error: "greenhouseId is required." }, { status: 400 });
+  const forbidden = authorizeGreenhouseScope(payload.greenhouseId);
+  if (forbidden) return forbidden;
   try {
     const db = getDb();
     const device = await registeredDevice(deviceId, payload.greenhouseId);

@@ -4,6 +4,7 @@ import { devices, measurementPoints, sensorConfigs, sensorReadings } from "@/db/
 import { authorizeApiRole } from "@/lib/server/access-control";
 import { parseSensorConfigInput, sensorCapabilities, sensorConfigPayload } from "@/lib/server/sensor-config";
 import type { SensorMetric } from "@/lib/server/sensor-telemetry";
+import { PILOT_GREENHOUSE_ID } from "@/lib/greenhouse-scope";
 
 export async function PUT(request: Request, context: { params: Promise<{ sensorId: string }> }) {
   const authorization = await authorizeApiRole("admin");
@@ -13,7 +14,7 @@ export async function PUT(request: Request, context: { params: Promise<{ sensorI
   try { payload = await request.json(); } catch { return Response.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
   try {
     const db = getDb();
-    const current = await db.select().from(sensorConfigs).where(eq(sensorConfigs.sensorId, sensorId)).limit(1).get();
+    const current = await db.select().from(sensorConfigs).where(and(eq(sensorConfigs.sensorId, sensorId), eq(sensorConfigs.greenhouseId, PILOT_GREENHOUSE_ID))).limit(1).get();
     if (!current) return Response.json({ error: "Sensor was not found." }, { status: 404 });
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) return Response.json({ error: "Request body must be an object." }, { status: 400 });
     const body = payload as Record<string, unknown>;
