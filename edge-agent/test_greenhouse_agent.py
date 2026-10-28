@@ -23,6 +23,8 @@ class EdgeAgentTest(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         agent_module.STATE_DIR = pathlib.Path(self.tempdir.name)
         agent_module.GREENHOUSE_ID = "GH-01"
+        agent_module.ACCESS_CLIENT_ID = "pi-token-id"
+        agent_module.ACCESS_CLIENT_SECRET = "access-secret"
         agent_module.AGENT_ID = "PI-GH-01"
         agent_module.AGENT_SECRET = "x" * 40
         self.agent = agent_module.Agent()
@@ -40,6 +42,85 @@ class EdgeAgentTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.agent.store.db.close()
         self.tempdir.cleanup()
+
+    def test_cloud_request_uses_shared_signed_bytes_service_headers_and_fresh_nonce(self):
+        client = agent_module.CloudClient()
+        client.api_url = "https://greenhouse.invalid"
+        client.agent_id = "PI-GH-01"
+        client.agent_secret = "0123456789abcdef0123456789abcdef"
+        client.greenhouse_id = "GH-01"
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b"{}"
+        requests = []
+
+        def open_request(request, timeout):
+            requests.append(request)
+            return response
+
+        with patch.object(agent_module, "iso", return_value="2026-10-28T00:00:00.000Z"), patch.object(agent_module.secrets, "token_hex", return_value="00112233445566778899aabbccddeeff"), patch.object(agent_module.urllib.request, "urlopen", side_effect=open_request):
+            client.signed_request("/api/agent/heartbeat", "POST", {"agentId": "PI-GH-01", "greenhouseId": "GH-01"})
+        request = requests[0]
+        self.assertEqual(request.get_header("X-greenhouse-nonce"), "00112233445566778899aabbccddeeff")
+        self.assertEqual(request.get_header("Cf-access-client-id"), "pi-token-id")
+        self.assertEqual(request.get_header("Cf-access-client-secret"), "access-secret")
+        self.assertEqual(request.get_header("X-greenhouse-signature"), "bd589190aa7b42dfb53dc24fbb20a743508d71272c32bd7dc82259e2294cb54f")
+
+    def test_agent_query_canonicalization_rejects_duplicates_and_encodings(self):
+        self.assertEqual(agent_module.canonical_agent_query("/api/agent/config", "greenhouseId=GH-01&agentId=PI-GH-01", "GET"), "agentId=PI-GH-01&greenhouseId=GH-01")
+        for query in ("agentId=PI-GH-01&agentId=PI-GH-02&greenhouseId=GH-01", "agentId=PI+GH&greenhouseId=GH-01", "agentId=PI%2DGH&greenhouseId=GH-01", "agentId=PI-GH-01&greenhouseId=GH-01&extra=x"):
+            self.assertIsNone(agent_module.canonical_agent_query("/api/agent/config", query, "GET"))
+        self.assertIsNone(agent_module.canonical_agent_query("/api/agent/%63onfig", "", "GET"))
+        self.assertIsNone(agent_module.canonical_agent_query("/api/agent/heartbeat", "x=y", "POST"))
+
+    def test_transport_retries_receive_distinct_nonces(self):
+        client = agent_module.CloudClient()
+        client.api_url = "https://greenhouse.invalid"
+        requests = []
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b"{}"
+
+        def open_request(request, timeout):
+            requests.append(request)
+            return response
+
+        with patch.object(agent_module, "iso", return_value="2026-10-28T00:00:00.000Z"), patch.object(agent_module.secrets, "token_hex", side_effect=["0" * 32, "1" * 32]), patch.object(agent_module.urllib.request, "urlopen", side_effect=open_request):
+            client.signed_request("/api/agent/config?greenhouseId=GH-01&agentId=PI-GH-01")
+            client.signed_request("/api/agent/config?greenhouseId=GH-01&agentId=PI-GH-01")
+        self.assertNotEqual(requests[0].get_header("X-greenhouse-nonce"), requests[1].get_header("X-greenhouse-nonce"))
+        self.assertNotEqual(requests[0].get_header("X-greenhouse-signature"), requests[1].get_header("X-greenhouse-signature"))
+
+    def test_auth_failures_remain_retryable_to_preserve_the_durable_outbox(self):
+        for status in (401, 403, 408, 429, 500):
+            error = agent_module.urllib.error.HTTPError("https://greenhouse.invalid", status, "failure", {}, None)
+            self.addCleanup(error.close)
+            self.assertTrue(agent_module.retryable_http(error), status)
+
+    def test_outbox_retains_auth_failed_telemetry_for_recovery(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        failure = agent_module.urllib.error.HTTPError("https://greenhouse.invalid", 401, "unauthorized", {}, None)
+        self.addCleanup(failure.close)
+        with patch.object(self.agent.cloud, "signed_request", side_effect=failure):
+            self.agent.flush_queue()
+        queued = self.agent.store.queued()
+        self.assertEqual(len(queued), 1)
+        self.assertEqual(queued[0][2], body)
+
+    def test_cloud_client_requires_both_access_service_token_values(self):
+        client = agent_module.CloudClient()
+        client.access_client_secret = ""
+        with self.assertRaisesRegex(RuntimeError, "GREENHOUSE_ACCESS_CLIENT_ID and GREENHOUSE_ACCESS_CLIENT_SECRET"):
+            client.signed_request("/api/agent/heartbeat", "POST", {})
+
+    def test_cloud_client_rejects_weak_agent_hmac_secret(self):
+        client = agent_module.CloudClient()
+        client.api_url = "https://greenhouse.invalid"
+        client.agent_secret = "x" * 31
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b"{}"
+        with patch.object(agent_module.urllib.request, "urlopen", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "at least 32 characters"):
+                client.signed_request("/api/agent/heartbeat", "POST", {})
 
     def test_fixture_image_queues_offline_and_flushes_after_reconnect(self):
         fixture = pathlib.Path(self.tempdir.name) / "fixture.jpg"

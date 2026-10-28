@@ -5,5 +5,5 @@
 - **In scope:** Worker Access service-token verification, agent HMAC/replay guard, additive nonce migration and cleanup, Pi signer and tests, API contract and operator runbook.
 - **Out of scope:** Browser role redesign; private image bucket/read API (next security slice); rate-limit dashboard setup; external Cloudflare/Supabase configuration; remote migrations/deploy; LAN firewall changes; relays.
 - **Affected areas:** Backend auth/API/D1, Edge Pi client, DevOps documentation, QA tests.
-- **Assumptions/risks:** GH-01 only. Access Service Auth claims follow the approved design. Existing Pi callers migrate together with Worker; until staging config and secrets are provisioned, agent calls fail closed. Nonce table adds D1 writes and needs scheduled expiry cleanup.
+- **Assumptions/risks:** GH-01 only. Access Service Auth claims follow the approved design; its path-app AUD is separately configured from browser AUD. Existing Pi callers migrate together with Worker; until staging config and secrets are provisioned, agent calls fail closed. Nonce table adds D1 writes and needs scheduled expiry cleanup.
 - **Owners/order:** Backend contract and verifier → Backend nonce migration/auth wiring → Edge signer → DevOps runbook (no external mutation) → QA targeted/full checks and fresh security review.

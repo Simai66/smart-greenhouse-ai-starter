@@ -1,28 +1,54 @@
 # Greenhouse edge-agent API v1
 
 All payload timestamps are ISO-8601 UTC. Browser endpoints are protected by
-Cloudflare Access and the application role mapping. Edge endpoints use a
-per-agent HMAC-SHA-256 signature and are not browser endpoints.
+Cloudflare Access and the application role mapping. Edge endpoints require a
+Cloudflare Access Service Auth assertion plus a per-agent HMAC-SHA-256
+signature; they are not browser endpoints.
 
 ## Agent authentication
 
 For every `/api/agent/*` request, the Pi sends:
 
 ```text
+CF-Access-Client-Id: <GH-01 service token ID>
+CF-Access-Client-Secret: <GH-01 service token secret>
 X-Greenhouse-Agent: PI-GH-01
-X-Greenhouse-Timestamp: 2026-07-18T03:00:00.000Z
-X-Greenhouse-Signature: base64(HMAC-SHA-256(secret, timestamp + "." + raw-body))
+X-Greenhouse-Timestamp: 2026-10-28T00:00:00.000Z
+X-Greenhouse-Nonce: <32 lowercase hex characters, fresh per HTTP attempt>
+X-Greenhouse-Signature: lowercase-hex(HMAC-SHA-256(secret, canonical request bytes))
 ```
 
-The timestamp must be within five minutes of the Worker clock. The Worker
+The Worker verifies the signed Access JWT issuer, service application AUD,
+expiry, `type=app`, empty `sub`, and `common_name` against
+`CLOUDFLARE_ACCESS_SERVICE_TOKEN_ID_<NORMALIZED_AGENT_ID>`. `CLOUDFLARE_ACCESS_SERVICE_AUD`
+is separate from the browser app's `CLOUDFLARE_ACCESS_AUD`. The Worker also
 looks up `GREENHOUSE_AGENT_SECRET_<agentId>` with non-alphanumeric characters
 normalised to `_`; for example, `PI-GH-01` uses
 `GREENHOUSE_AGENT_SECRET_PI_GH_01`. Agent IDs are restricted to uppercase
-letters, digits, `_`, and `-`. `GET` signatures use an empty body. The agent
-must never send this secret as a request field.
+letters, digits, `_`, and `-`. `GET` signatures use an empty body. Neither
+secret belongs in request bodies, firmware, or logs.
 
-Errors use `{ "error": "..." }`. Authentication errors are `401`, invalid
-or unauthorised input is `400`/`403`, unavailable storage is `503`.
+Canonical bytes are UTF-8/ASCII method, exact route path, sorted canonical
+query, timestamp, and nonce separated by one LF byte, then one LF and exact raw
+body bytes. Query is empty on routes without query parameters. `/api/agent/config`
+and `/api/agent/commands` accept exactly one each of `agentId` and
+`greenhouseId`; percent escapes, `+`, duplicates, unknown keys, and encoded
+paths are rejected. HMAC uses lowercase hexadecimal SHA-256. Timestamp must be
+canonical ISO-8601 UTC within five minutes. Nonce is unique per agent and held
+for 24 hours; duplicate requests return `401`, D1 errors return `503`. A retry
+must use a new nonce; stable reading/image/command IDs preserve business
+idempotency.
+
+Bodies are counted from the request stream before buffering: heartbeat and
+image-upload metadata 16 KiB, telemetry and detections 128 KiB, command
+acknowledgement and image completion 8 KiB. Other methods/routes are rejected.
+Access policy must protect only `/api/agent/*` with Service Auth for the
+registered token; no Bypass policy is allowed. The direct `workers.dev` origin
+still requires the signed assertion and HMAC.
+
+Errors use `{ "error": "..." }`. Authentication/replay errors are `401`,
+invalid or unauthorised input is `400`/`403`, unavailable configuration or
+storage is `503`, and oversized bodies are `413`.
 
 Image capture and AI result routes are documented in
 [Image and AI evidence API v1](images-v1.md). They reuse the same HMAC headers;

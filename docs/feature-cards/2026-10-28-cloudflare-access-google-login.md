@@ -1,5 +1,8 @@
 # Feature card: Cloudflare Access Google login for GH-01
 
+> Historical completion record. Its HMAC-only/BYPASS assumption is superseded by
+> [GH-01 agent ingress security](2026-10-28-gh01-agent-ingress-security.md).
+
 - **Outcome:** Approved greenhouse users sign in with Google through Cloudflare Access; browser APIs accept only a valid, app-scoped Access JWT and map its verified email to existing server-side roles.
 - **Acceptance:** Valid JWT (signature, issuer, audience, expiry, email) reaches role mapping; missing/invalid tokens and missing Access config fail closed; Access mode never trusts caller-supplied identity headers; staging runbook gives exact Google/Access setup and verification steps; Pi agent API remains protected by its existing HMAC verifier.
 - **Scope:** Backend auth boundary, focused tests, staging auth-mode setting, setup docs. No UI login SDK, database/migration, production changes, or dashboard provisioning.

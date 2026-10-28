@@ -10,7 +10,7 @@
 
 - `lib/server/cloudflare-access-auth.ts`, `tests/cloudflare-access-auth.test.ts`: distinguish signed user JWT from signed Service Auth app JWT and bind `common_name` to configured service-token ID.
 - `lib/server/agent-auth.ts` and agent route callers: canonical HMAC, route/query/body bounds, nonce reservation, JSON decoding only after authentication.
-- `db/schema.ts`, `drizzle/0005_agent_request_nonces.sql`, `drizzle/meta/_journal.json`, `worker/index.ts`: unique nonce persistence and bounded expiry cleanup.
+- `db/schema.ts`, `drizzle/0005_agent_request_nonces.sql`, `worker/index.ts`: unique nonce persistence and indexed expiry cleanup. Existing Drizzle journal lists only `0000` while numbered SQL migrations `0001–0004` exist; do not invent missing migration history rows.
 - `edge-agent/greenhouse_agent.py`, `edge-agent/test_greenhouse_agent.py`, `edge-agent/docker-compose.example.yml`: matching signatures and Service Auth headers from Pi-only env.
 - `docs/api/edge-agent-v1.md`, `README.md`: exact contract, configuration, phased rollout and rollback; remove stale Access Bypass advice.
 
@@ -32,9 +32,9 @@
 
 ## Task 3 — Add additive nonce storage and cleanup
 
-1. Add schema and migration for `(agent_id, nonce)` primary/unique key, expiry timestamp, and expiry index. No existing rows/tables are deleted.
+1. Add schema and migration for `(agent_id, nonce)` primary key, expiry timestamp, and expiry index. No existing rows/tables are deleted.
 2. Add test that applies migrations to local D1, verifies duplicate insert fails, and expired cleanup only removes eligible rows.
-3. Add bounded cleanup to the existing scheduled Worker handler alongside image retention; keep current schedule.
+3. Add indexed expiry cleanup to the existing scheduled Worker handler alongside image retention; keep current schedule so daily cleanup drains the full prior-day request volume.
 4. Run migration/schema tests; document rollback as restoring old Worker while retaining new table/history.
 
 ## Task 4 — Update Pi signer and tests

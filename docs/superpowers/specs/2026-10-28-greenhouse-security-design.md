@@ -118,7 +118,9 @@ approved implementation, before the changed controls are relied on.
 - Pi sends `CF-Access-Client-Id` and `CF-Access-Client-Secret` plus existing
   agent identity and HMAC headers. Keep the service-token secret in Pi-only
   secret storage; Worker stores the expected service-token identity and
-  validates the signed Access assertion as a service token.
+  validates the signed Access assertion as a service token. Store its app-path
+  audience separately as `CLOUDFLARE_ACCESS_SERVICE_AUD` because the `/api/agent/*`
+  Access application may have a different AUD tag from the browser app.
 - Worker verifies signature, issuer, audience, expiry and `type: "app"`; for a
   service token require `sub: ""` and `common_name` equal to the configured
   `CF-Access-Client-Id` for that Pi. The JWT does not use
@@ -153,7 +155,7 @@ approved implementation, before the changed controls are relied on.
   `2026-10-28T00:00:00.000Z`; nonce
   `00112233445566778899aabbccddeeff`; body UTF-8 bytes
   `{"agentId":"PI-GH-01","greenhouseId":"GH-01"}`; expected HMAC-SHA256
-  hex `bd589190aa7b42dfb53dc24fbb20a743508d71272c32bd7dc82259e2294cb54`.
+  hex `bd589190aa7b42dfb53dc24fbb20a743508d71272c32bd7dc82259e2294cb54f`.
   This vector checks canonical bytes only; test freshness separately with a
   controlled clock because its timestamp is intentionally historical.
 
