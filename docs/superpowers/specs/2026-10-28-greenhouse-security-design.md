@@ -1,10 +1,11 @@
 # GH-01 security design
 
-**Status:** Draft for product-owner approval
+**Status:** Approved by product owner for repository implementation; external rollout requires a separate verified operational gate.
 **Decision:** GH-01 single-greenhouse pilot, private image storage, Google login for
 people, Cloudflare Access Service Auth plus existing HMAC for Pi requests.
-**Scope boundary:** Design only. No runtime, D1, Cloudflare, Supabase, Pi,
-firmware, or relay changes in this document's authoring task.
+**Scope boundary:** This document authorizes repository implementation only. It
+does not authorize Cloudflare/Supabase changes, remote D1 migrations, deploys,
+or relay/hardware operations.
 
 ## User outcome
 
@@ -148,10 +149,13 @@ approved implementation, before the changed controls are relied on.
   idempotency keys, and equivalent dedupe for every retried mutation.
 - Cross-language conformance vector for Pi and Worker tests: key bytes
   `0123456789abcdef0123456789abcdef`; method `POST`; path
-  `/api/agent/heartbeat`; empty canonical query; timestamp `1700000000`; nonce
+  `/api/agent/heartbeat`; empty canonical query; timestamp
+  `2026-10-28T00:00:00.000Z`; nonce
   `00112233445566778899aabbccddeeff`; body UTF-8 bytes
   `{"agentId":"PI-GH-01","greenhouseId":"GH-01"}`; expected HMAC-SHA256
-  hex `c3c50f1707196f94172da7352915897d60dcd52584420ff3b38d1204e629518e`.
+  hex `bd589190aa7b42dfb53dc24fbb20a743508d71272c32bd7dc82259e2294cb54`.
+  This vector checks canonical bytes only; test freshness separately with a
+  controlled clock because its timestamp is intentionally historical.
 
 ### Private inspection images
 
