@@ -59,8 +59,9 @@ Affected: UI, API, edge SQLite queue. No D1 schema or deployment changes.
 
 ### Current checkpoint
 
-- Existing local diff implements all three layers and adds regression tests; it
-  remains uncommitted user work and must stay separate from PR #5/#7.
+- Existing local diff implemented all three layers and added regression tests;
+  it stayed separate from PR #5/#7 and was later committed independently as
+  `e549a95` after user authorization.
 - Latest inspected branch: `codex/sgh-dual-measurement-identity`, with no staged
   changes. Worktree also contains unrelated readiness cards/plans; preserve them.
 - `rule.md` and release card `2026-08-11-pm-release-readiness.md` were restored

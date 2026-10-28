@@ -80,3 +80,5 @@ Main agent owns review, fixes, and QA. Stop before commit/merge/deploy; report f
 - Declined-to-judge: repeated `openCamera` calls while permission is pending
   predate this diff; live storage/hardware and Cloudflare typecheck errors are
   outside this code review and remain tracked by release readiness.
+- User later authorized a dedicated commit; image retry work was committed as
+  `e549a95`, separate from PR #5/#7 remediation.
