@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getCloudflareAccessIdentity } from "../lib/server/cloudflare-access-auth.ts";
+import { getCloudflareAccessIdentity, getCloudflareAccessServiceIdentity } from "../lib/server/cloudflare-access-auth.ts";
 
 const teamDomain = "https://greenhouse-test.cloudflareaccess.com";
 const audience = "greenhouse-app-audience";
@@ -40,6 +40,7 @@ const env = {
   GREENHOUSE_AUTH_MODE: "cloudflare-access",
   CLOUDFLARE_ACCESS_TEAM_DOMAIN: teamDomain,
   CLOUDFLARE_ACCESS_AUD: audience,
+  CLOUDFLARE_ACCESS_SERVICE_AUD: "greenhouse-agent-audience",
 };
 
 test("accepts signed Access JWT and returns verified email", async () => {
@@ -49,6 +50,38 @@ test("accepts signed Access JWT and returns verified email", async () => {
       status: "authenticated",
       email: "operator@example.com",
     });
+  } finally { restore(); }
+});
+
+test("accepts only signed Service Auth app JWT bound to expected token ID", async () => {
+  const restore = installJwks();
+  try {
+    const appAssertion = await token({ aud: "greenhouse-agent-audience", email: undefined, type: "app", sub: "", common_name: "pi-token-id" });
+    assert.deepEqual(await getCloudflareAccessServiceIdentity(headers(appAssertion), { ...env, CLOUDFLARE_ACCESS_SERVICE_TOKEN_ID_PI_GH_01: "pi-token-id" }, "PI-GH-01"), {
+      status: "authenticated",
+      serviceTokenId: "pi-token-id",
+    });
+    assert.deepEqual(await getCloudflareAccessServiceIdentity(headers(appAssertion), { ...env, CLOUDFLARE_ACCESS_SERVICE_TOKEN_ID_PI_GH_01: "other-token-id" }, "PI-GH-01"), { status: "unauthenticated" });
+    assert.deepEqual(await getCloudflareAccessServiceIdentity(headers(await token()), { ...env, CLOUDFLARE_ACCESS_SERVICE_TOKEN_ID_PI_GH_01: "pi-token-id" }, "PI-GH-01"), { status: "unauthenticated" });
+  } finally { restore(); }
+});
+
+test("fails closed for missing service token mapping or invalid app claims", async () => {
+  const restore = installJwks();
+  try {
+    const appAssertion = await token({ aud: "greenhouse-agent-audience", email: undefined, type: "app", sub: "", common_name: "pi-token-id" });
+    const mappedEnv = { ...env, CLOUDFLARE_ACCESS_SERVICE_TOKEN_ID_PI_GH_01: "pi-token-id" };
+    assert.deepEqual(await getCloudflareAccessServiceIdentity(headers(appAssertion), env, "PI-GH-01"), { status: "unavailable" });
+    assert.deepEqual(await getCloudflareAccessServiceIdentity(headers(appAssertion), { ...mappedEnv, CLOUDFLARE_ACCESS_SERVICE_AUD: undefined }, "PI-GH-01"), { status: "unavailable" });
+    for (const claims of [
+      { email: undefined, type: "app", sub: "not-empty", common_name: "pi-token-id" },
+      { email: undefined, type: "user", sub: "", common_name: "pi-token-id" },
+      { email: undefined, type: "app", sub: "", common_name: "" },
+      { email: undefined, type: "app", sub: "", common_name: "pi-token-id", exp: Math.floor(Date.now() / 1000) - 60 },
+      { aud: "wrong-agent-audience", email: undefined, type: "app", sub: "", common_name: "pi-token-id" },
+    ]) {
+      assert.deepEqual(await getCloudflareAccessServiceIdentity(headers(await token(claims)), mappedEnv, "PI-GH-01"), { status: "unauthenticated" });
+    }
   } finally { restore(); }
 });
 
@@ -106,6 +139,7 @@ test("rejects wrong issuer, audience, expiry, not-before, and missing email", as
       { exp: now - 60 },
       { nbf: now + 60 },
       { email: "" },
+      { type: "app", sub: "" },
     ]) {
       assert.deepEqual(await getCloudflareAccessIdentity(headers(await token(claims)), env), { status: "unauthenticated" });
     }

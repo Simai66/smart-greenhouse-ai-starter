@@ -1,5 +1,6 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import handler from "vinext/server/app-router-entry";
+import { runAgentNonceRetention } from "@/lib/server/agent-request-nonces";
 import { runImageRetention } from "@/lib/server/inspection-images";
 
 interface Env {
@@ -20,7 +21,8 @@ const worker = {
     return handler.fetch(request, env, ctx);
   },
   async scheduled(controller: { scheduledTime: number }, _env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runImageRetention(new Date(controller.scheduledTime)));
+    const scheduledTime = new Date(controller.scheduledTime);
+    ctx.waitUntil(Promise.all([runImageRetention(scheduledTime), runAgentNonceRetention(scheduledTime)]));
   },
 };
 

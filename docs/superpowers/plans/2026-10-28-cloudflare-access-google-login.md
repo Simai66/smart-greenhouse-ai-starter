@@ -1,5 +1,8 @@
 # Cloudflare Access Google login Implementation Plan
 
+> Historical implementation plan. Agent-route Bypass was replaced by the
+> approved Service Auth flow in `2026-10-28-greenhouse-security-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Authenticate GH-01 browser API requests with Google identities asserted by Cloudflare Access.

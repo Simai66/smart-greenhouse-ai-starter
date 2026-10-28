@@ -98,7 +98,8 @@ used as evidence that a relay changed state.
    `0001_edge_agent_and_policies.sql`,
    `0002_sensor_configs_and_reading_ids.sql`,
    `0003_supabase_storage_images.sql`, then
-   `0004_dual_measurement_points_and_plant_assignments.sql`.
+   `0004_dual_measurement_points_and_plant_assignments.sql`, then
+   `0005_agent_request_nonces.sql`.
    Back up staging D1 before applying. App rollback is safe because migration
    `0004` only adds tables, columns, and indexes; retain the added schema and
    assignment history when rolling back the Worker. Recover incorrect mappings
@@ -109,15 +110,21 @@ used as evidence that a relay changed state.
 3. Set a distinct Worker secret for each agent, named
    `GREENHOUSE_AGENT_SECRET_<AGENT_ID>` with non-alphanumeric characters
    changed to `_` (for example `PI-GH-01` becomes
-   `GREENHOUSE_AGENT_SECRET_PI_GH_01`; at least 32 characters). Set browser
-   roles with `GREENHOUSE_ADMIN_EMAILS` and `GREENHOUSE_OPERATOR_EMAILS`.
+   `GREENHOUSE_AGENT_SECRET_PI_GH_01`; at least 32 characters). Also set
+   `CLOUDFLARE_ACCESS_SERVICE_TOKEN_ID_PI_GH_01` and
+   `CLOUDFLARE_ACCESS_SERVICE_AUD` after creating the Access Service Auth app.
+   Set browser roles with `GREENHOUSE_ADMIN_EMAILS` and
+   `GREENHOUSE_OPERATOR_EMAILS`.
 4. Configure Cloudflare Access in the dashboard before exposing browser APIs.
    The staging Worker uses Google sign-in and validates Access JWTs itself; see
    [Google login setup](#cloudflare-access-google-login) below. Keep OAuth
    credentials and approved-user policy in Cloudflare, never in source.
-5. On the Pi, copy `edge-agent/docker-compose.example.yml`, set its four
-   required cloud values plus LAN node token/allow-list values, and start it
-   with Docker Compose. Its persistent volume is the recoverable outbound
+5. On the Pi, copy `edge-agent/docker-compose.example.yml`, set its six
+   required cloud values (`GREENHOUSE_API_URL`, `GREENHOUSE_ID`,
+   `GREENHOUSE_AGENT_ID`, `GREENHOUSE_AGENT_SECRET`,
+   `GREENHOUSE_ACCESS_CLIENT_ID`, `GREENHOUSE_ACCESS_CLIENT_SECRET`) plus LAN
+   node token/allow-list values. Keep the environment file owner-only and wait
+   for the rollout gate below before starting it. Its persistent volume is the recoverable outbound
    queue, inbound reading dedupe, sensor config cache, and local-policy state.
 6. Flash `firmware/esp32` with PlatformIO after assigning each ESP32 a unique
    LAN node token. Firmware calls Pi only; it contains no cloud HMAC secret.
@@ -128,15 +135,12 @@ used as evidence that a relay changed state.
 remote D1 database `smart-greenhouse-staging`. Verify the Cloudflare account
 email and register a `workers.dev` subdomain before publishing:
 
-```bash
-npx wrangler deploy --config wrangler.staging.jsonc
-npx wrangler secret put GREENHOUSE_AGENT_SECRET_PI_GH_01 --config wrangler.staging.jsonc
-```
-
 The agent secret must be at least 32 characters. Staging config sets
 `GREENHOUSE_AUTH_MODE=cloudflare-access`; the app returns 503 until the Access
 team domain and audience are configured. Complete the Access setup below before
-exposing browser APIs. Do not commit secrets or put them in ESP32 firmware.
+exposing browser APIs. Do not deploy the new agent verifier until Access service
+app, Worker secrets, migration, and Pi values are ready. Do not commit secrets or
+put them in ESP32 firmware.
 
 The Pi relay adapter remains a simulator. The staging ESP32 firmware reads the
 SHT30 on I2C `0x44` (`SDA=21`, `SCL=22`) for the temperature channel; BH1750 and
@@ -156,16 +160,14 @@ limit to 10 MiB. Public URLs expose images until the 15-day cleanup cron removes
 them; use a private bucket with signed read URLs before handling sensitive
 commercial imagery.
 
-Apply D1 and set Worker secrets without committing them:
+Set Storage and browser-role Worker secrets without committing them:
 
 ```bash
-npx wrangler d1 migrations apply smart-greenhouse-staging --remote --config wrangler.staging.jsonc
 npx wrangler secret put SUPABASE_URL --config wrangler.staging.jsonc
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config wrangler.staging.jsonc
 npx wrangler secret put SUPABASE_STORAGE_BUCKET --config wrangler.staging.jsonc
 npx wrangler secret put GREENHOUSE_ADMIN_EMAILS --config wrangler.staging.jsonc
 npx wrangler secret put GREENHOUSE_OPERATOR_EMAILS --config wrangler.staging.jsonc
-npx wrangler deploy --config wrangler.staging.jsonc
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` is used only by Worker. Browser and Pi receive
@@ -191,11 +193,13 @@ API identity checks.
 3. In Access → Applications, create a self-hosted application for the exact
    staging hostname `smart-greenhouse-ai-staging.smart-greenhouse-ai.workers.dev`.
    Set Google as the login method and add an Allow policy containing only
-   approved email addresses. Add a more specific application path for
-   `/api/agent/*` with a Bypass policy for Everyone: the Pi cannot use Google
-   login, and every agent endpoint still requires its existing timestamped
-   HMAC signature. Bypass removes Access enforcement and logging on that path,
-   so keep it limited to `/api/agent/*`.
+   approved email addresses. Create a separate self-hosted application for the
+   same hostname and `/api/agent/*` path. Give it a Service Auth policy scoped
+   to the one GH-01 service token. Do not add an Everyone Bypass policy. The
+   Worker verifies the app-specific AUD, signed service-token assertion, token
+   ID binding, and per-agent HMAC. In Access settings, enable Strict Service
+   Token Authentication so bad service credentials return 401/403 rather than
+   an interactive login redirect.
 4. Copy the Access team domain (`https://<team>.cloudflareaccess.com`) and this
    application's AUD tag. Store the app values as Worker secrets, so a later
    Wrangler deploy cannot replace dashboard-only variables:
@@ -203,16 +207,31 @@ API identity checks.
    ```bash
    npx wrangler secret put CLOUDFLARE_ACCESS_TEAM_DOMAIN --config wrangler.staging.jsonc
    npx wrangler secret put CLOUDFLARE_ACCESS_AUD --config wrangler.staging.jsonc
+   npx wrangler secret put CLOUDFLARE_ACCESS_SERVICE_AUD --config wrangler.staging.jsonc
    npx wrangler secret put GREENHOUSE_ADMIN_EMAILS --config wrangler.staging.jsonc
    npx wrangler secret put GREENHOUSE_OPERATOR_EMAILS --config wrangler.staging.jsonc
+   npx wrangler secret put CLOUDFLARE_ACCESS_SERVICE_TOKEN_ID_PI_GH_01 --config wrangler.staging.jsonc
+   npx wrangler secret put GREENHOUSE_AGENT_SECRET_PI_GH_01 --config wrangler.staging.jsonc
    ```
 
    Enter the values only at the interactive prompts. A user allowed by Access
    but absent from both role lists is a viewer. Keep values out of client code
    and logs.
-5. Deploy staging with `npx wrangler deploy --config wrangler.staging.jsonc`.
-   Open the staging hostname in a private browser window, complete Google
-   login, then request `/api/sensors?greenhouseId=GH-01`. Confirm an approved
+5. After verifying backup and Access setup, confirm staging shows only
+   `0005_agent_request_nonces.sql` pending, then apply migrations:
+
+   ```bash
+   npx wrangler d1 migrations list smart-greenhouse-staging --remote --config wrangler.staging.jsonc
+   npx wrangler d1 migrations apply smart-greenhouse-staging --remote --config wrangler.staging.jsonc
+   ```
+
+   Configure the Pi's owner-only environment file. Deploy the new Worker only
+   after browser/service-token secrets and Pi values are ready. Roll out both
+   together; Worker rejects old HMAC-only requests. Keep the nonce table during
+   Worker rollback.
+6. Deploy staging with `npx wrangler deploy --config wrangler.staging.jsonc`,
+   then start the updated Pi. Open the staging hostname in a private browser window,
+   complete Google login, then request `/api/sensors?greenhouseId=GH-01`. Confirm an approved
    viewer receives 200, an unauthenticated request is redirected or denied by
    Access, and a Google identity outside the allow policy is blocked. Unit
    tests cover verifier outcomes for missing or invalid assertions. Confirm
@@ -223,6 +242,16 @@ API identity checks.
 The code change protects API routes even when someone calls the `workers.dev`
 origin directly. The Access application is still required to provide the Google
 login screen and block the whole site before it reaches the Worker.
+
+For Pi, store `GREENHOUSE_ACCESS_CLIENT_ID`,
+`GREENHOUSE_ACCESS_CLIENT_SECRET`, and `GREENHOUSE_AGENT_SECRET` in a Pi-only
+environment file with owner-only read/write permissions. Worker migration and
+Pi credentials must be coordinated: the new verifier rejects old HMAC-only
+requests. Back up staging D1, apply migration `0005`, set Worker secrets, and
+then roll out the Pi configuration and Worker together. A Worker rollback must
+retain the nonce table. Pi treats `401`/`403` auth and scope responses as
+retryable so the persistent outbox does not discard readings during this
+transition.
 
 ## P0 safety configuration
 

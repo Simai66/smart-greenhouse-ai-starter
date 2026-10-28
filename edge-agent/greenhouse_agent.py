@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """Fail-closed Raspberry Pi gateway for LAN sensor nodes and cloud telemetry.
 
-Cloud requests use the per-agent HMAC secret. LAN requests use separate
-per-node tokens, so an ESP32 never receives the cloud credential. Relay and
-sensor drivers remain simulators until hardware commissioning supplies a
-reviewed pin map and sensor adapter.
+Cloud requests use Cloudflare Access Service Auth plus the per-agent HMAC
+secret. LAN requests use separate per-node tokens, so an ESP32 never receives
+the cloud credentials. Relay and sensor drivers remain simulators until
+hardware commissioning supplies a reviewed pin map and sensor adapter.
 """
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
 import json
 import math
 import os
 import re
+import secrets
 import shlex
 import sqlite3
 import shutil
@@ -36,6 +36,8 @@ API_URL = os.environ.get("GREENHOUSE_API_URL", "").rstrip("/")
 AGENT_ID = os.environ.get("GREENHOUSE_AGENT_ID", "")
 AGENT_SECRET = os.environ.get("GREENHOUSE_AGENT_SECRET", "")
 GREENHOUSE_ID = os.environ.get("GREENHOUSE_ID", "")
+ACCESS_CLIENT_ID = os.environ.get("GREENHOUSE_ACCESS_CLIENT_ID", "")
+ACCESS_CLIENT_SECRET = os.environ.get("GREENHOUSE_ACCESS_CLIENT_SECRET", "")
 STATE_DIR = Path(os.environ.get("GREENHOUSE_STATE_DIR", "/var/lib/greenhouse-agent"))
 POLL_SECONDS = max(5, int(os.environ.get("GREENHOUSE_POLL_SECONDS", "15")))
 LOCAL_HOST = os.environ.get("GREENHOUSE_LISTEN_HOST", "0.0.0.0")
@@ -70,7 +72,7 @@ def parse_time(value: str) -> datetime:
 
 
 def retryable_http(error: urllib.error.HTTPError) -> bool:
-    return error.code in (408, 429) or error.code >= 500
+    return error.code in (401, 403, 408, 429) or error.code >= 500
 
 
 def stable_reading_id(*parts: object) -> str:
@@ -321,22 +323,62 @@ def command_expired(command: Command) -> bool:
         return True
 
 
+def canonical_agent_query(path: str, raw_query: str, method: str) -> str | None:
+    query_routes = {"/api/agent/config", "/api/agent/commands"}
+    static_routes = {
+        ("POST", "/api/agent/heartbeat"),
+        ("POST", "/api/agent/telemetry"),
+        ("POST", "/api/agent/detections"),
+        ("POST", "/api/agent/images/upload-url"),
+        ("POST", "/api/agent/images/complete"),
+        ("GET", "/api/agent/config"),
+        ("GET", "/api/agent/commands"),
+    }
+    if (method, path) not in static_routes and not (method == "POST" and re.fullmatch(r"/api/agent/commands/[A-Za-z0-9_-]{3,128}/ack", path)):
+        return None
+    if path not in query_routes:
+        return "" if not raw_query else None
+    if not raw_query or "%" in raw_query or "+" in raw_query:
+        return None
+    pairs = []
+    for part in raw_query.split("&"):
+        key, separator, value = part.partition("=")
+        if not separator or key not in {"agentId", "greenhouseId"} or not re.fullmatch(r"[A-Za-z0-9._~-]{1,64}", value):
+            return None
+        pairs.append((key, value))
+    if len(pairs) != 2 or {key for key, _ in pairs} != {"agentId", "greenhouseId"}:
+        return None
+    return "&".join(f"{key}={value}" for key, value in sorted(pairs))
+
+
 class CloudClient:
     def __init__(self) -> None:
         self.api_url = API_URL
         self.agent_id = AGENT_ID
         self.agent_secret = AGENT_SECRET
         self.greenhouse_id = GREENHOUSE_ID
+        self.access_client_id = ACCESS_CLIENT_ID
+        self.access_client_secret = ACCESS_CLIENT_SECRET
 
     def signed_request(self, path: str, method: str = "GET", body: dict[str, Any] | None = None) -> dict[str, Any]:
-        if not self.api_url or not self.agent_id or not self.agent_secret or not self.greenhouse_id:
-            raise RuntimeError("GREENHOUSE_API_URL, GREENHOUSE_AGENT_ID, GREENHOUSE_AGENT_SECRET and GREENHOUSE_ID are required")
+        if not self.api_url or not self.agent_id or not self.agent_secret or not self.greenhouse_id or not self.access_client_id or not self.access_client_secret:
+            raise RuntimeError("GREENHOUSE_API_URL, GREENHOUSE_AGENT_ID, GREENHOUSE_AGENT_SECRET, GREENHOUSE_ID, GREENHOUSE_ACCESS_CLIENT_ID and GREENHOUSE_ACCESS_CLIENT_SECRET are required")
+        if len(self.agent_secret) < 32:
+            raise RuntimeError("GREENHOUSE_AGENT_SECRET must contain at least 32 characters")
         raw = json.dumps(body, separators=(",", ":"), ensure_ascii=False) if body is not None else ""
         timestamp = iso()
-        signature = base64.b64encode(hmac.new(self.agent_secret.encode(), f"{timestamp}.{raw}".encode(), hashlib.sha256).digest()).decode()
-        request = urllib.request.Request(f"{self.api_url}{path}", data=raw.encode() if method != "GET" else None, method=method, headers={"Content-Type": "application/json", "User-Agent": "smart-greenhouse-edge-agent/1.0", "X-Greenhouse-Agent": self.agent_id, "X-Greenhouse-Timestamp": timestamp, "X-Greenhouse-Signature": signature})
+        request_url = urllib.parse.urlsplit(f"{self.api_url}{path}")
+        query = canonical_agent_query(request_url.path, request_url.query, method)
+        if query is None:
+            raise ValueError("Agent request route or query is not allow-listed")
+        nonce = secrets.token_hex(16)
+        raw_bytes = raw.encode("utf-8")
+        canonical = b"\n".join((method.encode("ascii"), request_url.path.encode("ascii"), query.encode("ascii"), timestamp.encode("ascii"), nonce.encode("ascii"))) + b"\n" + raw_bytes
+        signature = hmac.new(self.agent_secret.encode(), canonical, hashlib.sha256).hexdigest()
+        request = urllib.request.Request(f"{self.api_url}{path}", data=raw_bytes if method != "GET" else None, method=method, headers={"Content-Type": "application/json", "User-Agent": "smart-greenhouse-edge-agent/1.0", "CF-Access-Client-Id": self.access_client_id, "CF-Access-Client-Secret": self.access_client_secret, "X-Greenhouse-Agent": self.agent_id, "X-Greenhouse-Timestamp": timestamp, "X-Greenhouse-Nonce": nonce, "X-Greenhouse-Signature": signature})
         with urllib.request.urlopen(request, timeout=10) as response:
             return json.loads(response.read() or b"{}")
+
 
     def upload_image(self, image_path: Path, metadata: dict[str, Any], detections: list[dict[str, Any]]) -> dict[str, Any]:
         upload = self.signed_request("/api/agent/images/upload-url", "POST", metadata)

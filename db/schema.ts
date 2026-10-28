@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * P0 domain storage. Times are ISO-8601 UTC strings so gateway sample time and
@@ -33,6 +33,15 @@ export const edgeAgents = sqliteTable("edge_agents", {
   lastSeenAt: text("last_seen_at"),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("edge_agents_greenhouse_idx").on(table.greenhouseId)]);
+
+export const agentRequestNonces = sqliteTable("agent_request_nonces", {
+  agentId: text("agent_id").notNull(),
+  nonce: text("nonce").notNull(),
+  expiresAt: text("expires_at").notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.agentId, table.nonce] }),
+  index("agent_request_nonces_expiry_idx").on(table.expiresAt),
+]);
 
 export const sensorReadings = sqliteTable("sensor_readings", {
   id: text("id").primaryKey(),

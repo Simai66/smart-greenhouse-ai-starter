@@ -69,11 +69,11 @@ async function accessKeys(teamDomain: string, unknownKid = false): Promise<Acces
   }
 }
 
-export async function verifyCloudflareAccessJwt(
+async function verifyAccessTokenClaims(
   token: string,
   teamDomain: string,
   audience: string,
-): Promise<{ email: string } | null> {
+): Promise<Record<string, unknown> | null> {
   const issuer = normalizedTeamDomain(teamDomain);
   if (!issuer || !audience || token.length > 16_384) return null;
 
@@ -95,13 +95,11 @@ export async function verifyCloudflareAccessJwt(
   const expiresAt = payload.exp;
   const notBefore = payload.nbf;
   const audiences = typeof payload.aud === "string" ? [payload.aud] : payload.aud;
-  const email = payload.email;
   if (
     payload.iss !== issuer ||
     !Array.isArray(audiences) || !audiences.includes(audience) ||
     typeof expiresAt !== "number" || !Number.isFinite(expiresAt) || expiresAt <= now - 30 ||
-    (notBefore !== undefined && (typeof notBefore !== "number" || !Number.isFinite(notBefore) || notBefore > now + 30)) ||
-    typeof email !== "string" || email.length > 254 || !email.trim() || !email.includes("@")
+    (notBefore !== undefined && (typeof notBefore !== "number" || !Number.isFinite(notBefore) || notBefore > now + 30))
   ) return null;
 
   const findKey = (keys: AccessJwk[]) => keys.find((key) =>
@@ -119,6 +117,18 @@ export async function verifyCloudflareAccessJwt(
   );
   const signingInput = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
   if (!await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, signature, signingInput)) return null;
+  return payload;
+}
+
+export async function verifyCloudflareAccessJwt(
+  token: string,
+  teamDomain: string,
+  audience: string,
+): Promise<{ email: string } | null> {
+  const claims = await verifyAccessTokenClaims(token, teamDomain, audience);
+  if (claims?.type === "app" || claims?.sub === "") return null;
+  const email = claims?.email;
+  if (typeof email !== "string" || email.length > 254 || !email.trim() || !email.includes("@")) return null;
   return { email: email.trim().toLowerCase() };
 }
 
@@ -135,6 +145,33 @@ export async function getCloudflareAccessIdentity(
   try {
     const identity = await verifyCloudflareAccessJwt(token, teamDomain, audience);
     return identity ? { status: "authenticated", ...identity } : { status: "unauthenticated" };
+  } catch {
+    return { status: "unavailable" };
+  }
+}
+
+export type CloudflareAccessServiceIdentity =
+  | { status: "authenticated"; serviceTokenId: string }
+  | { status: "unauthenticated" }
+  | { status: "unavailable" };
+
+export async function getCloudflareAccessServiceIdentity(
+  requestHeaders: Headers,
+  env: AccessAuthEnvironment,
+  agentId: string,
+): Promise<CloudflareAccessServiceIdentity> {
+  if (env.GREENHOUSE_AUTH_MODE !== "cloudflare-access") return { status: "unavailable" };
+  const teamDomain = env.CLOUDFLARE_ACCESS_TEAM_DOMAIN;
+  const audience = env.CLOUDFLARE_ACCESS_SERVICE_AUD;
+  const serviceTokenId = env[`CLOUDFLARE_ACCESS_SERVICE_TOKEN_ID_${agentId.replace(/[^A-Za-z0-9_]/g, "_")}`];
+  if (!teamDomain || !audience || !normalizedTeamDomain(teamDomain) || !serviceTokenId) return { status: "unavailable" };
+  const assertion = requestHeaders.get("cf-access-jwt-assertion");
+  if (!assertion) return { status: "unauthenticated" };
+  try {
+    const claims = await verifyAccessTokenClaims(assertion, teamDomain, audience);
+    return claims?.type === "app" && claims.sub === "" && claims.common_name === serviceTokenId
+      ? { status: "authenticated", serviceTokenId }
+      : { status: "unauthenticated" };
   } catch {
     return { status: "unavailable" };
   }

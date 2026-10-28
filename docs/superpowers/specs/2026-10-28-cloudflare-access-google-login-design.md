@@ -1,5 +1,8 @@
 # Cloudflare Access Google login — design
 
+> Historical browser-login design. Agent routes now require Access Service Auth
+> plus HMAC per [GH-01 security design](2026-10-28-greenhouse-security-design.md).
+
 ## Intent
 
 Make the GH-01 browser API work behind Cloudflare Access and Google sign-in. Cloudflare Access authenticates and gates users; the Worker independently verifies the signed `Cf-Access-Jwt-Assertion` before trusting its email for the existing `GREENHOUSE_ADMIN_EMAILS` / `GREENHOUSE_OPERATOR_EMAILS` mapping.

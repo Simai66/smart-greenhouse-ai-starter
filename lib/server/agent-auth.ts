@@ -1,12 +1,11 @@
 import { env } from "cloudflare:workers";
+import { getCloudflareAccessServiceIdentity } from "@/lib/server/cloudflare-access-auth";
+import { reserveAgentRequestNonce } from "@/lib/server/agent-request-nonces";
+import { agentRequestLimits, canonicalAgentQuery, canonicalAgentRequest, decodeAgentBody, isFreshAgentTimestamp, readBoundedAgentBody } from "@/lib/server/agent-request-signature";
 
 const AGENT_ID_PATTERN = /^[A-Z0-9_-]{3,64}$/;
-const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
-
-function bytesToBase64(bytes: ArrayBuffer) {
-  let binary = "";
-  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
-  return btoa(binary);
+function bytesToHex(bytes: ArrayBuffer) {
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function equalSignature(actual: string, expected: string) {
@@ -26,13 +25,26 @@ function secretBindingName(agentId: string) {
 export async function authenticateAgentRequest(request: Request): Promise<SignedAgentRequest | Response> {
   const agentId = request.headers.get("X-Greenhouse-Agent") ?? "";
   const timestamp = request.headers.get("X-Greenhouse-Timestamp") ?? "";
+  const nonce = request.headers.get("X-Greenhouse-Nonce") ?? "";
   const signature = request.headers.get("X-Greenhouse-Signature") ?? "";
-  const rawBody = request.method === "GET" ? "" : await request.text();
-  const parsedTimestamp = Date.parse(timestamp);
+  const url = new URL(request.url);
+  const bodyLimit = agentRequestLimits(request.method, url.pathname);
 
-  if (!AGENT_ID_PATTERN.test(agentId) || !Number.isFinite(parsedTimestamp) || Math.abs(Date.now() - parsedTimestamp) > MAX_CLOCK_SKEW_MS || !signature) {
+  if (bodyLimit === null || canonicalAgentQuery(url) === null) {
+    return Response.json({ error: "Invalid agent route or query." }, { status: 400 });
+  }
+  if (!AGENT_ID_PATTERN.test(agentId) || !isFreshAgentTimestamp(timestamp) || !/^[0-9a-f]{32}$/.test(nonce) || !signature) {
     return Response.json({ error: "Invalid edge-agent authentication headers." }, { status: 401 });
   }
+
+  const access = await getCloudflareAccessServiceIdentity(request.headers, env as unknown as Record<string, string | undefined>, agentId);
+  if (access.status === "unavailable") return Response.json({ error: "Agent authentication is temporarily unavailable." }, { status: 503 });
+  if (access.status !== "authenticated") return Response.json({ error: "Invalid edge-agent authentication." }, { status: 401 });
+
+  const rawBytes = await readBoundedAgentBody(request, bodyLimit);
+  if (rawBytes instanceof Response) return rawBytes;
+  const canonical = canonicalAgentRequest(request, rawBytes, timestamp, nonce);
+  if (!canonical) return Response.json({ error: "Invalid edge-agent request signature fields." }, { status: 401 });
 
   const secretName = secretBindingName(agentId);
   const secret = (env as unknown as Record<string, unknown>)[secretName];
@@ -47,10 +59,19 @@ export async function authenticateAgentRequest(request: Request): Promise<Signed
     false,
     ["sign"],
   );
-  const expected = bytesToBase64(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${timestamp}.${rawBody}`)));
+  const expected = bytesToHex(await crypto.subtle.sign("HMAC", key, canonical));
   if (!equalSignature(signature, expected)) {
     return Response.json({ error: "Invalid edge-agent signature." }, { status: 401 });
   }
+
+  try {
+    if (!await reserveAgentRequestNonce(agentId, nonce)) return Response.json({ error: "Edge-agent request has already been used." }, { status: 401 });
+  } catch {
+    return Response.json({ error: "Agent replay protection is temporarily unavailable." }, { status: 503 });
+  }
+
+  const rawBody = decodeAgentBody(rawBytes);
+  if (rawBody === null) return Response.json({ error: "Agent request body must be valid UTF-8." }, { status: 400 });
 
   return { agentId, rawBody };
 }
