@@ -3,6 +3,7 @@ import io
 import json
 import os
 import pathlib
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -106,6 +107,30 @@ class EdgeAgentTest(unittest.TestCase):
         self.assertEqual(len(queued), 1)
         self.assertEqual(queued[0][2], body)
 
+    def test_outbox_quarantines_permanent_rejections_without_losing_payload(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        failure = agent_module.urllib.error.HTTPError("https://greenhouse.invalid", 400, "invalid payload", {}, None)
+        self.addCleanup(failure.close)
+        with patch.object(self.agent.cloud, "signed_request", side_effect=failure):
+            self.agent.flush_queue()
+        self.assertEqual(self.agent.store.queued(), [])
+        quarantined = self.agent.store.quarantined()
+        self.assertEqual(len(quarantined), 1)
+        self.assertEqual(quarantined[0][1], "/api/agent/telemetry")
+        self.assertEqual(quarantined[0][2], body)
+        self.assertEqual(quarantined[0][3], 400)
+
+    def test_quarantine_and_queue_removal_are_atomic(self):
+        body = {"imageId": "img_123"}
+        self.agent.store.queue(agent_module.IMAGE_QUEUE_PATH, body)
+        queued_id = self.agent.store.queued()[0][0]
+        self.agent.store.db.execute("CREATE TRIGGER fail_quarantine BEFORE INSERT ON outbound_quarantine BEGIN SELECT RAISE(ABORT, 'disk error'); END")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.agent.store.quarantine(queued_id, 400, "invalid image")
+        self.assertEqual(len(self.agent.store.queued()), 1)
+        self.assertEqual(self.agent.store.quarantined(), [])
+
     def test_cloud_client_requires_both_access_service_token_values(self):
         client = agent_module.CloudClient()
         client.access_client_secret = ""
@@ -153,7 +178,7 @@ class EdgeAgentTest(unittest.TestCase):
             agent_module.CAPTURE_COMMAND = previous_command
             agent_module.CAPTURE_INTERVAL_SECONDS = previous_interval
 
-    def test_capture_retains_transient_http_failures_and_discards_invalid_uploads(self):
+    def test_capture_retains_transient_failures_and_quarantines_invalid_uploads(self):
         for status in (408, 429, 503, 400):
             with self.subTest(status=status):
                 image = pathlib.Path(self.tempdir.name) / f"capture-{status}.jpg"
@@ -163,8 +188,11 @@ class EdgeAgentTest(unittest.TestCase):
                 with patch.object(self.agent.camera, "capture", return_value=(image, "image/jpeg")), patch.object(self.agent.camera, "detections", return_value=[]), patch.object(self.agent.cloud, "upload_image", side_effect=failure):
                     self.agent.capture_once(force=True)
                 if status == 400:
-                    self.assertFalse(image.exists())
+                    self.assertTrue(image.exists())
                     self.assertEqual(self.agent.store.queued(), [])
+                    quarantined = self.agent.store.quarantined()
+                    self.assertEqual(len(quarantined), 1)
+                    self.assertEqual(pathlib.Path(quarantined[0][2]["localPath"]), image)
                 else:
                     self.assertTrue(image.exists())
                     self.assertEqual(len(self.agent.store.queued()), 1)

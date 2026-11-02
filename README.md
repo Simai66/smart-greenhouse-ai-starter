@@ -129,6 +129,35 @@ used as evidence that a relay changed state.
 6. Flash `firmware/esp32` with PlatformIO after assigning each ESP32 a unique
    LAN node token. Firmware calls Pi only; it contains no cloud HMAC secret.
 
+### Inspecting rejected Pi outbox records
+
+The Pi keeps permanent cloud `4xx` rejections in `outbound_quarantine` instead
+of deleting telemetry, acknowledgements, or captured images. Inspect records on
+the Pi without printing credentials:
+
+```sql
+SELECT id, path, status_code, status_text, rejected_at
+FROM outbound_quarantine
+ORDER BY id;
+```
+
+Review `body` locally before replay. To move one corrected record back to the
+outbox, replace `<id>` with its numeric quarantine ID and run this transaction
+against `/var/lib/greenhouse-agent/agent.db`:
+
+```sql
+BEGIN IMMEDIATE;
+INSERT INTO outbound_queue(path, body, created_at)
+SELECT path, body, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+FROM outbound_quarantine WHERE id = <id>;
+DELETE FROM outbound_quarantine WHERE id = <id>;
+COMMIT;
+```
+
+Do not replay unchanged payloads rejected for permanent validation errors.
+Quarantined camera files remain on disk; remove them only after operator review
+and a verified backup. Monitor the quarantine count and available Pi disk space.
+
 ### Staging deployment
 
 `wrangler.staging.jsonc` binds Worker `smart-greenhouse-ai-staging` to the

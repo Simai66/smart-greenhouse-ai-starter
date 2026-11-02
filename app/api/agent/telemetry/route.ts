@@ -1,6 +1,6 @@
-import { and, eq, inArray } from "drizzle-orm";
-import { getDb } from "@/db";
-import { alerts, devices, sensorConfigs, sensorReadings } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
+import { getD1, getDb } from "@/db";
+import { devices, sensorConfigs, sensorReadings } from "@/db/schema";
 import { assertRegisteredAgent, markAgentOnline } from "@/lib/server/agent-registry";
 import { authenticateAgentRequest, jsonBody } from "@/lib/server/agent-auth";
 import { deterministicReadingId, isFiniteNumber, isSensorMetric, isSensorQuality, isValidReadingId, isValidSensorId, isOutsideThreshold, MAX_TELEMETRY_AGE_MS, MAX_TELEMETRY_FUTURE_MS, SENSOR_UNITS } from "@/lib/server/sensor-telemetry";
@@ -35,23 +35,6 @@ function capabilitiesSupport(raw: string, metric: string, unit: string): boolean
   }
 }
 
-async function ensureThresholdAlert(
-  greenhouseId: string,
-  sensorId: string,
-  sensorName: string,
-  breached: boolean,
-  occurredAt: string,
-) {
-  const db = getDb();
-  const source = `sensor-threshold:${sensorId}`;
-  const open = await db.select({ id: alerts.id }).from(alerts).where(and(eq(alerts.greenhouseId, greenhouseId), eq(alerts.source, source), eq(alerts.status, "open"))).limit(1).get();
-  if (breached && !open) {
-    await db.insert(alerts).values({ id: crypto.randomUUID(), greenhouseId, source, severity: "warning", title: `${sensorName} อยู่นอกเกณฑ์ที่ตั้งไว้`, status: "open", openedAt: occurredAt, resolvedAt: null, resolvedBy: null }).run();
-  } else if (!breached && open) {
-    await db.update(alerts).set({ status: "resolved", resolvedAt: occurredAt, resolvedBy: "system:sensor-threshold" }).where(eq(alerts.id, open.id)).run();
-  }
-}
-
 export async function POST(request: Request) {
   const authenticated = await authenticateAgentRequest(request);
   if (authenticated instanceof Response) return authenticated;
@@ -72,7 +55,6 @@ export async function POST(request: Request) {
     const configMap = new Map(configs.map((config) => [config.sensorId, config]));
     const values: Array<typeof sensorReadings.$inferInsert> = [];
     const thresholdChecks: Array<{ readingId: string; sensorId: string; name: string; breached: boolean }> = [];
-    const readingIds: string[] = [];
 
     for (const reading of payload.readings) {
       const sensorId = reading.sensorId;
@@ -92,7 +74,6 @@ export async function POST(request: Request) {
       const readingId = isValidReadingId(reading.readingId)
         ? reading.readingId
         : await deterministicReadingId([authenticated.agentId, sensorId, metric, unit, normalizedSampledAt, String(reading.value)].join("\u001f"));
-      readingIds.push(readingId);
       values.push({ id: crypto.randomUUID(), readingId, greenhouseId: payload.greenhouseId, sensorId, metric, value: String(reading.value), unit, sampledAt: normalizedSampledAt, receivedAt: now.toISOString(), quality: reading.quality, configVersion: reading.configVersion as number | undefined });
       const min = config.minThreshold === null ? null : Number(config.minThreshold);
       const max = config.maxThreshold === null ? null : Number(config.maxThreshold);
@@ -101,25 +82,28 @@ export async function POST(request: Request) {
       }
     }
 
-    const existing = readingIds.length ? await db.select({ readingId: sensorReadings.readingId }).from(sensorReadings).where(inArray(sensorReadings.readingId, readingIds)).all() : [];
-    const existingIds = new Set(existing.map((row) => row.readingId).filter((value): value is string => Boolean(value)));
-    const insertedIds = new Set<string>();
-    const newValues = values.filter((value) => {
+    const thresholdChecksByReadingId = new Map<string, (typeof thresholdChecks)[number]>();
+    for (const check of thresholdChecks) if (!thresholdChecksByReadingId.has(check.readingId)) thresholdChecksByReadingId.set(check.readingId, check);
+    const thresholdByReadingId = new Map<string, (typeof thresholdChecks)[number] | null>();
+    for (const value of values) if (!thresholdByReadingId.has(value.readingId ?? "")) thresholdByReadingId.set(value.readingId ?? "", thresholdChecksByReadingId.get(value.readingId ?? "") ?? null);
+    const statements = values.flatMap((value) => {
       const readingId = value.readingId ?? "";
-      if (existingIds.has(readingId) || insertedIds.has(readingId)) return false;
-      insertedIds.add(readingId);
-      return true;
+      const reading = getD1().prepare("INSERT INTO sensor_readings (id, reading_id, greenhouse_id, sensor_id, metric, value, unit, sampled_at, received_at, quality, config_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(reading_id) DO NOTHING")
+        .bind(value.id, value.readingId, value.greenhouseId, value.sensorId, value.metric, value.value, value.unit, value.sampledAt, value.receivedAt, value.quality, value.configVersion ?? null);
+      const check = thresholdByReadingId.get(readingId);
+      if (!check) return [reading, getD1().prepare("SELECT changes()")];
+      const source = `sensor-threshold:${check.sensorId}`;
+      const alert = check.breached
+        ? getD1().prepare("INSERT INTO alerts (id, greenhouse_id, source, severity, title, status, opened_at, resolved_at, resolved_by) SELECT ?, ?, ?, 'warning', ?, 'open', ?, NULL, NULL WHERE changes() = 1 AND NOT EXISTS (SELECT 1 FROM alerts WHERE greenhouse_id = ? AND source = ? AND status = 'open')")
+          .bind(crypto.randomUUID(), payload.greenhouseId, source, `${check.name} อยู่นอกเกณฑ์ที่ตั้งไว้`, now.toISOString(), payload.greenhouseId, source)
+        : getD1().prepare("UPDATE alerts SET status = 'resolved', resolved_at = ?, resolved_by = 'system:sensor-threshold' WHERE greenhouse_id = ? AND source = ? AND status = 'open' AND changes() = 1")
+          .bind(now.toISOString(), payload.greenhouseId, source);
+      return [reading, alert];
     });
-    if (newValues.length) await db.insert(sensorReadings).values(newValues).onConflictDoNothing({ target: sensorReadings.readingId }).run();
-    const checkedReadingIds = new Set<string>();
-    for (const check of thresholdChecks) {
-      if (insertedIds.has(check.readingId) && !checkedReadingIds.has(check.readingId)) {
-        checkedReadingIds.add(check.readingId);
-        await ensureThresholdAlert(payload.greenhouseId, check.sensorId, check.name, check.breached, now.toISOString());
-      }
-    }
+    const results: Array<{ meta?: { changes?: number } }> = statements.length ? await getD1().batch(statements) : [];
+    const accepted = results.reduce((total, result, index) => total + (index % 2 === 0 ? result.meta?.changes ?? 0 : 0), 0);
     await markAgentOnline(authenticated.agentId, now.toISOString());
-    return Response.json({ accepted: newValues.length, duplicates: values.length - newValues.length, receivedAt: now.toISOString() }, { status: 202 });
+    return Response.json({ accepted, duplicates: values.length - accepted, receivedAt: now.toISOString() }, { status: 202 });
   } catch {
     return Response.json({ error: "Telemetry storage is temporarily unavailable." }, { status: 503 });
   }

@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { getDb } from "@/db";
-import { deviceCommandEvents, deviceCommands, devices } from "@/db/schema";
+import { getD1, getDb } from "@/db";
+import { deviceCommands, devices } from "@/db/schema";
 import { assertRegisteredAgent, markAgentOnline } from "@/lib/server/agent-registry";
 import { authenticateAgentRequest, jsonBody } from "@/lib/server/agent-auth";
 
@@ -25,13 +25,26 @@ export async function POST(request: Request, context: { params: Promise<{ comman
       const device = await db.select({ id: devices.id }).from(devices).where(and(eq(devices.id, command.deviceId), eq(devices.agentId, authenticated.agentId))).limit(1).get();
       if (!device) return Response.json({ error: "Agent does not own this command target." }, { status: 403 });
     }
-    if (command.state === "acknowledged" || command.state === "failed") return Response.json({ commandId, state: command.state, idempotent: true });
+    if (command.state === payload.status) return Response.json({ commandId, state: command.state, idempotent: true });
+    if (command.state === "acknowledged" || command.state === "failed" || command.state === "timed_out") return Response.json({ error: "Command already has a conflicting terminal state." }, { status: 409 });
     if (command.expiresAt && command.expiresAt <= now) return Response.json({ error: "Command has expired." }, { status: 409 });
     const state = payload.status;
     const failureReason = state === "failed" ? (payload.reason as string).trim() : null;
-    await db.update(deviceCommands).set({ state, acknowledgedAt: now, failureReason }).where(eq(deviceCommands.id, commandId)).run();
-    await db.insert(deviceCommandEvents).values({ id: crypto.randomUUID(), commandId, state, occurredAt: now, metadataJson: JSON.stringify({ agentId: authenticated.agentId, reason: failureReason }) }).run();
-    if (command.deviceId !== "ALL" && payload.reportedStatus) await db.update(devices).set({ reportedStatus: payload.reportedStatus as string, lastSeenAt: now, updatedAt: now }).where(eq(devices.id, command.deviceId)).run();
+    const transition = getD1().prepare("UPDATE device_commands SET state = ?, acknowledged_at = ?, failure_reason = ? WHERE id = ? AND state IN ('requested', 'dispatched') AND (expires_at IS NULL OR expires_at > ?)")
+      .bind(state, now, failureReason, commandId, now);
+    const event = getD1().prepare("INSERT INTO device_command_events (id, command_id, state, occurred_at, metadata_json) SELECT ?, ?, ?, ?, ? WHERE changes() = 1")
+      .bind(crypto.randomUUID(), commandId, state, now, JSON.stringify({ agentId: authenticated.agentId, reason: failureReason }));
+    const statements = [transition, event];
+    if (command.deviceId !== "ALL" && payload.reportedStatus) {
+      statements.push(getD1().prepare("UPDATE devices SET reported_status = ?, last_seen_at = ?, updated_at = ? WHERE id = ? AND EXISTS (SELECT 1 FROM device_commands WHERE id = ? AND state = ? AND acknowledged_at = ?)")
+        .bind(payload.reportedStatus, now, now, command.deviceId, commandId, state, now));
+    }
+    const [result] = await getD1().batch(statements);
+    if ((result?.meta.changes ?? 0) !== 1) {
+      const latest = await db.select().from(deviceCommands).where(eq(deviceCommands.id, commandId)).limit(1).get();
+      if (latest?.state === state) return Response.json({ commandId, state, idempotent: true });
+      return Response.json({ error: "Command changed before the acknowledgement was committed." }, { status: 409 });
+    }
     await markAgentOnline(authenticated.agentId, now);
     return Response.json({ commandId, state, acknowledgedAt: now });
   } catch {

@@ -1,12 +1,8 @@
 import { and, eq } from "drizzle-orm";
-import { getDb } from "@/db";
-import { deviceCommandEvents, deviceCommands, devices } from "@/db/schema";
+import { getD1, getDb } from "@/db";
+import { deviceCommands, devices } from "@/db/schema";
 import { assertRegisteredAgent, markAgentOnline } from "@/lib/server/agent-registry";
 import { authenticateAgentRequest } from "@/lib/server/agent-auth";
-
-function event(commandId: string, state: string, occurredAt: string, metadata?: Record<string, unknown>) {
-  return { id: crypto.randomUUID(), commandId, state, occurredAt, metadataJson: metadata ? JSON.stringify(metadata) : null };
-}
 
 export async function GET(request: Request) {
   const authenticated = await authenticateAgentRequest(request);
@@ -24,15 +20,21 @@ export async function GET(request: Request) {
     const deviceIds = ownedDevices.map((device) => device.id);
     const candidates = await db.select().from(deviceCommands).where(eq(deviceCommands.greenhouseId, greenhouseId)).all();
     const commands = candidates.filter((command) => (deviceIds.includes(command.deviceId) || command.deviceId === "ALL") && (command.state === "requested" || command.state === "dispatched"));
+    const transitions = [];
     for (const command of commands.filter((item) => item.expiresAt && item.expiresAt <= now)) {
-      await db.update(deviceCommands).set({ state: "timed_out", failureReason: "Command expired before edge execution." }).where(eq(deviceCommands.id, command.id)).run();
-      await db.insert(deviceCommandEvents).values(event(command.id, "timed_out", now, { reason: "expired" })).run();
+      transitions.push(
+        getD1().prepare("UPDATE device_commands SET state = 'timed_out', failure_reason = 'Command expired before edge execution.' WHERE id = ? AND state IN ('requested', 'dispatched') AND expires_at <= ?").bind(command.id, now),
+        getD1().prepare("INSERT INTO device_command_events (id, command_id, state, occurred_at, metadata_json) SELECT ?, ?, 'timed_out', ?, ? WHERE changes() = 1").bind(crypto.randomUUID(), command.id, now, JSON.stringify({ reason: "expired" })),
+      );
     }
     const deliverable = commands.filter((command) => !command.expiresAt || command.expiresAt > now);
     for (const command of deliverable.filter((item) => item.state === "requested")) {
-      await db.update(deviceCommands).set({ state: "dispatched", dispatchedAt: now }).where(eq(deviceCommands.id, command.id)).run();
-      await db.insert(deviceCommandEvents).values(event(command.id, "dispatched", now, { agentId: authenticated.agentId })).run();
+      transitions.push(
+        getD1().prepare("UPDATE device_commands SET state = 'dispatched', dispatched_at = ? WHERE id = ? AND state = 'requested' AND (expires_at IS NULL OR expires_at > ?)").bind(now, command.id, now),
+        getD1().prepare("INSERT INTO device_command_events (id, command_id, state, occurred_at, metadata_json) SELECT ?, ?, 'dispatched', ?, ? WHERE changes() = 1").bind(crypto.randomUUID(), command.id, now, JSON.stringify({ agentId: authenticated.agentId })),
+      );
     }
+    if (transitions.length) await getD1().batch(transitions);
     await markAgentOnline(authenticated.agentId, now);
     return Response.json({ commands: deliverable.map((command) => ({ commandId: command.id, deviceId: command.deviceId, action: command.action, correlationId: command.correlationId, idempotencyKey: command.idempotencyKey, expiresAt: command.expiresAt, maxRuntimeSeconds: command.maxRuntimeSeconds })) }, { headers: { "Cache-Control": "no-store" } });
   } catch {
