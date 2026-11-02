@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
-import { getDb } from "@/db";
-import { deviceCommandEvents, deviceCommands, devicePolicies, devices, edgeAgents } from "@/db/schema";
+import { getD1, getDb } from "@/db";
+import { deviceCommands, devicePolicies, devices, edgeAgents } from "@/db/schema";
 import { authorizeApiRole } from "@/lib/server/access-control";
 import { policyAllowsManualCommand } from "@/lib/server/device-policy";
 import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
@@ -62,8 +62,12 @@ export async function POST(request: Request) {
     const commandId = crypto.randomUUID();
     const correlationId = crypto.randomUUID();
     const expiresAt = new Date(requestedAt.getTime() + COMMAND_TTL_MS).toISOString();
-    await db.insert(deviceCommands).values({ id: commandId, greenhouseId: payload.greenhouseId, deviceId: payload.deviceId, action, state: "requested", idempotencyKey, requestedBy: authorization.user.email, requestedAt: requestedAt.toISOString(), correlationId, expiresAt, maxRuntimeSeconds: payload.maxRuntimeSeconds as number | undefined }).run();
-    await db.insert(deviceCommandEvents).values({ id: crypto.randomUUID(), commandId, state: "requested", occurredAt: requestedAt.toISOString(), metadataJson: JSON.stringify({ requestedBy: authorization.user.email, correlationId }) }).run();
+    await getD1().batch([
+      getD1().prepare("INSERT INTO device_commands (id, greenhouse_id, device_id, action, state, idempotency_key, requested_by, requested_at, correlation_id, expires_at, max_runtime_seconds) VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?)")
+        .bind(commandId, payload.greenhouseId, payload.deviceId, action, idempotencyKey, authorization.user.email, requestedAt.toISOString(), correlationId, expiresAt, payload.maxRuntimeSeconds ?? null),
+      getD1().prepare("INSERT INTO device_command_events (id, command_id, state, occurred_at, metadata_json) SELECT ?, ?, 'requested', ?, ? WHERE changes() = 1")
+        .bind(crypto.randomUUID(), commandId, requestedAt.toISOString(), JSON.stringify({ requestedBy: authorization.user.email, correlationId })),
+    ]);
     return Response.json(commandResult({ id: commandId, deviceId: payload.deviceId, action, state: "requested", requestedAt: requestedAt.toISOString(), correlationId, expiresAt, maxRuntimeSeconds: (payload.maxRuntimeSeconds as number | undefined) ?? null, failureReason: null }), { status: 202 });
   } catch { return Response.json({ error: "Unable to queue the device command." }, { status: 503 }); }
 }

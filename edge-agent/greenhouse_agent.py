@@ -225,6 +225,7 @@ class Store:
         self.lock = threading.RLock()
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("CREATE TABLE IF NOT EXISTS outbound_queue (id INTEGER PRIMARY KEY, path TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS outbound_quarantine (id INTEGER PRIMARY KEY, path TEXT NOT NULL, body TEXT NOT NULL, status_code INTEGER NOT NULL, status_text TEXT NOT NULL, rejected_at TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS processed_commands (idempotency_key TEXT PRIMARY KEY, completed_at TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS policies (device_id TEXT PRIMARY KEY, version INTEGER NOT NULL, policy TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS runtime (device_id TEXT PRIMARY KEY, last_on_at TEXT, last_off_at TEXT)")
@@ -253,6 +254,30 @@ class Store:
         with self.lock:
             self.db.execute("DELETE FROM outbound_queue WHERE id = ?", (queue_id,))
             self.db.commit()
+
+    def quarantine(self, queue_id: int, status_code: int, status_text: str) -> None:
+        with self.lock:
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                row = self.db.execute("SELECT path, body FROM outbound_queue WHERE id = ?", (queue_id,)).fetchone()
+                if row:
+                    self.db.execute(
+                        "INSERT INTO outbound_quarantine(path, body, status_code, status_text, rejected_at) VALUES (?, ?, ?, ?, ?)",
+                        (row[0], row[1], status_code, status_text[:128], iso()),
+                    )
+                    self.db.execute("DELETE FROM outbound_queue WHERE id = ?", (queue_id,))
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
+
+    def quarantined(self, limit: int = 100) -> list[tuple[int, str, dict[str, Any], int, str, str]]:
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id, path, body, status_code, status_text, rejected_at FROM outbound_quarantine ORDER BY id LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [(row[0], row[1], json.loads(row[2]), row[3], row[4], row[5]) for row in rows]
 
     def seen(self, key: str) -> bool:
         with self.lock:
@@ -510,11 +535,9 @@ class Agent:
                     self.cloud.signed_request(path, "POST", body)
                 self.store.remove_queued(queue_id)
             except urllib.error.HTTPError as error:
-                if not retryable_http(error):
-                    if path == IMAGE_QUEUE_PATH:
-                        Path(str(body.get("localPath", ""))).unlink(missing_ok=True)
-                    self.store.remove_queued(queue_id)
-                return
+                if retryable_http(error):
+                    return
+                self.store.quarantine(queue_id, error.code, str(error.reason))
             except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
                 return
 
