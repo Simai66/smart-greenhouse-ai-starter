@@ -172,7 +172,7 @@ test("keeps truthful configured status and decisions ahead of dashboard detail",
   assert.doesNotMatch(source, /LIVE/);
   assert.match(source, /สถานะทรัพยากรสำคัญ/);
   assert.match(source, /context: GreenhouseContext/);
-  assert.match(source, /const activeCamera = context\.cameras\.find/);
+  assert.match(source, /const activeCamera =\s*context\.cameras\.find\(\(camera\) => camera\.enabled && camera\.status === "online"\)\s*\?\?\s*context\.cameras\[0\];/);
   assert.match(source, /activeCamera \? activeCamera\.name : "ยังไม่มีกล้องในโรงเรือนนี้"/);
   assert.doesNotMatch(source, /ภาพสดจากกล้องจำลอง 01/);
   assert.match(source, /ยังไม่มีเวลาซิงก์ที่บันทึก/);
@@ -226,9 +226,9 @@ test("keeps the dashboard plant-health preview compact and warning-first", async
   assert.match(source, /\.slice\(0, 4\)/);
   assert.match(source, /แสดง \$\{previewPlants\.length\} จาก \$\{plants\.length\} ต้น/);
   assert.match(source, /previewPlants\.map/);
-  assert.match(source, /border-amber-200 bg-amber-50 text-amber-800/);
-  assert.match(source, /border-emerald-200 bg-emerald-50 text-emerald-800/);
-  assert.match(source, /border-slate-200 bg-slate-100 text-slate-700/);
+  assert.match(source, /border-amber-300 text-amber-800/);
+  assert.match(source, /border-primary\/30 text-primary/);
+  assert.match(source, /border-border text-muted-foreground/);
   assert.doesNotMatch(source, /plants\.sort\(/);
 });
 
