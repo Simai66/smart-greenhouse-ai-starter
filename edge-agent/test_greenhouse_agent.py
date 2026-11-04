@@ -165,7 +165,7 @@ class EdgeAgentTest(unittest.TestCase):
 
     def test_submit_telemetry_uses_partial_response_quarantine_path(self):
         response = {"accepted": 1, "duplicates": 0, "rejected": [{"index": 1, "error": "invalid"}]}
-        with patch.object(self.agent.store, "save_inbound", side_effect=[True, True]), patch.object(self.agent.cloud, "signed_request", return_value=response):
+        with patch.object(self.agent.cloud, "signed_request", return_value=response):
             self.agent.submit_telemetry([{"readingId": "reading-ok"}, {"readingId": "reading-bad"}])
         self.assertEqual(self.agent.store.queued(), [])
         quarantined = self.agent.store.quarantined()
@@ -366,6 +366,20 @@ class EdgeAgentTest(unittest.TestCase):
         self.assertEqual((error, status), (None, 202))
         self.assertEqual(result["accepted"], 0)
         restarted.store.db.close()
+
+    def test_outbox_failure_rolls_back_inbound_dedupe_for_retry(self):
+        payload = {"nodeId": "ESP32-01", "readings": [self.reading()]}
+        self.agent.store.db.execute("CREATE TRIGGER fail_outbox BEFORE INSERT ON outbound_queue BEGIN SELECT RAISE(ABORT, 'disk error'); END")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.agent.validate_local_telemetry("ESP32-01", payload)
+        self.assertEqual(self.agent.store.db.execute("SELECT COUNT(*) FROM inbound_readings").fetchone(), (0,))
+        self.assertEqual(self.agent.store.queued(), [])
+
+        self.agent.store.db.execute("DROP TRIGGER fail_outbox")
+        result, error, status = self.agent.validate_local_telemetry("ESP32-01", payload)
+        self.assertEqual((error, status), (None, 202))
+        self.assertEqual(result["accepted"], 1)
+        self.assertEqual(len(self.agent.store.queued()), 1)
 
     def test_rejects_stale_and_invalid_quality_value(self):
         stale = agent_module.iso(agent_module.now() - timedelta(hours=25))
