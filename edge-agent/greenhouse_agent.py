@@ -337,11 +337,29 @@ class Store:
             row = self.db.execute("SELECT config FROM sensor_configs WHERE sensor_id = ?", (sensor_id,)).fetchone()
         return json.loads(row[0]) if row else None
 
-    def save_inbound(self, reading_id: str, node_id: str, body: dict[str, Any]) -> bool:
+    def queue_inbound(self, node_id: str, readings: list[dict[str, Any]], queue_body: dict[str, Any]) -> list[dict[str, Any]]:
+        fresh: list[dict[str, Any]] = []
         with self.lock:
-            cursor = self.db.execute("INSERT OR IGNORE INTO inbound_readings(reading_id, node_id, body, received_at) VALUES (?, ?, ?, ?)", (reading_id, node_id, json.dumps(body, separators=(",", ":")), iso()))
-            self.db.commit()
-            return cursor.rowcount == 1
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                for reading in readings:
+                    cursor = self.db.execute(
+                        "INSERT OR IGNORE INTO inbound_readings(reading_id, node_id, body, received_at) VALUES (?, ?, ?, ?)",
+                        (reading["readingId"], node_id, json.dumps(reading, separators=(",", ":")), iso()),
+                    )
+                    if cursor.rowcount == 1:
+                        fresh.append(reading)
+                if fresh:
+                    body = {**queue_body, "readings": fresh}
+                    self.db.execute(
+                        "INSERT INTO outbound_queue(path, body, created_at) VALUES (?, ?, ?)",
+                        ("/api/agent/telemetry", json.dumps(body, separators=(",", ":")), iso()),
+                    )
+                self.db.commit()
+                return fresh
+            except Exception:
+                self.db.rollback()
+                raise
 
 
 def command_expired(command: Command) -> bool:
@@ -494,15 +512,9 @@ class Agent:
             if not isinstance(config_version, int) or isinstance(config_version, bool) or config_version < 1:
                 return None, "configVersion must be a positive integer.", 400
             normalized.append({"readingId": reading_id, "sensorId": sensor_id, "metric": metric, "value": float(value), "unit": unit, "sampledAt": iso(sampled_at), "quality": quality, "configVersion": config_version})
-        fresh: list[dict[str, Any]] = []
-        duplicates = 0
-        for reading in normalized:
-            if self.store.save_inbound(reading["readingId"], node_id, reading):
-                fresh.append(reading)
-            else:
-                duplicates += 1
-        if fresh:
-            self.store.queue("/api/agent/telemetry", {"greenhouseId": GREENHOUSE_ID, "agentId": AGENT_ID, "readings": fresh})
+        base = {"greenhouseId": GREENHOUSE_ID, "agentId": AGENT_ID}
+        fresh = self.store.queue_inbound(node_id, normalized, base)
+        duplicates = len(normalized) - len(fresh)
         return {"accepted": len(fresh), "duplicates": duplicates, "configVersion": max((item["configVersion"] for item in normalized), default=1), "receivedAt": iso()}, None, 202
 
     def local_config(self, node_id: str) -> dict[str, Any]:
@@ -648,18 +660,14 @@ class Agent:
                 self.store.set_runtime(device_id, "off")
 
     def submit_telemetry(self, readings: list[dict[str, Any]]) -> None:
-        fresh: list[dict[str, Any]] = []
+        normalized_readings: list[dict[str, Any]] = []
         for reading in readings:
             sensor_id = reading.get("sensorId")
             reading_id = reading.get("readingId") or stable_reading_id(AGENT_ID, sensor_id, reading.get("metric"), reading.get("sampledAt"), reading.get("value"))
-            normalized = {**reading, "readingId": reading_id}
-            if self.store.save_inbound(reading_id, "agent", normalized):
-                fresh.append(normalized)
-        if not fresh:
-            return
-        body = {"greenhouseId": GREENHOUSE_ID, "agentId": AGENT_ID, "readings": fresh}
-        self.store.queue("/api/agent/telemetry", body)
-        self.flush_queue()
+            normalized_readings.append({**reading, "readingId": reading_id})
+        base = {"greenhouseId": GREENHOUSE_ID, "agentId": AGENT_ID}
+        if self.store.queue_inbound("agent", normalized_readings, base):
+            self.flush_queue()
 
     def sync_config(self) -> None:
         payload = self.cloud.signed_request(f"/api/agent/config?greenhouseId={urllib.parse.quote(GREENHOUSE_ID)}&agentId={urllib.parse.quote(AGENT_ID)}")

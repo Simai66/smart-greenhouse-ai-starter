@@ -83,6 +83,19 @@ invented sensor thresholds, or publishing unmeasured AI results.
   checks). Re-ran Python suite after final backup connection-close fix: 30 passed.
 - Read-only QA subagent reviewed plan and backup path; no remaining findings.
 
+### Progress — 2026-11-04
+
+- Closed a Pi telemetry data-loss window: inbound dedupe and cloud outbox insert
+  now commit atomically; an outbox failure rolls both back so device retry works.
+- Added rollback/retry coverage and an actual-`Store` backup-copy restore check
+  for queued telemetry, quarantine, and inbound reading records.
+- Verification: `python3 -m unittest discover -s edge-agent -p 'test_*.py'`
+  passed (32 tests); `git diff --check` passed. Existing suite emits two
+  `ResourceWarning` messages for unclosed SQLite connections.
+- Explicit queue lifecycle state migration remains open. Pi operator restore
+  drill and hardware-owner S1-02 evidence remain outstanding; do not enable
+  actuator control.
+
 ### Remaining work and exact resume order
 
 1. **Resume at S1-02, hardware gate.** Hardware owner supplies ESP32 board/model,
@@ -95,6 +108,34 @@ invented sensor thresholds, or publishing unmeasured AI results.
    explicit `PENDING/RETRY/SYNCED/FAILED` implementation is still outstanding.
 4. Then follow S2 MQTT/TLS → S3 local HTTPS/auth/dashboard → S4 camera/AI →
    S5 cloud sync/remote command path → S6 PWA/failure QA.
+
+### S1-02 hardware evidence worksheet
+
+Repository-confirmed baseline (code/config evidence only; not physical
+commissioning evidence):
+
+- PlatformIO target is generic `esp32dev`; exact board model/revision is unknown.
+- Firmware reads one SHT30 at I2C `0x44`, SDA GPIO21, SCL GPIO22. Firmware has
+  no actuator GPIO implementation.
+- README mentions BH1750 and AB142 in the test setup, but neither has a verified
+  P0 firmware channel or calibration record.
+- Pi relay adapter remains a simulator. No physical relay part number or wiring
+  evidence is recorded.
+
+Hardware owner + Edge must record before bench verification:
+
+- ESP32 exact model/revision and board photo or datasheet.
+- Sensor and relay exact part numbers; wiring diagram and pin map.
+- Relay active polarity, power path/fuse rating, and de-energized behavior on
+  boot, reset, watchdog timeout, and loss of Pi/network.
+- Independent physical emergency-OFF circuit and witnessed test result.
+- Owner-approved maximum pump runtime/cooldown and other configured safety
+  limits; otherwise keep `REQUIRES_CONFIGURATION`.
+- Bench test date, participants, measurements, and pass/fail evidence for each
+  item. No physical actuator activation before hardware QA signs off.
+
+Current disposition: S1-02 is blocked pending these hardware-owner inputs; this
+worksheet does not assert that any component has been commissioned.
 
 ### Known blockers and limits
 
