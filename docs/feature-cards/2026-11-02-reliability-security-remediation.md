@@ -1,5 +1,7 @@
 # Feature card: Reliability and security remediation
 
+Status: Active — audit follow-up approved 2026-11-04
+
 ## Outcome
 
 Preserve accepted greenhouse telemetry, keep command audit evidence consistent,
@@ -69,3 +71,33 @@ actuator pilot remains gated by hardware review and interlock evidence.
   private image storage.
 - Release remains open. No staging TLS, bucket migration, or integrated QA
   evidence collected in this checkpoint.
+
+## Audit follow-up — 2026-11-04
+
+- Outcome: close verified audit defects in image privacy, mixed telemetry batches,
+  and edge-agent Python compatibility while preserving queued data and API auth.
+- Acceptance: image APIs return only short-lived `readUrl` values for ready,
+  unexpired objects; clients and contract use `readUrl`; responses containing
+  signed URLs are `no-store`; storage signing failures return service errors.
+- Acceptance: telemetry validates readings independently, stores valid readings
+  atomically with their threshold effects, reports rejected indexes, and edge
+  agent atomically quarantines rejected items from HTTP 202 batches; malformed
+  envelope and storage failures still fail closed.
+- Acceptance: edge agent imports UTC compatibly and tests run on supported Python;
+  command, ACK, and telemetry storage failures emit safe diagnostic event names.
+- Audit dispositions: retain 401/403 outbox retries because tests and data-safety
+  contract require preserving queued readings during credential recovery. Keep
+  fixed GH-01 scope fail-closed until membership authorization is implemented;
+  environment override alone would not safely enable multiple greenhouses.
+- Typecheck item: verify current `@cloudflare/workers-types` dependency and
+  `npx tsc --noEmit` before changing config; avoid duplicate dependency.
+- Cutover evidence — 2026-11-04: Supabase project ref `idzdofvqwtkusxnwlefj`
+  reports `ACTIVE_HEALTHY`; bucket `greenhouse-images` now has `public=false`.
+  Pre/post object count: 1; object was not moved or deleted. Anonymous HEAD to
+  its former public URL returned HTTP 400. Environment label was not confirmed.
+- Remaining image gate: QA must verify authorized signed reads through the
+  deployed Worker and check old public URLs/CDN behavior before release. Local
+  code tests do not prove deployed integration.
+- Owner/order: Backend updates signed image and telemetry APIs; Frontend updates
+  image client and view; Edge keeps UTC compatibility; QA reviews integrated
+  behavior; DevOps completes private bucket cutover before release.

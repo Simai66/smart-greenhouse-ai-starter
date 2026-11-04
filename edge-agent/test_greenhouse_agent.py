@@ -121,6 +121,56 @@ class EdgeAgentTest(unittest.TestCase):
         self.assertEqual(quarantined[0][2], body)
         self.assertEqual(quarantined[0][3], 400)
 
+    def test_partial_telemetry_response_quarantines_only_rejected_readings(self):
+        accepted = {"readingId": "reading-accepted"}
+        rejected = {"readingId": "reading-rejected"}
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [accepted, rejected]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        response = {"accepted": 1, "duplicates": 0, "rejected": [{"index": 1, "error": "invalid"}]}
+        with patch.object(self.agent.cloud, "signed_request", return_value=response):
+            self.agent.flush_queue()
+        self.assertEqual(self.agent.store.queued(), [])
+        quarantined = self.agent.store.quarantined()
+        self.assertEqual(len(quarantined), 1)
+        self.assertEqual(quarantined[0][2]["readings"], [rejected])
+        self.assertEqual(quarantined[0][2]["rejectionDetails"], response["rejected"])
+        self.assertEqual(quarantined[0][3], 422)
+
+    def test_inconsistent_partial_telemetry_response_keeps_entire_batch_queued(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        response = {"accepted": 1, "duplicates": 0, "rejected": [{"index": 4, "error": "invalid"}]}
+        with patch.object(self.agent.cloud, "signed_request", return_value=response):
+            self.agent.flush_queue()
+        self.assertEqual(self.agent.store.queued()[0][2], body)
+        self.assertEqual(self.agent.store.quarantined(), [])
+
+    def test_malformed_telemetry_success_response_keeps_batch_queued(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        for response in ({"accepted": 1}, ["not-an-object"]):
+            self.agent.store.queue("/api/agent/telemetry", body)
+            with patch.object(self.agent.cloud, "signed_request", return_value=response):
+                self.agent.flush_queue()
+            queued = self.agent.store.queued()
+            self.assertEqual(len(queued), 1)
+            self.assertEqual(queued[0][2], body)
+            self.agent.store.remove_queued(queued[0][0])
+
+    def test_invalid_json_success_response_keeps_telemetry_queued(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        with patch.object(self.agent.cloud, "signed_request", side_effect=json.JSONDecodeError("bad JSON", "", 0)):
+            self.agent.flush_queue()
+        self.assertEqual(self.agent.store.queued()[0][2], body)
+
+    def test_submit_telemetry_uses_partial_response_quarantine_path(self):
+        response = {"accepted": 1, "duplicates": 0, "rejected": [{"index": 1, "error": "invalid"}]}
+        with patch.object(self.agent.store, "save_inbound", side_effect=[True, True]), patch.object(self.agent.cloud, "signed_request", return_value=response):
+            self.agent.submit_telemetry([{"readingId": "reading-ok"}, {"readingId": "reading-bad"}])
+        self.assertEqual(self.agent.store.queued(), [])
+        quarantined = self.agent.store.quarantined()
+        self.assertEqual(quarantined[0][2]["readings"], [{"readingId": "reading-bad"}])
+
     def test_quarantine_and_queue_removal_are_atomic(self):
         body = {"imageId": "img_123"}
         self.agent.store.queue(agent_module.IMAGE_QUEUE_PATH, body)

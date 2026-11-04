@@ -100,6 +100,14 @@ diagnostics but do not imply healthy telemetry. A request accepts at most 100
 readings and sample time must be no older than 24 hours or more than five
 minutes in the future.
 
+The route validates readings independently. It stores valid readings and their
+threshold-alert effects in one D1 batch, then returns HTTP 202 with `accepted`,
+`duplicates`, `rejected` (each item has a zero-based `index` and `error`), and
+`receivedAt`. Invalid envelope, authentication, and storage failures still fail
+the whole request; edge clients should retain the batch on non-202 responses.
+The Pi agent removes processed readings from its outbox and atomically moves
+rejected readings, with their rejection details, to its quarantine.
+
 `POST /api/agent/heartbeat`
 
 ```json

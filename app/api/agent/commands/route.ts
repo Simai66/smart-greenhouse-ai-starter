@@ -37,7 +37,8 @@ export async function GET(request: Request) {
     if (transitions.length) await getD1().batch(transitions);
     await markAgentOnline(authenticated.agentId, now);
     return Response.json({ commands: deliverable.map((command) => ({ commandId: command.id, deviceId: command.deviceId, action: command.action, correlationId: command.correlationId, idempotencyKey: command.idempotencyKey, expiresAt: command.expiresAt, maxRuntimeSeconds: command.maxRuntimeSeconds })) }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
+  } catch (err) {
+    console.error("[commands] queue failure", err instanceof Error ? err.name : typeof err);
     return Response.json({ error: "Command queue is temporarily unavailable." }, { status: 503 });
   }
 }

@@ -33,6 +33,7 @@ NODE
 
 worker_url="http://127.0.0.1:${port}"
 worker_log="$(mktemp "${TMPDIR}/smart-greenhouse-worker.XXXXXX.log")"
+worker_state="$(mktemp -d "${TMPDIR}/smart-greenhouse-worker-state.XXXXXX")"
 worker_pid=""
 
 cleanup() {
@@ -47,6 +48,7 @@ cleanup() {
     kill -9 "${worker_pid}" 2>/dev/null || true
   fi
   rm -f "${worker_log}"
+  rm -rf "${worker_state}"
   exit "${status}"
 }
 trap cleanup EXIT INT TERM
@@ -57,7 +59,7 @@ trap cleanup EXIT INT TERM
   --cwd "${SITES_PROJECT_ROOT}/dist/server" \
   --ip 127.0.0.1 \
   --port "${port}" \
-  --persist-to "${SITES_RUNTIME_ROOT:-${SITES_PROJECT_ROOT}/.sites-runtime}/wrangler/state" \
+  --persist-to "${worker_state}" \
   --log-level error \
   --show-interactive-dev-session=false \
   >"${worker_log}" 2>&1 &

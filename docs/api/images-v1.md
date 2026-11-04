@@ -29,12 +29,14 @@ access.
 ```
 
 Response contains `imageId`, `objectPath`, `uploadUrl`,
-`uploadExpiresAt`, `publicUrl`, and `status: "pending"`. Browser/Pi sends a
+`uploadExpiresAt`, and `status: "pending"`. Responses containing signed URLs
+use `Cache-Control: no-store`. Browser/Pi sends a
 `PUT` with the original `Content-Type` to `uploadUrl`, then calls
 `POST /api/images/complete` with `{ "imageId": "img_..." }`.
 
 `GET /api/images?greenhouseId=GH-01&cameraId=CAM-A-01&limit=100` requires
-`viewer` and returns image metadata, `publicUrl` (or `null` after expiry),
+`viewer` and returns image metadata, `readUrl` (short-lived signed URL, or
+`null` after expiry),
 `status`, `detectionCount`, and detection summaries.
 
 ## Pi image flow
@@ -51,10 +53,12 @@ Keep `capturedAt` identical on retries; if omitted, the first reservation's
 timestamp is reused. Conflicting ownership or metadata returns
 `409 IMAGE_ID_CONFLICT`; malformed IDs return `400 INVALID_IMAGE_ID`.
 
-A `pending` reservation returns a fresh signed upload URL. Before uploading,
+A `pending` reservation returns a fresh signed upload URL. A `ready` reservation
+returns a short-lived `readUrl`; expired reservations return no read URL. Before uploading,
 retry completion: only `409 UPLOAD_NOT_FOUND` requires a PUT, then completion.
-A `ready` or `expired` reservation returns existing metadata without an upload
-URL; proceed directly to posting detections. `failed` returns
+A `ready` reservation returns existing metadata without an upload URL; proceed
+directly to posting detections. `expired` returns metadata without read or
+upload URLs. `failed` returns
 `409 IMAGE_UPLOAD_FAILED`. Preserve queued work on HTTP 408/429, server errors,
 and network failures. Clients omitting `imageId` still receive a new ID.
 

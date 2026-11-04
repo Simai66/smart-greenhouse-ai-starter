@@ -13,9 +13,29 @@ function load(path, mocks = {}) {
   const code = ts.transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  runInNewContext(code, { exports, require: (id) => mocks[id] ?? require(id), crypto, Response, TextEncoder });
+  runInNewContext(code, { exports, require: (id) => mocks[id] ?? require(id), crypto, Response, TextEncoder, fetch: (...args) => globalThis.fetch(...args) });
   return exports;
 }
+
+test("signed image reads use the configured private bucket and short expiry", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url, init });
+    return Response.json({ signedUrl: "/object/sign/greenhouse-images/GH-01/image.jpg?token=secret" });
+  };
+  try {
+    const storage = load("../lib/server/supabase-storage.ts", {
+      "cloudflare:workers": { env: { SUPABASE_URL: "https://storage.invalid", SUPABASE_SERVICE_ROLE_KEY: "x".repeat(32), SUPABASE_STORAGE_BUCKET: "greenhouse-images" } },
+    });
+    assert.equal(await storage.createSignedReadUrl("GH-01/image.jpg"), "https://storage.invalid/storage/v1/object/sign/greenhouse-images/GH-01/image.jpg?token=secret");
+    assert.equal(requests[0].url, "https://storage.invalid/storage/v1/object/sign/greenhouse-images/GH-01/image.jpg");
+    assert.equal(requests[0].init.method, "POST");
+    assert.deepEqual(JSON.parse(requests[0].init.body), { expiresIn: 300 });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 // Exercise the service against real SQLite constraints; only storage is faked.
 test("image reservation survives retries, collisions, concurrent requests and lost responses", async () => {
@@ -42,8 +62,10 @@ test("image reservation survives retries, collisions, concurrent requests and lo
       return { rows: method === "get" ? stmt.get(...params) : stmt.all(...params) };
     });
     let signedCount = 0;
+    let readCount = 0;
     let inspectedCount = 0;
     let failSigning = false;
+    let failReadSigning = false;
     let agentRegistrationResponse = null;
     const service = load("../lib/server/inspection-images.ts", {
       "@/db": { getDb: () => db },
@@ -54,7 +76,10 @@ test("image reservation survives retries, collisions, concurrent requests and lo
       "@/lib/server/image-contract": load("../lib/server/image-contract.ts"),
       "@/lib/server/supabase-storage": {
         supabaseStorageBucket: () => "images",
-        publicObjectUrl: (bucket, path) => `https://storage.invalid/${bucket}/${path}`,
+        createSignedReadUrl: async (path) => {
+          if (failReadSigning) throw new Error("Read signing unavailable");
+          return `https://storage.invalid/signed/${path}?token=${++readCount}`;
+        },
         createSignedUploadUrl: async (path) => {
           if (failSigning) throw new Error("Storage unavailable");
           return { uploadUrl: `https://storage.invalid/${path}?attempt=${++signedCount}`, expiresAt: "later" };
@@ -75,6 +100,7 @@ test("image reservation survives retries, collisions, concurrent requests and lo
     assert.equal(first.data.objectPath, retry.data.objectPath);
     assert.notEqual(first.data.uploadUrl, retry.data.uploadUrl);
     assert.equal(sqlite.prepare("SELECT count(*) AS n FROM inspection_images").get().n, 1);
+    assert.equal(sqlite.prepare("SELECT public_url FROM inspection_images WHERE id = ?").get(input.imageId).public_url, null);
     for (const change of [{ byteSize: 101 }, { cameraId: "CAM-B" }, { plantId: "PLANT-B" }, { contentType: "image/png" }, { capturedAt: "2026-09-24T00:00:00Z" }]) {
       assert.equal((await reserve({ ...input, ...change })).response.status, 409);
     }
@@ -90,6 +116,7 @@ test("image reservation survives retries, collisions, concurrent requests and lo
         assert.equal(result.data.status, status);
         assert.equal(result.data.imageId, input.imageId);
         assert.equal(result.data.uploadUrl, undefined);
+        assert.equal(result.data.readUrl, status === "ready" ? `https://storage.invalid/signed/${result.data.objectPath}?token=${readCount}` : null);
         const batch = { greenhouseId: input.greenhouseId, imageId: result.data.imageId, modelVersion: "v1", detectedAt: input.capturedAt, results: [{ plantId: "PLANT-01", classification: "healthy", confidence: 99, severity: "none" }] };
         await insertDetectionBatch(batch, actor.agentId);
         assert.equal((await insertDetectionBatch(batch, actor.agentId)).data.idempotent, true);
@@ -97,6 +124,10 @@ test("image reservation survives retries, collisions, concurrent requests and lo
       }
       assert.equal(signedCount, before);
     }
+    sqlite.prepare("UPDATE inspection_images SET status = 'ready' WHERE id = ?").run(input.imageId);
+    failReadSigning = true;
+    await assert.rejects(reserve(), /Read signing unavailable/);
+    failReadSigning = false;
     const lost = { ...input, imageId: `img_${crypto.randomUUID()}`, capturedAt: undefined };
     failSigning = true;
     await assert.rejects(reserve(lost), /Storage unavailable/);
@@ -112,7 +143,7 @@ test("image reservation survives retries, collisions, concurrent requests and lo
       "@/lib/server/agent-registry": { assertRegisteredAgent: async () => null },
       "@/lib/greenhouse-scope": load("../lib/greenhouse-scope.ts", { "./server/api-error.ts": load("../lib/server/api-error.ts") }),
       "@/lib/server/image-contract": load("../lib/server/image-contract.ts"),
-      "@/lib/server/supabase-storage": { inspectObject: async () => { inspectedCount += 1; return { exists: true }; } },
+      "@/lib/server/supabase-storage": { inspectObject: async () => { inspectedCount += 1; return { exists: true }; }, createSignedReadUrl: async () => "https://storage.invalid/signed/read?token=test" },
     }).completeImageUpload(foreignImageId, { kind: "agent", agentId: "pi-01" });
     assert.equal(completion.response.status, 403);
     assert.equal(inspectedCount, 0);

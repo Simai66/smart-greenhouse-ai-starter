@@ -80,8 +80,8 @@ deployment.
   device, telemetry, commands, image metadata, and audit records. Agent writes
   use the same staging Worker/D1 trust boundary.
 - **Worker → Supabase Storage:** Worker uses the service-role key to create
-  signed upload URLs. Current setup/runbook specifies a public image bucket and
-  stores public URLs. A public object URL is usable by anyone who has it.
+  signed upload and short-lived read URLs. Setup requires a private bucket;
+  bucket cutover and CDN verification remain staging work.
 - **ESP32 → Pi LAN:** Pi listens on its LAN HTTP port; ESP32 sends a node ID and
   token. Current example binds `0.0.0.0`; network segmentation/firewall remains
   an operator responsibility.
@@ -94,8 +94,7 @@ Current repository evidence: `lib/server/access-control.ts`,
 `edge-agent/greenhouse_agent.py`, `edge-agent/docker-compose.example.yml`,
 `firmware/esp32/`, `app/api/device-commands/route.ts`, `README.md`, and the
 active release card. README currently documents `/api/agent/*` as Access
-Bypass and image bucket as public; that runbook must be revised as part of an
-approved implementation, before the changed controls are relied on.
+Bypass; that runbook must be revised before the changed controls are relied on.
 
 ## Chosen architecture
 
@@ -283,8 +282,8 @@ not available. Do not compensate by weakening auth or restoring public access.
    Do not test a real relay.
 4. Roll back Worker/edge versions if smoke fails; keep additive schema and
    audit/nonce history. Keep new Access and bucket controls closed. Existing
-   Worker image flows that expect `publicUrl` will fail while bucket stays
-   private; treat this as a temporary image-service outage and forward-fix by
+   Worker image flows that expect signed `readUrl` values will fail while the
+   bucket stays private; treat this as a temporary image-service outage and forward-fix by
    restoring private signed reads. Never make images public as routine rollback.
    Verify old public URLs against origin and CDN/cache behavior before declaring
    cutover complete. If cached copies remain, treat affected images as exposed

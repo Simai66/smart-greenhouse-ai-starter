@@ -17,6 +17,7 @@ type TelemetryReading = {
 };
 
 type TelemetryPayload = { greenhouseId?: unknown; agentId?: unknown; readings?: TelemetryReading[] };
+type RejectedReading = { index: number; error: string };
 
 function validString(value: unknown, max = 128): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max;
@@ -55,21 +56,39 @@ export async function POST(request: Request) {
     const configMap = new Map(configs.map((config) => [config.sensorId, config]));
     const values: Array<typeof sensorReadings.$inferInsert> = [];
     const thresholdChecks: Array<{ readingId: string; sensorId: string; name: string; breached: boolean }> = [];
+    const rejected: RejectedReading[] = [];
 
-    for (const reading of payload.readings) {
+    for (const [index, reading] of payload.readings.entries()) {
+      if (!reading || typeof reading !== "object" || Array.isArray(reading)) {
+        rejected.push({ index, error: "A telemetry reading must be an object." });
+        continue;
+      }
       const sensorId = reading.sensorId;
       const metric = reading.metric;
       const unit = reading.unit;
       const sampledAt = typeof reading.sampledAt === "string" ? Date.parse(reading.sampledAt) : Number.NaN;
       if (!isValidSensorId(sensorId) || !isSensorMetric(metric) || typeof unit !== "string" || unit !== SENSOR_UNITS[metric] || !isFiniteNumber(reading.value) || !isSensorQuality(reading.quality) || !Number.isFinite(sampledAt) || sampledAt < now.getTime() - MAX_TELEMETRY_AGE_MS || sampledAt > now.getTime() + MAX_TELEMETRY_FUTURE_MS) {
-        return Response.json({ error: "A telemetry reading is invalid, stale, or from the future." }, { status: 400 });
+        rejected.push({ index, error: "A telemetry reading is invalid, stale, or from the future." });
+        continue;
       }
       const device = deviceMap.get(sensorId);
       const config = configMap.get(sensorId);
-      if (!device || !config) return Response.json({ error: "Telemetry contains an unregistered sensor." }, { status: 403 });
-      if (!capabilitiesSupport(device.capabilitiesJson, metric, unit) || config.metric !== metric || config.unit !== unit) return Response.json({ error: "Telemetry metric or unit does not match the registered sensor capability." }, { status: 400 });
-      if (reading.configVersion !== undefined && (!Number.isInteger(reading.configVersion) || (reading.configVersion as number) < 1)) return Response.json({ error: "configVersion must be a positive integer." }, { status: 400 });
-      if (reading.readingId !== undefined && !isValidReadingId(reading.readingId)) return Response.json({ error: "readingId is invalid." }, { status: 400 });
+      if (!device || !config) {
+        rejected.push({ index, error: "Telemetry contains an unregistered sensor." });
+        continue;
+      }
+      if (!capabilitiesSupport(device.capabilitiesJson, metric, unit) || config.metric !== metric || config.unit !== unit) {
+        rejected.push({ index, error: "Telemetry metric or unit does not match the registered sensor capability." });
+        continue;
+      }
+      if (reading.configVersion !== undefined && (!Number.isInteger(reading.configVersion) || (reading.configVersion as number) < 1)) {
+        rejected.push({ index, error: "configVersion must be a positive integer." });
+        continue;
+      }
+      if (reading.readingId !== undefined && !isValidReadingId(reading.readingId)) {
+        rejected.push({ index, error: "readingId is invalid." });
+        continue;
+      }
       const normalizedSampledAt = new Date(sampledAt).toISOString();
       const readingId = isValidReadingId(reading.readingId)
         ? reading.readingId
@@ -103,8 +122,9 @@ export async function POST(request: Request) {
     const results: Array<{ meta?: { changes?: number } }> = statements.length ? await getD1().batch(statements) : [];
     const accepted = results.reduce((total, result, index) => total + (index % 2 === 0 ? result.meta?.changes ?? 0 : 0), 0);
     await markAgentOnline(authenticated.agentId, now.toISOString());
-    return Response.json({ accepted, duplicates: values.length - accepted, receivedAt: now.toISOString() }, { status: 202 });
-  } catch {
+    return Response.json({ accepted, duplicates: values.length - accepted, rejected, receivedAt: now.toISOString() }, { status: 202 });
+  } catch (err) {
+    console.error("[telemetry] storage failure", err instanceof Error ? err.name : typeof err);
     return Response.json({ error: "Telemetry storage is temporarily unavailable." }, { status: 503 });
   }
 }
