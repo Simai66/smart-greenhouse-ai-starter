@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const imageId = payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as { imageId?: unknown }).imageId : undefined;
   try {
     const result = await completeImageUpload(imageId, { kind: "browser", createdBy: authorization.user.email });
-    return "response" in result ? result.response : Response.json(result.data);
+    return "response" in result ? result.response : Response.json(result.data, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return apiError("STORAGE_UNAVAILABLE", "Image completion service is temporarily unavailable.", 503);
   }

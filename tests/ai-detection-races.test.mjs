@@ -72,7 +72,7 @@ function find(tree, predicate) {
 }
 
 const camera = (id) => ({ id, name: id, zone: "zone", enabled: true, status: "online" });
-const image = (id) => ({ imageId: id, publicUrl: `/${id}.jpg`, status: "ready", detectionCount: 0, detections: [] });
+const image = (id) => ({ imageId: id, readUrl: `/${id}.jpg`, status: "ready", detectionCount: 0, detections: [] });
 const props = { greenhouseId: "greenhouse-a", plant: { id: "plant", zone: "zone" }, cameras: [camera("a"), camera("b")], reviewedCameraIds: [], onSave() {} };
 const refresh = (view) => find(view.render(), (node) => node.props?.["aria-label"] === "โหลดภาพใหม่").props.onClick();
 const upload = (view) => find(view.render(), (node) => node.type === "input").props.onChange({ target: { files: [{}] }, currentTarget: {} });

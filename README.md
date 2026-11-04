@@ -184,10 +184,12 @@ because they contain audit history and queued command evidence.
 ### Supabase Storage image setup
 
 Create bucket `greenhouse-images` in the existing Supabase project. Set it to
-Public read, allow `image/jpeg`, `image/png`, and `image/webp`, and set the file
-limit to 10 MiB. Public URLs expose images until the 15-day cleanup cron removes
-them; use a private bucket with signed read URLs before handling sensitive
-commercial imagery.
+Private, allow `image/jpeg`, `image/png`, and `image/webp`, and set the file
+limit to 10 MiB. The Worker returns five-minute signed read URLs only after
+authorization; signed URL responses use `Cache-Control: no-store`. Before
+switching an existing public bucket, inventory and reconcile stored objects,
+verify private reads and rollback in staging, and check old public URLs and CDN
+caches. Do not close the image privacy gate until anonymous reads fail.
 
 Set Storage and browser-role Worker secrets without committing them:
 

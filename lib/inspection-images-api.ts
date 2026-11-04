@@ -14,7 +14,7 @@ export type InspectionImage = {
   imageId: string;
   greenhouseId: string;
   objectPath: string;
-  publicUrl: string | null;
+  readUrl: string | null;
   source: string;
   cameraId: string | null;
   plantId: string | null;

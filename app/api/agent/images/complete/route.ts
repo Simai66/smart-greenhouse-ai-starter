@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   if (payload instanceof Response) return payload;
   try {
     const result = await completeImageUpload(payload.imageId, { kind: "agent", agentId: authenticated.agentId });
-    return "response" in result ? result.response : Response.json(result.data);
+    return "response" in result ? result.response : Response.json(result.data, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return apiError("STORAGE_UNAVAILABLE", "Image completion service is temporarily unavailable.", 503);
   }

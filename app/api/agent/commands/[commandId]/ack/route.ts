@@ -47,7 +47,8 @@ export async function POST(request: Request, context: { params: Promise<{ comman
     }
     await markAgentOnline(authenticated.agentId, now);
     return Response.json({ commandId, state, acknowledgedAt: now });
-  } catch {
+  } catch (err) {
+    console.error("[ack] command acknowledgement failure", err instanceof Error ? err.name : typeof err);
     return Response.json({ error: "Command acknowledgement could not be stored." }, { status: 503 });
   }
 }

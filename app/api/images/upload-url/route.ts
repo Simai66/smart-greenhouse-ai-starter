@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   }
   try {
     const result = await createImageUpload(payload, "dashboard", { kind: "browser", createdBy: authorization.user.email });
-    return "response" in result ? result.response : Response.json(result.data, { status: 201 });
+    return "response" in result ? result.response : Response.json(result.data, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch {
     return apiError("STORAGE_UNAVAILABLE", "Image upload service is temporarily unavailable.", 503);
   }

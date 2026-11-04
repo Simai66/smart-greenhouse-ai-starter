@@ -55,9 +55,27 @@ export function supabaseStorageBucket(): string {
   return config().bucket;
 }
 
-export function publicObjectUrl(bucket: string, objectPath: string): string {
+/**
+ * Creates a short-lived signed URL for reading a private object.
+ * Use this in every API response that returns an image URL to the browser — never
+ * expose the public endpoint directly after the bucket is switched to private.
+ */
+export async function createSignedReadUrl(objectPath: string, expiresInSeconds = 300): Promise<string> {
   const value = config();
-  return `${storageBaseUrl(value)}/object/public/${encodeURIComponent(bucket)}/${encodedPath(objectPath)}`;
+  const response = await fetch(
+    `${storageBaseUrl(value)}/object/sign/${encodeURIComponent(value.bucket)}/${encodedPath(objectPath)}`,
+    {
+      method: "POST",
+      headers: { ...requestHeaders(value), "Content-Type": "application/json" },
+      body: JSON.stringify({ expiresIn: expiresInSeconds }),
+    },
+  );
+  if (!response.ok) await throwStorageError(response);
+  const body = await response.json() as { signedUrl?: string; signedURL?: string };
+  const url = body.signedUrl ?? body.signedURL;
+  if (!url) throw new Error("Supabase Storage did not return a signed read URL.");
+  // Supabase may return a relative path — resolve it against the base URL.
+  return /^https?:\/\//i.test(url) ? url : `${storageBaseUrl(value)}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
 export async function createSignedUploadUrl(objectPath: string): Promise<{ uploadUrl: string; expiresAt: string }> {

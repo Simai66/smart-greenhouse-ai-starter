@@ -89,12 +89,12 @@ test("telemetry reading and threshold alert commit or roll back together and ret
       },
     });
 
-    const makeRequest = (readingId, value, quality = "valid") => new Request("https://greenhouse.invalid/api/agent/telemetry", {
+    const makeRequest = (readings) => new Request("https://greenhouse.invalid/api/agent/telemetry", {
       method: "POST",
-      body: JSON.stringify({ greenhouseId: "GH-01", agentId: "PI-GH-01", readings: [{ readingId, sensorId: "SEN-01", metric: "temperature", value, unit: "celsius", sampledAt: new Date().toISOString(), quality }] }),
+      body: JSON.stringify({ greenhouseId: "GH-01", agentId: "PI-GH-01", readings }),
     });
-    const post = async (readingId, value, quality) => {
-      const request = makeRequest(readingId, value, quality);
+    const post = async (readingId, value, quality = "valid") => {
+      const request = makeRequest([{ readingId, sensorId: "SEN-01", metric: "temperature", value, unit: "celsius", sampledAt: new Date().toISOString(), quality }]);
       authenticated = { agentId: "PI-GH-01", rawBody: await request.clone().text() };
       return route.POST(request);
     };
@@ -120,6 +120,22 @@ test("telemetry reading and threshold alert commit or roll back together and ret
     const recovered = await post("reading-002", 25);
     assert.equal(recovered.status, 202);
     assert.equal(sqlite.prepare("SELECT status FROM alerts").get().status, "resolved");
+
+    const partial = makeRequest([
+      { readingId: "reading-003", sensorId: "SEN-01", metric: "temperature", value: 22, unit: "celsius", sampledAt: new Date().toISOString(), quality: "valid" },
+      { readingId: "reading-bad", sensorId: "SEN-01", metric: "temperature", value: 999, unit: "celsius", sampledAt: "invalid", quality: "valid" },
+      null,
+    ]);
+    authenticated = { agentId: "PI-GH-01", rawBody: await partial.clone().text() };
+    const partialResponse = await route.POST(partial);
+    assert.equal(partialResponse.status, 202);
+    const partialBody = await partialResponse.json();
+    assert.equal(partialBody.accepted, 1);
+    assert.deepEqual(partialBody.rejected, [
+      { index: 1, error: "A telemetry reading is invalid, stale, or from the future." },
+      { index: 2, error: "A telemetry reading must be an object." },
+    ]);
+    assert.equal(sqlite.prepare("SELECT count(*) AS n FROM sensor_readings WHERE reading_id = 'reading-003'").get().n, 1);
   } finally {
     sqlite.close();
   }

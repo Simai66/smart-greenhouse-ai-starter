@@ -27,10 +27,12 @@ import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+UTC = timezone.utc
 
 API_URL = os.environ.get("GREENHOUSE_API_URL", "").rstrip("/")
 AGENT_ID = os.environ.get("GREENHOUSE_AGENT_ID", "")
@@ -72,6 +74,7 @@ def parse_time(value: str) -> datetime:
 
 
 def retryable_http(error: urllib.error.HTTPError) -> bool:
+    # Keep auth failures queued; operators can rotate credentials without losing readings.
     return error.code in (401, 403, 408, 429) or error.code >= 500
 
 
@@ -255,7 +258,7 @@ class Store:
             self.db.execute("DELETE FROM outbound_queue WHERE id = ?", (queue_id,))
             self.db.commit()
 
-    def quarantine(self, queue_id: int, status_code: int, status_text: str) -> None:
+    def quarantine(self, queue_id: int, status_code: int, status_text: str, body: dict[str, Any] | None = None) -> None:
         with self.lock:
             self.db.execute("BEGIN IMMEDIATE")
             try:
@@ -263,7 +266,7 @@ class Store:
                 if row:
                     self.db.execute(
                         "INSERT INTO outbound_quarantine(path, body, status_code, status_text, rejected_at) VALUES (?, ?, ?, ?, ?)",
-                        (row[0], row[1], status_code, status_text[:128], iso()),
+                        (row[0], json.dumps(body, separators=(",", ":")) if body is not None else row[1], status_code, status_text[:128], iso()),
                     )
                     self.db.execute("DELETE FROM outbound_queue WHERE id = ?", (queue_id,))
                 self.db.commit()
@@ -532,13 +535,37 @@ class Agent:
                     self.cloud.upload_image(image_path, body["metadata"], body.get("detections", []))
                     image_path.unlink(missing_ok=True)
                 else:
-                    self.cloud.signed_request(path, "POST", body)
+                    response = self.cloud.signed_request(path, "POST", body)
+                    if path == "/api/agent/telemetry":
+                        if not isinstance(response, dict):
+                            return
+                        # Older all-or-nothing API versions omit rejected; counts must still cover every reading.
+                        rejected = response.get("rejected", [])
+                        readings = body.get("readings")
+                        if not isinstance(rejected, list) or not isinstance(readings, list):
+                            return
+                        indexes = [item.get("index") for item in rejected if isinstance(item, dict)]
+                        accepted = response.get("accepted")
+                        duplicates = response.get("duplicates")
+                        if (
+                            len(indexes) != len(rejected)
+                            or any(not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= len(readings) for index in indexes)
+                            or len(set(indexes)) != len(indexes)
+                            or not isinstance(accepted, int) or isinstance(accepted, bool) or accepted < 0
+                            or not isinstance(duplicates, int) or isinstance(duplicates, bool) or duplicates < 0
+                            or accepted + duplicates + len(indexes) != len(readings)
+                        ):
+                            return
+                        if indexes:
+                            rejected_body = {**body, "readings": [readings[index] for index in indexes], "rejectionDetails": rejected}
+                            self.store.quarantine(queue_id, 422, "Partial telemetry rejection", rejected_body)
+                            continue
                 self.store.remove_queued(queue_id)
             except urllib.error.HTTPError as error:
                 if retryable_http(error):
                     return
                 self.store.quarantine(queue_id, error.code, str(error.reason))
-            except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
+            except (urllib.error.URLError, TimeoutError, OSError, RuntimeError, json.JSONDecodeError):
                 return
 
     def capture_once(self, force: bool = False) -> None:
@@ -631,13 +658,8 @@ class Agent:
         if not fresh:
             return
         body = {"greenhouseId": GREENHOUSE_ID, "agentId": AGENT_ID, "readings": fresh}
-        try:
-            self.cloud.signed_request("/api/agent/telemetry", "POST", body)
-        except urllib.error.HTTPError as error:
-            if retryable_http(error):
-                self.store.queue("/api/agent/telemetry", body)
-        except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
-            self.store.queue("/api/agent/telemetry", body)
+        self.store.queue("/api/agent/telemetry", body)
+        self.flush_queue()
 
     def sync_config(self) -> None:
         payload = self.cloud.signed_request(f"/api/agent/config?greenhouseId={urllib.parse.quote(GREENHOUSE_ID)}&agentId={urllib.parse.quote(AGENT_ID)}")
