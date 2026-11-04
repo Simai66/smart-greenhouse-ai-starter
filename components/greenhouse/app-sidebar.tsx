@@ -6,7 +6,6 @@ import {
   Bot,
   Cpu,
   LayoutDashboard,
-  Leaf,
   Settings,
   Sprout,
 } from "lucide-react";
@@ -60,7 +59,33 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="border-b border-sidebar-border">
-        <SidebarMenu><SidebarMenuItem><SidebarMenuButton size="lg" tooltip="Smart Greenhouse" onClick={() => navigate("dashboard")}><span className="grid size-8 place-items-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"><Leaf aria-hidden="true" /></span><span><strong className="block">Smart Greenhouse</strong><small className="text-sidebar-foreground/70">{greenhouse.code}</small></span></SidebarMenuButton></SidebarMenuItem></SidebarMenu>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="lg"
+              tooltip="Smart Greenhouse"
+              onClick={() => navigate("dashboard")}
+              className="gap-3"
+            >
+              <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-md bg-white">
+                <img
+                  src="/images/greenhouse-logo.png"
+                  alt=""
+                  aria-hidden="true"
+                  className="size-full object-contain"
+                />
+              </span>
+              <span className="grid min-w-0 gap-0.5 text-left">
+                <strong className="truncate text-sm font-semibold leading-tight">
+                  Smart Greenhouse
+                </strong>
+                <small className="truncate text-[10px] font-medium uppercase leading-tight tracking-[0.12em] text-sidebar-foreground/70">
+                  {greenhouse.code}
+                </small>
+              </span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <div className="rounded-lg border border-sidebar-border bg-sidebar-accent p-3 group-data-[collapsible=icon]:hidden"><strong className="block text-sm">{greenhouse.name}</strong><small className="text-sidebar-foreground/70">{greenhouse.zones.filter((zone) => zone.status === "active").length} โซน · {online ? "ออนไลน์" : "ออฟไลน์"}</small></div>
       </SidebarHeader>
       <SidebarContent>
