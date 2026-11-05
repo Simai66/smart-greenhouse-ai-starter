@@ -69,6 +69,7 @@ class BackupDatabaseTest(unittest.TestCase):
                 try:
                     store.queue("/api/agent/telemetry", {"readings": [{"readingId": "reading-queued"}]})
                     store.queue("/api/agent/telemetry", {"readingId": "reading-rejected"})
+                    store.mark_retry(store.queued()[0][0])
                     store.quarantine(store.queued()[1][0], 422, "invalid payload")
                     store.db.execute(
                         "INSERT INTO inbound_readings VALUES (?, ?, ?, ?, ?)",
@@ -84,11 +85,35 @@ class BackupDatabaseTest(unittest.TestCase):
                 restored_store = agent_module.Store()
                 try:
                     self.assertEqual(restored_store.queued()[0][2], {"readings": [{"readingId": "reading-queued"}]})
+                    self.assertEqual(restored_store.db.execute("SELECT state FROM outbound_queue").fetchone(), ("RETRY",))
                     self.assertEqual(restored_store.quarantined()[0][2:5], ({"readingId": "reading-rejected"}, 422, "invalid payload"))
                     self.assertEqual(restored_store.db.execute("SELECT reading_id, node_id, delivered_at FROM inbound_readings").fetchone(), ("reading-queued", "ESP32-01", None))
                     self.assertEqual(restored_store.db.execute("PRAGMA integrity_check").fetchone(), ("ok",))
                 finally:
                     restored_store.db.close()
+            finally:
+                agent_module.STATE_DIR = previous_state_dir
+
+    def test_legacy_queue_migrates_additively_and_preserves_quarantine(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_dir = pathlib.Path(directory)
+            database = state_dir / "agent.db"
+            with sqlite3.connect(database) as db:
+                db.execute("CREATE TABLE outbound_queue (id INTEGER PRIMARY KEY, path TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL)")
+                db.execute("INSERT INTO outbound_queue VALUES (1, '/api/agent/telemetry', '{\"readingId\":\"queued\"}', '2026-11-05T00:00:00Z')")
+                db.execute("CREATE TABLE outbound_quarantine (id INTEGER PRIMARY KEY, path TEXT NOT NULL, body TEXT NOT NULL, status_code INTEGER NOT NULL, status_text TEXT NOT NULL, rejected_at TEXT NOT NULL)")
+                db.execute("INSERT INTO outbound_quarantine VALUES (1, '/api/agent/telemetry', '{\"readingId\":\"failed\"}', 422, 'invalid payload', '2026-11-05T00:00:00Z')")
+            previous_state_dir = agent_module.STATE_DIR
+            try:
+                agent_module.STATE_DIR = state_dir
+                store = agent_module.Store()
+                try:
+                    self.assertEqual(store.db.execute("SELECT state FROM outbound_queue WHERE id = 1").fetchone(), ("PENDING",))
+                    self.assertEqual(store.quarantined()[0][2:5], ({"readingId": "failed"}, 422, "invalid payload"))
+                    with self.assertRaises(sqlite3.IntegrityError):
+                        store.db.execute("UPDATE outbound_queue SET state = 'FAILED' WHERE id = 1")
+                finally:
+                    store.db.close()
             finally:
                 agent_module.STATE_DIR = previous_state_dir
 

@@ -106,6 +106,7 @@ class EdgeAgentTest(unittest.TestCase):
         queued = self.agent.store.queued()
         self.assertEqual(len(queued), 1)
         self.assertEqual(queued[0][2], body)
+        self.assertEqual(self.agent.store.db.execute("SELECT state FROM outbound_queue WHERE id = ?", (queued[0][0],)).fetchone(), ("RETRY",))
 
     def test_outbox_quarantines_permanent_rejections_without_losing_payload(self):
         body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}

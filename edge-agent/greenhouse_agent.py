@@ -229,6 +229,9 @@ class Store:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("CREATE TABLE IF NOT EXISTS outbound_queue (id INTEGER PRIMARY KEY, path TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS outbound_quarantine (id INTEGER PRIMARY KEY, path TEXT NOT NULL, body TEXT NOT NULL, status_code INTEGER NOT NULL, status_text TEXT NOT NULL, rejected_at TEXT NOT NULL)")
+        queue_columns = {row[1] for row in self.db.execute("PRAGMA table_info(outbound_queue)")}
+        if "state" not in queue_columns:
+            self.db.execute("ALTER TABLE outbound_queue ADD COLUMN state TEXT NOT NULL DEFAULT 'PENDING' CHECK(state IN ('PENDING', 'RETRY'))")
         self.db.execute("CREATE TABLE IF NOT EXISTS processed_commands (idempotency_key TEXT PRIMARY KEY, completed_at TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS policies (device_id TEXT PRIMARY KEY, version INTEGER NOT NULL, policy TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS runtime (device_id TEXT PRIMARY KEY, last_on_at TEXT, last_off_at TEXT)")
@@ -251,6 +254,11 @@ class Store:
     def update_queued(self, queue_id: int, body: dict[str, Any]) -> None:
         with self.lock:
             self.db.execute("UPDATE outbound_queue SET body = ? WHERE id = ?", (json.dumps(body, separators=(",", ":")), queue_id))
+            self.db.commit()
+
+    def mark_retry(self, queue_id: int) -> None:
+        with self.lock:
+            self.db.execute("UPDATE outbound_queue SET state = 'RETRY' WHERE id = ?", (queue_id,))
             self.db.commit()
 
     def remove_queued(self, queue_id: int) -> None:
@@ -550,11 +558,13 @@ class Agent:
                     response = self.cloud.signed_request(path, "POST", body)
                     if path == "/api/agent/telemetry":
                         if not isinstance(response, dict):
+                            self.store.mark_retry(queue_id)
                             return
                         # Older all-or-nothing API versions omit rejected; counts must still cover every reading.
                         rejected = response.get("rejected", [])
                         readings = body.get("readings")
                         if not isinstance(rejected, list) or not isinstance(readings, list):
+                            self.store.mark_retry(queue_id)
                             return
                         indexes = [item.get("index") for item in rejected if isinstance(item, dict)]
                         accepted = response.get("accepted")
@@ -567,6 +577,7 @@ class Agent:
                             or not isinstance(duplicates, int) or isinstance(duplicates, bool) or duplicates < 0
                             or accepted + duplicates + len(indexes) != len(readings)
                         ):
+                            self.store.mark_retry(queue_id)
                             return
                         if indexes:
                             rejected_body = {**body, "readings": [readings[index] for index in indexes], "rejectionDetails": rejected}
@@ -575,9 +586,11 @@ class Agent:
                 self.store.remove_queued(queue_id)
             except urllib.error.HTTPError as error:
                 if retryable_http(error):
+                    self.store.mark_retry(queue_id)
                     return
                 self.store.quarantine(queue_id, error.code, str(error.reason))
             except (urllib.error.URLError, TimeoutError, OSError, RuntimeError, json.JSONDecodeError):
+                self.store.mark_retry(queue_id)
                 return
 
     def capture_once(self, force: bool = False) -> None:
