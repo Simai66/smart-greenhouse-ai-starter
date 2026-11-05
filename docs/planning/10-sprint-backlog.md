@@ -5,6 +5,7 @@ Effort uses person-days as planning assumptions. Each task uses the same DoD: ac
 ## Sprint 1 — Baseline and hardware reliability
 
 ### S1-01 Repository baseline
+- **Status:** Complete 2026-11-05. Automated QA checks pass; hardware and deployment remain unverified.
 - **Description / owner:** Produce evidence-backed baseline for current GH-01 implementation. Main agent; QA reviews.
 - **Priority / dependencies / effort:** P0 / none / 2–3d.
 - **Files/modules:** `docs/feature-cards/`, `docs/planning/`, `README.md`, tests, firmware and gateway.
@@ -13,7 +14,19 @@ Effort uses person-days as planning assumptions. Each task uses the same DoD: ac
 - **Tests:** Existing unit, Python, typecheck and build baseline; no claim of hardware test.
 - **DoD:** Audit and feature card reviewed; evidence/results/date recorded.
 
+**Baseline evidence — 2026-11-05:** Current worktree changes preserved. Repository
+docs keep dashboard demo-only; exact ESP32 board, relay wiring, calibration,
+physical emergency-off, and actuator behavior remain unverified. Initial unit
+failure came from a stale palette assertion; updated `tests/design-system-contract.test.mjs`
+to match current `design.md` and CSS tokens. S1-01 completion gate: `npm test`
+passed with 81 unit, 36 Python, build, and 3 rendered HTML checks. `npx tsc --noEmit`, targeted
+ESLint, and `git diff --check` passed. Full lint had 0 errors and 7 existing
+warnings. Build reports a >500 kB chunk and routes it cannot classify statically.
+An earlier local Worker run returned intermittent HTTP 500; repeated smoke and
+full `npm test` passed. No hardware/deployment tests ran.
+
 ### S1-02 Hardware map and safety requirements
+- **Status:** Repository source audit recorded 2026-11-05; bench verification blocked pending hardware-owner inputs. See `docs/feature-cards/2026-11-04-hybrid-edge-cloud-gh01.md`.
 - **Description / owner:** Verify board, sensors, pins, relay wiring and calibration method. Hardware owner with Edge specialist.
 - **Priority / dependencies / effort:** P0 / S1-01 / 3–5d.
 - **Files/modules:** `firmware/esp32/`, wiring diagrams, sensor configuration, hardware test notes.
@@ -22,7 +35,16 @@ Effort uses person-days as planning assumptions. Each task uses the same DoD: ac
 - **Tests:** Sensor disconnect/short/invalid-value checks; relay de-energized boot and independent emergency-OFF test.
 - **DoD:** Hardware owner signs evidence; no fabricated sensor values or safety limits.
 
+**Repository evidence — 2026-11-05:** `platformio.ini` targets generic `esp32dev`;
+exact board/revision is unknown. Firmware config uses SHT30 I2C `0x44`, SDA
+GPIO21, SCL GPIO22; one configured sensor endpoint. Point B returns invalid.
+Pi `RelayDriver` is a simulator; ESP32 source has no relay GPIO output. No
+physical relay, wiring, load, fuse, calibration, safe-boot, or emergency-OFF
+evidence found. PlatformIO CLI unavailable; firmware build not run. Keep all
+hardware safety values `REQUIRES_CONFIGURATION` and actuators disabled.
+
 ### S1-03 Local database durability
+- **Status:** Local migration, backup/restore tests, and runbook complete 2026-11-05; Pi restore drill and capacity policy remain pre-rollout gates.
 - **Description / owner:** Establish consistent backup/restore and queue migration safety. Edge + Backend.
 - **Priority / dependencies / effort:** P0 / S1-01 / 2–4d.
 - **Files/modules:** `edge-agent/greenhouse_agent.py`, SQLite schema, `edge-agent/test_greenhouse_agent.py`, backup runbook.
@@ -30,6 +52,15 @@ Effort uses person-days as planning assumptions. Each task uses the same DoD: ac
 - **Acceptance:** Existing queue/quarantine/readings survive backup, migration and restart; no data is silently dropped.
 - **Tests:** Restore copy; restart during queued writes; duplicate/outbox preservation checks.
 - **DoD:** Runbook and evidence accepted before migration code is enabled.
+
+**Current evidence:** Additive migration maps legacy queue rows to `PENDING`;
+transient failures persist as `RETRY`; permanent rejects remain in quarantine.
+Successful delivery keeps existing delete behavior. Tests cover legacy upgrade,
+retry recovery, backup/restore of queue/quarantine/inbound dedupe, and SQLite
+integrity. Full gate passed: 81 unit, 37 Python, build, and 3 rendered HTML
+checks. No payload pruning or synced-history retention added. Pi restore drill,
+image spool capacity, free-space reserve, and full-queue policy remain rollout
+risks; do not roll this image to Pi until backup and capacity gate is satisfied.
 
 ## Sprint 2 — Secure MQTT
 

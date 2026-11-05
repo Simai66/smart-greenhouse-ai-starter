@@ -14,3 +14,21 @@ docker compose -f docker-compose.example.yml exec greenhouse-agent \
 ```
 
 Create the `backups` directory with permissions available to the gateway's unprivileged UID before running. Copy verified backups off the Pi to separate storage. Test recovery on a copy: stop the gateway, preserve the current DB, restore the backup as `agent.db`, start the gateway, and verify readings/queue state. Do not overwrite the only copy or restore while the gateway is running. Define retention and capacity with the operator before scheduling automatic cleanup.
+
+### Outbound queue upgrade
+
+Before upgrading the agent image, create and verify a separate SQLite backup.
+On first start, the agent additively adds `outbound_queue.state`; existing rows
+become `PENDING`. Transient delivery failures become `RETRY`. Permanent HTTP
+rejections remain in `outbound_quarantine`; successful delivery keeps existing
+behavior and removes the queue row. The migration does not rewrite or prune
+queue/quarantine payloads. If startup or post-upgrade checks fail, stop the agent
+and restore the verified backup using the recovery steps above.
+
+After startup, inspect active states on the Pi without selecting payloads:
+
+```sql
+SELECT state, COUNT(*) FROM outbound_queue GROUP BY state;
+SELECT COUNT(*) FROM outbound_quarantine;
+PRAGMA integrity_check;
+```

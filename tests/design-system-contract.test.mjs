@@ -16,9 +16,9 @@ test("configures shadcn with the approved greenhouse token contract", async () =
   assert.equal(config.tailwind.baseColor, "neutral");
   assert.equal(config.tailwind.cssVariables, true);
   assert.equal(config.iconLibrary, "lucide");
-  assert.match(css, /--primary:\s*#25734f;/i);
-  assert.match(css, /--sidebar:\s*#173f2d;/i);
-  assert.match(css, /--background:\s*#f3f5f3;/i);
+  assert.match(css, /--primary:\s*#193527;/i);
+  assert.match(css, /--sidebar:\s*#193527;/i);
+  assert.match(css, /--background:\s*#faf9f6;/i);
   assert.match(css, /--destructive:\s*#b9413a;/i);
   assert.match(
     css,
