@@ -55,9 +55,9 @@ function MetricCard({ metric }: { metric: DashboardMetric }) {
   const isWarning = metric.tone === "warning" || metric.tone === "danger";
 
   return (
-    <Card className="shadow-none transition-colors hover:border-primary/30">
+    <Card className="shadow-none">
       <CardContent className="flex min-h-36 gap-4 p-4 sm:p-5">
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+        <span className="grid size-10 shrink-0 place-items-center text-muted-foreground">
           <Icon className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
@@ -153,7 +153,7 @@ export function CommandDeckView({
             </p>
           </div>
         </div>
-        <span className="inline-flex w-fit items-center rounded-md border px-2.5 py-1.5 text-xs text-muted-foreground">
+        <span className="inline-flex w-fit items-center text-xs text-muted-foreground">
           {lastUpdated
             ? `${online ? "เชื่อมต่อแอปแล้ว" : "การเชื่อมต่อแอปขาดหาย"} · ซิงก์ล่าสุด ${lastUpdated}`
             : "ยังไม่มีเวลาซิงก์ที่บันทึก"}
@@ -255,7 +255,7 @@ export function CommandDeckView({
                   key={item.id}
                   onClick={() => onNavigate(item.targetPage)}
                 >
-                  <span className="grid size-9 place-items-center rounded-lg bg-amber-50 text-amber-700">
+                  <span className="grid size-9 place-items-center text-amber-700">
                     <CircleAlert className="size-4" aria-hidden="true" />
                   </span>
                   <span className="min-w-0">
@@ -287,7 +287,7 @@ export function CommandDeckView({
             </p>
           </CardHeader>
           <CardContent className="flex items-center gap-5">
-            <div className="grid size-24 shrink-0 place-items-center rounded-lg bg-secondary/70 text-center">
+            <div className="grid size-24 shrink-0 place-items-center text-center">
               <div>
                 <p className="text-2xl font-semibold tabular-nums">
                   {viewModel.hasPlantData ? `${viewModel.healthScore}%` : "—"}
@@ -450,7 +450,7 @@ export function CommandDeckView({
           </CardContent>
         </Card>
 
-        <Card className="border-primary/20 bg-secondary/60 shadow-none">
+        <Card className="shadow-none">
           <CardContent className="flex h-full min-h-44 flex-col items-start justify-between gap-5 p-5">
             <div>
               <p className="text-lg font-semibold">

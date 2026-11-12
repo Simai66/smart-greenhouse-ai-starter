@@ -13,6 +13,7 @@ theme:
 colors:
   primary: "#193527"
   secondary: "#8FA584"
+  accent: "#E5EEE3"
   dark: "#34413B"
   neutral: "#E2DED7"
   background: "#FAF9F6"
@@ -240,6 +241,12 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 `#8FA584`
 
 ใช้กับพื้นที่เน้นและองค์ประกอบรอง โดยใช้ข้อความสี `#193527`
+
+### Accent
+
+`#E5EEE3`
+
+ใช้เป็นพื้น hover, focus และ selected บนพื้นผิวสว่าง โดยใช้ข้อความสี `#193527`
 
 ### Dark
 

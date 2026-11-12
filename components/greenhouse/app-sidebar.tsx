@@ -65,28 +65,28 @@ export function AppSidebar({
               size="lg"
               tooltip="Smart Greenhouse"
               onClick={() => navigate("dashboard")}
-              className="gap-3"
+              className="gap-3 group-data-[collapsible=icon]:gap-0"
             >
-              <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-md bg-white">
+              <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-md bg-white group-data-[collapsible=icon]:size-8">
                 <img
                   src="/images/greenhouse-logo.png"
                   alt=""
                   aria-hidden="true"
-                  className="size-full object-contain"
+                  className="size-full scale-125 object-contain"
                 />
               </span>
-              <span className="grid min-w-0 gap-0.5 text-left">
+              <span className="grid min-w-0 gap-0.5 text-left group-data-[collapsible=icon]:hidden">
                 <strong className="truncate text-sm font-semibold leading-tight">
                   Smart Greenhouse
                 </strong>
-                <small className="truncate text-[10px] font-medium uppercase leading-tight tracking-[0.12em] text-sidebar-foreground/70">
+                <small className="truncate text-xs font-normal leading-tight text-sidebar-foreground/70">
                   {greenhouse.code}
                 </small>
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="rounded-lg border border-sidebar-border bg-sidebar-accent p-3 group-data-[collapsible=icon]:hidden"><strong className="block text-sm">{greenhouse.name}</strong><small className="text-sidebar-foreground/70">{greenhouse.zones.filter((zone) => zone.status === "active").length} โซน · {online ? "ออนไลน์" : "ออฟไลน์"}</small></div>
+        <div className="px-3 pb-2 pt-1 group-data-[collapsible=icon]:hidden"><strong className="block text-sm font-medium">{greenhouse.name}</strong><small className="text-sidebar-foreground/70">{greenhouse.zones.filter((zone) => zone.status === "active").length} โซน · {online ? "ออนไลน์" : "ออฟไลน์"}</small></div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
