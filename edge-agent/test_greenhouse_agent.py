@@ -3,12 +3,15 @@ import io
 import json
 import os
 import pathlib
+import subprocess
 import sqlite3
 import sys
 import tempfile
 import unittest
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
+
+from PIL import Image
 
 
 MODULE_PATH = pathlib.Path(__file__).with_name("greenhouse_agent.py")
@@ -381,6 +384,66 @@ class EdgeAgentTest(unittest.TestCase):
         self.assertEqual((error, status), (None, 202))
         self.assertEqual(result["accepted"], 1)
         self.assertEqual(len(self.agent.store.queued()), 1)
+
+    def test_camera_runs_inference_on_original_then_queues_smaller_same_size_jpeg(self):
+        image_path = pathlib.Path(self.tempdir.name) / "capture.jpg"
+        Image.effect_noise((1600, 1200), 100).convert("RGB").save(image_path, quality=100)
+        original = image_path.read_bytes()
+        original_size = len(original)
+        events = []
+        compress = self.agent.camera.compress_for_upload
+
+        def detect(path):
+            events.append("inference")
+            self.assertEqual(path.read_bytes(), original)
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (1600, 1200))
+            return [{"label": "leaf_spot"}]
+
+        def compress_after_inference(path, content_type):
+            events.append("compression")
+            return compress(path, content_type)
+
+        with patch.object(self.agent.camera, "capture", return_value=(image_path, "image/jpeg")), patch.object(self.agent.camera, "detections", side_effect=detect), patch.object(self.agent.camera, "compress_for_upload", side_effect=compress_after_inference), patch.object(self.agent, "flush_queue"):
+            self.agent.capture_once(force=True)
+
+        queued = self.agent.store.queued()[0][2]
+        self.assertEqual(events, ["inference", "compression"])
+        self.assertLess(image_path.stat().st_size, original_size)
+        self.assertEqual(queued["metadata"]["byteSize"], image_path.stat().st_size)
+        self.assertEqual(queued["detections"], [{"label": "leaf_spot"}])
+        with Image.open(image_path) as image:
+            self.assertEqual(image.size, (1600, 1200))
+        self.assertEqual(queued["metadata"]["contentType"], "image/jpeg")
+
+    def test_camera_preserves_png_content_type_when_jpeg_would_grow_file(self):
+        image_path = pathlib.Path(self.tempdir.name) / "tiny.png"
+        Image.new("RGB", (2, 2), "green").save(image_path)
+        original_size = image_path.stat().st_size
+
+        byte_size, content_type = self.agent.camera.compress_for_upload(image_path, "image/jpeg")
+
+        self.assertEqual(byte_size, original_size)
+        self.assertEqual(content_type, "image/png")
+        self.assertTrue(image_path.read_bytes().startswith(b"\x89PNG"))
+
+    def test_camera_does_not_compress_when_inference_fails(self):
+        image_path = pathlib.Path(self.tempdir.name) / "capture.jpg"
+        image_path.write_bytes(b"original capture")
+        with patch.object(self.agent.camera, "capture", return_value=(image_path, "image/jpeg")), patch.object(self.agent.camera, "detections", side_effect=subprocess.SubprocessError("model failed")), patch.object(self.agent.camera, "compress_for_upload") as compress, patch.object(self.agent, "flush_queue"):
+            self.agent.capture_once(force=True)
+        compress.assert_not_called()
+        self.assertEqual(image_path.read_bytes(), b"original capture")
+        self.assertEqual(self.agent.store.queued(), [])
+
+    def test_compression_failure_keeps_original_file(self):
+        image_path = pathlib.Path(self.tempdir.name) / "corrupt.jpg"
+        image_path.write_bytes(b"not an image")
+        original = image_path.read_bytes()
+        original_size = len(original)
+        self.assertEqual(self.agent.camera.compress_for_upload(image_path, "image/jpeg"), (original_size, "image/jpeg"))
+        self.assertEqual(image_path.read_bytes(), original)
+        self.assertEqual(list(pathlib.Path(self.tempdir.name).glob(".corrupt.jpg.*.tmp")), [])
 
     def test_rejects_stale_and_invalid_quality_value(self):
         stale = agent_module.iso(agent_module.now() - timedelta(hours=25))

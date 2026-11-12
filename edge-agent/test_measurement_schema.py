@@ -1,3 +1,5 @@
+
+
 import sqlite3
 import unittest
 from pathlib import Path
@@ -5,7 +7,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = ROOT / "drizzle"
-
 
 def apply_sql(connection: sqlite3.Connection, path: Path) -> None:
     sql = path.read_text(encoding="utf-8").replace("--> statement-breakpoint", "")

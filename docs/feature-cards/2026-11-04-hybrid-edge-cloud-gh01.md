@@ -95,6 +95,30 @@ invented sensor thresholds, or publishing unmeasured AI results.
 - Explicit queue lifecycle state migration remains open. Pi operator restore
   drill and hardware-owner S1-02 evidence remain outstanding; do not enable
   actuator control.
+- S1-03 migration design: existing `outbound_queue` rows map to `PENDING`;
+  existing quarantine rows remain intact as `FAILED` evidence. Previously
+  delivered rows cannot be reconstructed because current code deletes them.
+- Before storing terminal queue history, owner must configure telemetry and
+  quarantine retention, image-payload handling, and Pi disk capacity/alert
+  threshold. Until then, do not retain synced payloads or prune existing data.
+- Image spool sizing: firmware accepts at most 10 MiB/image and default capture
+  interval is 300 seconds (288 images/day). At max size this is 2.8125 GiB/day,
+  or 19.6875 GiB/week during a full cloud outage. Actual usage depends on encoded
+  image sizes and capture schedule. Successful upload removes the local file;
+  permanent rejection quarantines its path but currently leaves the file on disk.
+- The 15-day cloud object expiry does not bound the Pi spool. Queue migration
+  needs an owner-approved byte cap, free-space reserve, and full-queue behavior;
+  preserve queued images and pause new captures by default until another policy
+  is approved.
+- Image size can be reduced by camera resolution/JPEG quality through
+  `GREENHOUSE_CAPTURE_COMMAND`; current agent does not resize/recompress. The
+  10 MiB value is only a reject ceiling. A 1 MiB average would use 288 MiB/day
+  at the default interval (sizing example, not measured); approve target only
+  after checking real capture quality and AI usefulness.
+- Visual spot-check of bundled demo assets: leaf PNG is 2,277,942 bytes at
+  1448×1086; the 1200×900 WebP detail is 101,852 bytes (~95.5% smaller), with
+  spots still visible to a person. These are not a controlled encode pair,
+  camera captures, or AI evaluation; do not use as a production quality target.
 
 ### Remaining work and exact resume order
 

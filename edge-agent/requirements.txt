@@ -1,1 +1,1 @@
-# The reference agent intentionally uses only the Python standard library.
+Pillow==13.0.0
