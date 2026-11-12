@@ -1,5 +1,7 @@
 # Edge agent operations
 
+The agent runs AI detection against each original capture, then encodes a same-resolution JPEG at quality 85 for upload and offline queue. It replaces the original only when the encoded file is smaller; encoding errors preserve the original. Docker installs the pinned Pillow dependency. Run local Python tests after installing `requirements.txt`.
+
 ## SQLite backup
 
 Build/restart the gateway image before using the packaged backup utility. Create a new timestamped destination on the persistent state volume; the command fails if the destination exists and verifies SQLite integrity before publishing the backup.

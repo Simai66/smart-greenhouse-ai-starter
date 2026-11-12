@@ -92,6 +92,7 @@
 | Typecheck | `npx tsc --noEmit` |
 | Targeted TypeScript test | `node --experimental-strip-types --test tests/<file>.test.ts` |
 | Targeted JavaScript test | `node --test tests/<file>.test.mjs` |
+| Python dependencies | `python3 -m pip install -r edge-agent/requirements.txt` |
 | Python tests | `python3 -m unittest discover -s edge-agent -p 'test_*.py'` |
 | Production build | `npm run build` |
 | Full gate | `npm test` |

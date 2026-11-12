@@ -32,6 +32,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
+
 UTC = timezone.utc
 
 API_URL = os.environ.get("GREENHOUSE_API_URL", "").rstrip("/")
@@ -209,6 +211,29 @@ class CameraCapture:
         except json.JSONDecodeError:
             return []
         return value if isinstance(value, list) else []
+
+    def compress_for_upload(self, image_path: Path, original_content_type: str) -> tuple[int, str]:
+        original_size = image_path.stat().st_size
+        temporary = image_path.with_name(f".{image_path.name}.{uuid.uuid4().hex}.tmp")
+        content_type = original_content_type
+        try:
+            with Image.open(image_path) as source:
+                source.load()
+                content_type = Image.MIME.get(source.format or "", original_content_type)
+                orientation = source.getexif().get(274)
+                exif = Image.Exif()
+                if orientation:
+                    exif[274] = orientation
+                source.convert("RGB").save(temporary, format="JPEG", quality=85, optimize=True, exif=exif)
+            compressed_size = temporary.stat().st_size
+            if compressed_size < original_size:
+                os.replace(temporary, image_path)
+                return compressed_size, "image/jpeg"
+        except (OSError, ValueError, Image.DecompressionBombError) as error:
+            print(f"image compression skipped; original retained: {error}")
+        finally:
+            temporary.unlink(missing_ok=True)
+        return original_size, content_type
 
 
 @dataclass(frozen=True)
@@ -603,8 +628,9 @@ class Agent:
             if not captured:
                 return
             image_path, content_type = captured
-            metadata: dict[str, Any] = {"greenhouseId": GREENHOUSE_ID, "cameraId": CAMERA_ID, "plantId": CAMERA_PLANT_ID or None, "capturedAt": iso(captured_at), "contentType": content_type, "byteSize": image_path.stat().st_size}
             detections = self.camera.detections(image_path)
+            byte_size, content_type = self.camera.compress_for_upload(image_path, content_type)
+            metadata: dict[str, Any] = {"greenhouseId": GREENHOUSE_ID, "cameraId": CAMERA_ID, "plantId": CAMERA_PLANT_ID or None, "capturedAt": iso(captured_at), "contentType": content_type, "byteSize": byte_size}
             self.store.queue_image(image_path, metadata, detections)
             self.flush_queue()
         except (FileNotFoundError, OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as error:
