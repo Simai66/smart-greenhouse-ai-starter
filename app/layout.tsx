@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "Greenhouse 01 | Smart Greenhouse",
   description: "ระบบติดตามและควบคุมโรงเรือนมะเขือเทศอัจฉริยะ",
   other: { "codex-preview": "development" },
-  icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+  icons: { icon: "/favicon.png", shortcut: "/favicon.png" },
 };
 
 export default function RootLayout({
