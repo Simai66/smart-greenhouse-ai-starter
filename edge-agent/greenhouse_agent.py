@@ -509,9 +509,17 @@ class Agent:
         return bool(NODE_ID_PATTERN.fullmatch(node_id) and expected and hmac.compare_digest(expected, token))
 
     def allowed_sensor(self, node_id: str, sensor_id: str) -> bool:
+        config = self.store.sensor_config(sensor_id)
+        if not config:
+            return False
+        point_id = config.get("measurementPointId")
+        if point_id:
+            port_key = config.get("measurementPointPortKey")
+            if port_key not in {"A", "B"} or point_id != f"{node_id}-{port_key}":
+                return False
         if node_id in self.node_sensors:
             return sensor_id in self.node_sensors[node_id]
-        return sensor_id in {config.get("sensorId") for config in self.store.sensor_configs()}
+        return True
 
     def validate_local_telemetry(self, node_id: str, payload: object) -> tuple[dict[str, Any] | None, str | None, int]:
         if not NODE_ID_PATTERN.fullmatch(node_id):

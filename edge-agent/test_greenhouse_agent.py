@@ -69,6 +69,32 @@ class EdgeAgentTest(unittest.TestCase):
         self.assertEqual(request.get_header("Cf-access-client-secret"), "access-secret")
         self.assertEqual(request.get_header("X-greenhouse-signature"), "bd589190aa7b42dfb53dc24fbb20a743508d71272c32bd7dc82259e2294cb54f")
 
+    def test_linked_sensor_config_is_limited_to_its_physical_node(self):
+        self.agent.store.save_sensor_config({
+            "sensorId": "SEN-01",
+            "metric": "temperature",
+            "unit": "celsius",
+            "measurementPointId": "ESP32-02-A",
+            "measurementPointPortKey": "A",
+            "configVersion": 4,
+        })
+
+        self.assertFalse(self.agent.allowed_sensor("ESP32-01", "SEN-01"))
+        self.assertTrue(self.agent.allowed_sensor("ESP32-02", "SEN-01"))
+        self.assertEqual(self.agent.local_config("ESP32-01")["sensors"], [])
+
+    def test_linked_sensor_config_without_matching_point_port_is_rejected(self):
+        self.agent.store.save_sensor_config({
+            "sensorId": "SEN-01",
+            "metric": "temperature",
+            "unit": "celsius",
+            "measurementPointId": "ESP32-01-C",
+            "measurementPointPortKey": "C",
+            "configVersion": 4,
+        })
+
+        self.assertFalse(self.agent.allowed_sensor("ESP32-01", "SEN-01"))
+
     def test_agent_query_canonicalization_rejects_duplicates_and_encodings(self):
         self.assertEqual(agent_module.canonical_agent_query("/api/agent/config", "greenhouseId=GH-01&agentId=PI-GH-01", "GET"), "agentId=PI-GH-01&greenhouseId=GH-01")
         for query in ("agentId=PI-GH-01&agentId=PI-GH-02&greenhouseId=GH-01", "agentId=PI+GH&greenhouseId=GH-01", "agentId=PI%2DGH&greenhouseId=GH-01", "agentId=PI-GH-01&greenhouseId=GH-01&extra=x"):
