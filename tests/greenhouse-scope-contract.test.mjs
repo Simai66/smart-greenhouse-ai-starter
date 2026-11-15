@@ -24,6 +24,14 @@ test("browser greenhouse APIs apply GH-01 scope before live operations", () => {
   assert.match(source("lib/server/inspection-images.ts"), /authorizeGreenhouseScope\(row\.greenhouseId\)/);
 });
 
+test("sensor registration reports point-metric conflicts and batches device/config writes", () => {
+  const route = source("app/api/sensors/route.ts");
+  assert.equal(route.match(/Measurement point already has a sensor for this metric\./g)?.length, 2);
+  assert.match(route, /catch \{\s*if \(value\.measurementPointId\) \{\s*try \{\s*if \(await getDb\(\)\.select/);
+  assert.match(route, /await db\.batch\(\[deviceWrite, db\.insert\(sensorConfigs\)\.values\(row\)\]\)/);
+  assert.match(route, /return Response\.json\(\{ error: "Sensor configuration could not be stored\." }, \{ status: 503 \}\)/);
+});
+
 test("signed agent greenhouse routes retain registration guard with pilot scope", () => {
   for (const path of [
     "app/api/agent/config/route.ts",
