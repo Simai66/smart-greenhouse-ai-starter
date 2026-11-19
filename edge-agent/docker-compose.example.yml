@@ -7,6 +7,8 @@ services:
       GREENHOUSE_ID: GH-01
       GREENHOUSE_AGENT_ID: PI-GH-01
       GREENHOUSE_AGENT_SECRET: replace-with-the-per-agent-secret
+      GREENHOUSE_ACCESS_CLIENT_ID: replace-with-cloudflare-access-service-token-id
+      GREENHOUSE_ACCESS_CLIENT_SECRET: replace-with-cloudflare-access-service-token-secret
       # JSON maps ESP32 node IDs to LAN-only tokens. Never use the cloud secret here.
       GREENHOUSE_NODE_TOKENS: '{"ESP32-01":"replace-with-lan-token"}'
       # Optional JSON allow-list. Missing entries inherit all cached sensor IDs.

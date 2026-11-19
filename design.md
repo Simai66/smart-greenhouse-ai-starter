@@ -11,22 +11,23 @@ theme:
   default: light
   future: []
 colors:
-  primary: "#25734F"
-  primary-hover: "#174B36"
-  primary-soft: "#EFF8F2"
-  accent: "#2F8A5E"
-  background: "#F3F5F3"
+  primary: "#193527"
+  secondary: "#8FA584"
+  accent: "#E5EEE3"
+  dark: "#34413B"
+  neutral: "#E2DED7"
+  background: "#FAF9F6"
   surface: "#FFFFFF"
   card: "#FFFFFF"
-  card-hover: "#F5FAF6"
-  border: "#DFE5E1"
-  text-primary: "#1D2923"
-  text-secondary: "#4F5C55"
+  card-hover: "#F3F1EC"
+  border: "#E2DED7"
+  text-primary: "#34413B"
+  text-secondary: "#59675F"
   text-muted: "#59675F"
-  healthy: "#25734F"
+  healthy: "#193527"
   warning: "#8A5108"
   danger: "#B9413A"
-  information: "#31779D"
+  information: "#34413B"
   offline: "#59675F"
 typography:
   fontFamily: "Noto Sans Thai, Leelawadee UI, Tahoma, Arial, sans-serif"
@@ -222,9 +223,9 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 
 ## 5.1 Color Palette
 
-### Primary Green
+### Primary
 
-`#25734F`
+`#193527`
 
 ใช้สำหรับ
 
@@ -235,41 +236,37 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 - Success feedback
 - Important chart highlights
 
-### Primary Hover
+### Secondary
 
-`#174B36`
+`#8FA584`
 
-ใช้เมื่อ Hover หรือ Pressed
+ใช้กับพื้นที่เน้นและองค์ประกอบรอง โดยใช้ข้อความสี `#193527`
 
-### Primary Soft
+### Accent
 
-`#EFF8F2`
+`#E5EEE3`
 
-ใช้เป็นพื้นหลังของ
+ใช้เป็นพื้น hover, focus และ selected บนพื้นผิวสว่าง โดยใช้ข้อความสี `#193527`
 
-- Active menu
-- Status badge
-- Selected filter
-- Highlighted icon container
+### Dark
 
-### Accent Lime
+`#34413B`
 
-`#2F8A5E`
+ใช้กับข้อความหลักและพื้นผิวแถบเมนูที่ active
 
-ใช้เพียงเล็กน้อยกับ
+### Neutral
 
-- Positive trend
-- Decorative glow
-- Micro-interaction
-- Energy-related information
+`#E2DED7`
+
+ใช้กับเส้นขอบและพื้นผิวรอง
 
 ### Background
 
-`#F3F5F3`
+`#FAF9F6`
 
-พื้นหลังหลักของระบบ ใช้ neutral ที่ติดสีเขียวเล็กน้อยเพื่อให้อ่านข้อมูลในโรงเรือนหรือภาคสนามได้ชัด
+พื้นหลังหลักของระบบ
 
-### Surface
+### Surface and Card
 
 `#FFFFFF`
 
@@ -293,19 +290,19 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 
 ### Card Hover
 
-`#F5FAF6`
+`#F3F1EC`
 
 ### Border
 
-`#DFE5E1`
+`#E2DED7`
 
 ### Text Primary
 
-`#1D2923`
+`#34413B`
 
 ### Text Secondary
 
-`#4F5C55`
+`#59675F`
 
 ### Text Muted
 
@@ -315,7 +312,7 @@ AI ไม่ควรแสดงเพียงคำว่า Healthy หร�
 
 ### Healthy
 
-`#25734F`
+`#193527`
 
 ### Warning
 
@@ -538,7 +535,7 @@ Fallback:
 
 ### Primary Button
 
-- Background: Primary Green
+- Background: Primary
 - Text: White
 - Height: 44px
 - Radius: 12px
@@ -558,7 +555,7 @@ States:
 
 - Background: Card
 - Border: 1px
-- Text: White
+- Text: Primary
 
 ### Ghost Button
 
@@ -578,7 +575,7 @@ States:
 - Background: Surface or Card
 - Border: 1px
 - Placeholder: Muted text
-- Focus ring: Primary Green
+- Focus ring: Primary
 
 States:
 
@@ -594,14 +591,14 @@ States:
 - Same height as Input
 - Chevron icon
 - Dropdown layer uses Surface
-- Selected row uses Primary Soft
+- Selected row uses Secondary
 - Keyboard navigation supported
 
 ## 9.4 Toggle
 
 ### ON
 
-- Track: Primary Green
+- Track: Primary
 - Knob: White
 - Status label: On
 
@@ -801,7 +798,7 @@ Skeleton ต้องมีรูปร่างใกล้เคียงเ�
 
 - Semi-transparent dark surface
 - Border
-- Icon container with Primary Soft
+- Icon container with Secondary
 - Hover lift
 - Short copy only
 

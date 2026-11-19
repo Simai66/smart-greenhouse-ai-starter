@@ -656,7 +656,7 @@ export function GreenhouseApp() {
             {page}
           </section>}
         </MobileAppShell>
-      ) : <><AppSidebar activePage={activePage} openAlerts={openAlerts} deviceCount={greenhouseState.devices.length} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
+      ) : <><AppSidebar activePage={activePage} openAlerts={openAlerts} online={online} onNavigate={navigate} greenhouse={activeGreenhouse} />
         <SidebarInset>
           <SiteHeader
             pageTitle={pageMetadata[activePage].title}

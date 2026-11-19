@@ -39,17 +39,18 @@ In scope:
 - ล็อก release posture และ decision ปัจจุบัน
 - จัด P0/P1/P2 backlog, acceptance matrix, risk register และ release gate
 - ระบุ owner และ dependency order สำหรับงานถัดไป
+- แก้ TypeScript configuration ให้ตรวจ Cloudflare Worker ambient types ที่โค้ดปัจจุบันใช้อยู่ได้ โดยไม่เปลี่ยน runtime behavior
 
 Out of scope:
 
-- แก้ UI, API, database, firmware, deployment หรือ hardware ในงาน PM นี้
+- แก้ UI, API behavior, database, firmware, deployment หรือ hardware ในงาน PM นี้
 - Provision production Cloudflare/Pi/ESP32 หรือส่งคำสั่ง actuator จริง
-- เพิ่ม dependency, schema migration หรือเปลี่ยน product behavior
+- เพิ่ม runtime dependency, schema migration หรือเปลี่ยน product behavior
 
 ## Affected areas
 
-- Docs/process only: `AGENTS.md`, `rule.md`, `docs/feature-cards/`
-- No runtime, API, database หรือ deployment change
+- Docs/process: `AGENTS.md`, `rule.md`, `docs/feature-cards/`
+- TypeScript toolchain config/package metadata, including one dev-only Cloudflare types dependency; no runtime, API, database หรือ deployment behavior change
 
 ## Acceptance matrix
 
@@ -62,6 +63,7 @@ Out of scope:
 | Database | Additive migration, audit preservation และ rollback ขั้นตอนได้ | Backend + DevOps | D1 environment |
 | Accessibility | Keyboard, focus, 44px target, responsive และ reduced motion ผ่าน | Frontend + QA | UI implementation |
 | Release operations | Env list, monitoring, smoke test และ rollback owner ระบุครบ | DevOps | Deployment target |
+| Typecheck tooling | `npx tsc --noEmit` resolves Cloudflare Worker globals/module types and passes | Main agent | Explicit type dependency/config |
 
 ## Prioritized backlog
 

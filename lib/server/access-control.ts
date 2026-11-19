@@ -1,4 +1,6 @@
+import { headers } from "next/headers";
 import { getChatGPTUser, type ChatGPTUser } from "@/app/chatgpt-auth";
+import { getCloudflareAccessIdentity } from "@/lib/server/cloudflare-access-auth";
 
 export type GreenhouseRole = "viewer" | "operator" | "admin";
 
@@ -26,14 +28,25 @@ function roleForEmail(email: string): GreenhouseRole {
   return "viewer";
 }
 
-/**
- * The identity headers are injected by the hosted ChatGPT auth layer. Roles
- * deliberately come only from server configuration, never a request header.
- */
+/** Roles come from server configuration, never a caller-controlled role header. */
 export async function authorizeApiRole(
   minimumRole: GreenhouseRole,
 ): Promise<{ user: AuthorizedUser } | { response: Response }> {
-  const user = await getChatGPTUser();
+  const authMode = process.env.GREENHOUSE_AUTH_MODE;
+  let user: ChatGPTUser | null;
+  if (authMode === "cloudflare-access") {
+    const identity = await getCloudflareAccessIdentity(await headers(), process.env);
+    if (identity.status === "unavailable") {
+      return { response: Response.json({ error: "Authentication is temporarily unavailable." }, { status: 503 }) };
+    }
+    user = identity.status === "authenticated"
+      ? { displayName: identity.email, email: identity.email, fullName: null }
+      : null;
+  } else if (authMode !== undefined && authMode !== "hosted-identity") {
+    return { response: Response.json({ error: "Authentication is temporarily unavailable." }, { status: 503 }) };
+  } else {
+    user = await getChatGPTUser();
+  }
   if (!user) {
     return {
       response: Response.json({ error: "Authentication is required." }, { status: 401 }),
