@@ -1,9 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { edgeAgents } from "@/db/schema";
+import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
 
 /** A valid signature is not enough: an agent must be registered to the greenhouse it claims. */
 export async function assertRegisteredAgent(agentId: string, greenhouseId: string): Promise<Response | null> {
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   const agent = await getDb().select({ id: edgeAgents.id })
     .from(edgeAgents)
     .where(and(eq(edgeAgents.id, agentId), eq(edgeAgents.greenhouseId, greenhouseId)))
