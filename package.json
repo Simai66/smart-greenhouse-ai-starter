@@ -58,7 +58,7 @@
     "tailwindcss": "4.2.1",
     "typescript": "6.0.3",
     "vinext": "0.0.50",
-    "vite": "8.0.13",
+    "vite": "8.3.8",
     "wrangler": "4.92.0"
   },
   "type": "module",
