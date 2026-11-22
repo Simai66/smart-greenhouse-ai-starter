@@ -71,7 +71,7 @@ export function parseImageUploadInput(payload: unknown): { value?: ImageUploadIn
   if (plant.error) return { error: plant.error };
   if (capturedAt.error) return { error: capturedAt.error };
   if (!isImageContentType(body.contentType)) return { error: "contentType must be image/jpeg, image/png, or image/webp." };
-  if (!Number.isInteger(body.byteSize) || (body.byteSize as number) < 1 || (body.byteSize as number) > IMAGE_MAX_BYTES) return { error: "byteSize must be an integer from 1 byte through 10 MiB." };
+  if (typeof body.byteSize !== "number" || !Number.isInteger(body.byteSize) || body.byteSize < 1 || body.byteSize > IMAGE_MAX_BYTES) return { error: "byteSize must be an integer from 1 byte through 10 MiB." };
   return { value: { greenhouseId, cameraId: camera.value, plantId: plant.value, capturedAt: capturedAt.value, contentType: body.contentType, byteSize: body.byteSize } };
 }
 

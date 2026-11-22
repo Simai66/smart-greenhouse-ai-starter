@@ -1,7 +1,8 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { devices, edgeAgents, greenhouses, sensorConfigs, sensorReadings } from "@/db/schema";
+import { devices, edgeAgents, greenhouses, measurementPoints, sensorConfigs, sensorReadings } from "@/db/schema";
 import { authorizeApiRole } from "@/lib/server/access-control";
+import { authorizeGreenhouseScope } from "@/lib/greenhouse-scope";
 import { parseSensorConfigInput, sensorCapabilities, sensorConfigPayload } from "@/lib/server/sensor-config";
 
 function greenhouseIdFrom(request: Request): string | null {
@@ -19,7 +20,8 @@ async function sensorRows(greenhouseId: string) {
       .orderBy(desc(sensorReadings.sampledAt))
       .limit(1)
       .get();
-    return sensorConfigPayload(row, latest ?? null, device?.agentId ?? null);
+    const point = row.measurementPointId ? await db.select({ portKey: measurementPoints.portKey }).from(measurementPoints).where(and(eq(measurementPoints.id, row.measurementPointId), eq(measurementPoints.greenhouseId, greenhouseId))).limit(1).get() : null;
+    return sensorConfigPayload(row, latest ?? null, device?.agentId ?? null, point?.portKey ?? null);
   }));
 }
 
@@ -28,6 +30,8 @@ export async function GET(request: Request) {
   if ("response" in authorization) return authorization.response;
   const greenhouseId = greenhouseIdFrom(request);
   if (!greenhouseId) return Response.json({ error: "greenhouseId is required." }, { status: 400 });
+  const forbidden = authorizeGreenhouseScope(greenhouseId);
+  if (forbidden) return forbidden;
   try {
     return Response.json({ greenhouseId, collectedAt: new Date().toISOString(), sensors: await sensorRows(greenhouseId) }, { headers: { "Cache-Control": "no-store" } });
   } catch {
@@ -43,7 +47,10 @@ export async function POST(request: Request) {
   const parsed = parseSensorConfigInput(payload);
   if (!parsed.value) return Response.json({ error: parsed.error }, { status: 400 });
   const value = parsed.value;
+  const forbidden = authorizeGreenhouseScope(value.greenhouseId);
+  if (forbidden) return forbidden;
   const now = new Date().toISOString();
+  let measurementPointPortKey: string | null = null;
   try {
     const db = getDb();
     if (!await db.select({ id: greenhouses.id }).from(greenhouses).where(eq(greenhouses.id, value.greenhouseId)).limit(1).get()) return Response.json({ error: "Greenhouse was not found." }, { status: 404 });
@@ -54,14 +61,18 @@ export async function POST(request: Request) {
     if (value.agentId && !await db.select({ id: edgeAgents.id }).from(edgeAgents).where(and(eq(edgeAgents.id, value.agentId), eq(edgeAgents.greenhouseId, value.greenhouseId))).limit(1).get()) return Response.json({ error: "Agent is not registered for this greenhouse." }, { status: 400 });
     const agentId = value.agentId ?? existing?.agentId ?? null;
     if (existing && existing.agentId && value.agentId && existing.agentId !== value.agentId) return Response.json({ error: "Sensor is assigned to another agent." }, { status: 409 });
-    if (existing) {
-      await db.update(devices).set({ name: value.name, category: "sensor", agentId, capabilitiesJson: JSON.stringify(sensorCapabilities(value.metric, value.unit)), updatedAt: now }).where(eq(devices.id, value.sensorId)).run();
-    } else {
-      await db.insert(devices).values({ id: value.sensorId, greenhouseId: value.greenhouseId, agentId, name: value.name, category: "sensor", capabilitiesJson: JSON.stringify(sensorCapabilities(value.metric, value.unit)), reportedStatus: "offline", updatedAt: now }).run();
+    if (value.measurementPointId) {
+      const point = await db.select({ deviceId: measurementPoints.deviceId, portKey: measurementPoints.portKey }).from(measurementPoints).where(and(eq(measurementPoints.id, value.measurementPointId), eq(measurementPoints.greenhouseId, value.greenhouseId), eq(measurementPoints.enabled, true))).limit(1).get();
+      if (!point) return Response.json({ error: "Measurement point was not found or is disabled." }, { status: 404 });
+      measurementPointPortKey = point.portKey;
+      const pointDevice = await db.select({ agentId: devices.agentId }).from(devices).where(eq(devices.id, point.deviceId)).limit(1).get();
+      if (!agentId || pointDevice?.agentId !== agentId) return Response.json({ error: "Sensor channel and measurement point must use the same edge agent." }, { status: 409 });
+      if (await db.select({ sensorId: sensorConfigs.sensorId }).from(sensorConfigs).where(and(eq(sensorConfigs.measurementPointId, value.measurementPointId), eq(sensorConfigs.metric, value.metric))).limit(1).get()) return Response.json({ error: "Measurement point already has a sensor for this metric." }, { status: 409 });
     }
     const row = {
       sensorId: value.sensorId,
       greenhouseId: value.greenhouseId,
+      measurementPointId: value.measurementPointId ?? null,
       name: value.name,
       metric: value.metric,
       unit: value.unit,
@@ -77,9 +88,21 @@ export async function POST(request: Request) {
       createdAt: now,
       updatedAt: now,
     };
-    await db.insert(sensorConfigs).values(row).run();
-    return Response.json({ sensor: sensorConfigPayload(row, null, agentId) }, { status: 201 });
+    const deviceWrite = existing
+      ? db.update(devices).set({ name: value.name, category: "sensor", agentId, capabilitiesJson: JSON.stringify(sensorCapabilities(value.metric, value.unit)), updatedAt: now }).where(eq(devices.id, value.sensorId))
+      : db.insert(devices).values({ id: value.sensorId, greenhouseId: value.greenhouseId, agentId, name: value.name, category: "sensor", capabilitiesJson: JSON.stringify(sensorCapabilities(value.metric, value.unit)), reportedStatus: "offline", updatedAt: now });
+    await db.batch([deviceWrite, db.insert(sensorConfigs).values(row)]);
+    return Response.json({ sensor: sensorConfigPayload(row, null, agentId, measurementPointPortKey) }, { status: 201 });
   } catch {
+    if (value.measurementPointId) {
+      try {
+        if (await getDb().select({ sensorId: sensorConfigs.sensorId }).from(sensorConfigs).where(and(eq(sensorConfigs.measurementPointId, value.measurementPointId), eq(sensorConfigs.metric, value.metric))).limit(1).get()) {
+          return Response.json({ error: "Measurement point already has a sensor for this metric." }, { status: 409 });
+        }
+      } catch {
+        // Preserve the service-unavailable response when the conflict check also fails.
+      }
+    }
     return Response.json({ error: "Sensor configuration could not be stored." }, { status: 503 });
   }
 }

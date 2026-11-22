@@ -5,6 +5,7 @@
   "compatibility_date": "2026-08-05",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  "vars": { "GREENHOUSE_AUTH_MODE": "cloudflare-access" },
   "triggers": { "crons": ["0 20 * * *"] },
   "assets": {
     "directory": "dist/client",
