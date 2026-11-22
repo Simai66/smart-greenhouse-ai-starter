@@ -1,0 +1,143 @@
+digraph SmartGreenhouseWorkflow {
+  graph [
+    layout=neato,
+    bgcolor="white",
+    pad="0.35",
+    splines=ortho,
+    outputorder=edgesfirst,
+    labelloc=t,
+    label="แผนภาพขั้นตอนการดำเนินงานระบบ Smart Greenhouse",
+    fontname="Thonburi Bold",
+    fontsize=25
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    color="#64748B",
+    penwidth=1.2,
+    fontname="Thonburi",
+    fontsize=11,
+    margin="0.18,0.12"
+  ];
+  edge [
+    color="#64748B",
+    penwidth=1.2,
+    arrowsize=0.8,
+    fontname="Arial",
+    fontsize=9,
+    fontcolor="#334155",
+    arrowhead=normal
+  ];
+
+  start [pos="95,760!", shape=circle, width=1.05, height=1.05, fillcolor="#DCFCE7", color="#16A34A", label="เริ่ม\nรอบทำงาน"];
+  sensors [pos="275,760!", fillcolor="#CCFBF1", color="#0F766E", label=<
+    <B>Sensor / Relay</B><BR/>
+    อ่านค่าเซนเซอร์<BR/>
+    ตรวจสถานะอุปกรณ์
+  >];
+  edge_cycle [pos="500,760!", fillcolor="#DBEAFE", color="#2563EB", label=<
+    <B>Raspberry Pi</B><BR/>
+    Edge Agent<BR/>
+    local safety + auto policy
+  >];
+  sign [pos="720,760!", fillcolor="#EDE9FE", color="#7C3AED", label=<
+    <B>Signed HTTPS</B><BR/>
+    HMAC-SHA-256<BR/>
+    timestamp + raw body
+  >];
+  auth [pos="945,760!", shape=diamond, width=1.75, height=1.25, fillcolor="#FEF3C7", color="#D97706", label="ตรวจสอบ\nagent header\nและ signature"];
+  reject_auth [pos="945,585!", fillcolor="#FEE2E2", color="#DC2626", label=<
+    <B>Reject</B><BR/>401 / 400
+  >];
+  registration [pos="1185,760!", shape=diamond, width=1.95, height=1.3, fillcolor="#FEF3C7", color="#D97706", label="ตรวจ agent\nและ greenhouse\nที่ลงทะเบียน"];
+  reject_scope [pos="1185,585!", fillcolor="#FEE2E2", color="#DC2626", label=<
+    <B>Reject</B><BR/>403 / 400
+  >];
+  telemetry_store [pos="1435,760!", fillcolor="#DCFCE7", color="#16A34A", label=<
+    <B>Cloud Worker + D1</B><BR/>
+    validate telemetry<BR/>
+    store readings<BR/>
+    update agent/device freshness
+  >];
+  telemetry_end [pos="1700,760!", shape=doublecircle, width=1.15, height=1.15, fillcolor="#DCFCE7", color="#16A34A", label="รอรอบ\nถัดไป"];
+
+  operator [pos="95,300!", fillcolor="#F1F5F9", color="#475569", label=<
+    <B>Operator / Browser</B><BR/>
+    POST device command
+  >];
+  command_check [pos="350,300!", shape=diamond, width=2.0, height=1.35, fillcolor="#FEF3C7", color="#D97706", label="ตรวจ role +\nidempotency +\nfreshness + policy"];
+  command_reject [pos="350,115!", fillcolor="#FEE2E2", color="#DC2626", label=<
+    <B>ไม่เข้าคิว</B><BR/>400 / 403 / 409
+  >];
+  command_queue [pos="620,300!", fillcolor="#CFFAFE", color="#0891B2", label=<
+    <B>Queue command</B><BR/>
+    device_commands<BR/>
+    requested event<BR/>
+    expiry + correlation ID
+  >];
+  poll [pos="875,300!", fillcolor="#DBEAFE", color="#2563EB", label=<
+    <B>Edge Agent polls</B><BR/>
+    GET /api/agent/commands<BR/>
+    mark dispatched + event
+  >];
+  local_check [pos="1125,300!", shape=diamond, width=2.0, height=1.35, fillcolor="#FEF3C7", color="#D97706", label="ตรวจ local policy\nexpiry + cooldown\nmanualAllowed"];
+  local_fail [pos="1125,115!", fillcolor="#FEE2E2", color="#DC2626", label=<
+    <B>Failed ACK</B><BR/>เหตุผลความปลอดภัย
+  >];
+  relay [pos="1355,300!", fillcolor="#CCFBF1", color="#0F766E", label=<
+    <B>Relay Driver</B><BR/>
+    turn_on / turn_off<BR/>
+    emergency_stop → all off
+  >];
+  ack [pos="1585,300!", fillcolor="#EDE9FE", color="#7C3AED", label=<
+    <B>Signed ACK</B><BR/>
+    acknowledged / failed<BR/>
+    reportedStatus
+  >];
+  audit [pos="1830,300!", fillcolor="#DCFCE7", color="#16A34A", label=<
+    <B>Cloud Worker + D1</B><BR/>
+    update command state<BR/>
+    update device status<BR/>
+    append command event
+  >];
+  command_end [pos="2070,300!", shape=doublecircle, width=1.15, height=1.15, fillcolor="#DCFCE7", color="#16A34A", label="แสดงผล\nสถานะ"];
+
+  pending [pos="850,535!", shape=note, fillcolor="#F8FAFC", color="#94A3B8", fontcolor="#475569", fontsize=9, label=<
+    <B>Offline / network error</B><BR/>
+    Pi เก็บ outbound queue ใน local SQLite<BR/>
+    แล้วส่งซ้ำเมื่อเชื่อมต่อได้
+  >];
+  future [pos="1500,115!", shape=note, style="dashed,filled", fillcolor="#FDF4FF", color="#C026D3", fontcolor="#701A75", fontsize=9, label=<
+    <B>DETECTIONS / ALERTS</B><BR/>
+    มีตารางใน schema แล้ว<BR/>
+    แต่ ingestion route ยังไม่อยู่ใน API ปัจจุบัน
+  >];
+
+  start -> sensors [xlabel="เริ่มรอบ"];
+  sensors -> edge_cycle [xlabel="อ่านค่า"];
+  edge_cycle -> sign [xlabel="ส่งข้อมูล"];
+  sign -> auth [xlabel="HTTPS"];
+  auth -> registration [xlabel="ผ่าน", color="#16A34A"];
+  auth -> reject_auth [xlabel="ไม่ผ่าน", color="#DC2626"];
+  registration -> telemetry_store [xlabel="ผ่าน", color="#16A34A"];
+  registration -> reject_scope [xlabel="ไม่ผ่าน", color="#DC2626"];
+  telemetry_store -> telemetry_end [xlabel="202 Accepted"];
+  telemetry_end -> start [xlabel="ทุก ~15 วินาที", style=dashed, color="#94A3B8"];
+
+  operator -> command_check [xlabel="คำสั่ง"];
+  command_check -> command_queue [xlabel="ผ่าน", color="#16A34A"];
+  command_check -> command_reject [xlabel="ไม่ผ่าน", color="#DC2626"];
+  command_queue -> poll [xlabel="รอ agent poll"];
+  poll -> local_check [xlabel="dispatched"];
+  local_check -> relay [xlabel="อนุญาต", color="#16A34A"];
+  local_check -> local_fail [xlabel="ปฏิเสธ / หมดอายุ", color="#DC2626"];
+  relay -> ack [xlabel="ผล hardware"];
+  ack -> audit [xlabel="POST ACK"];
+  audit -> command_end [xlabel="สถานะล่าสุด"];
+  audit -> operator [xlabel="GET history", style=dashed, color="#94A3B8"];
+
+  edge_cycle -> pending [xlabel="cloud ล่ม", style=dashed, color="#94A3B8"];
+  pending -> sign [xlabel="retry", style=dashed, color="#94A3B8"];
+  telemetry_store -> future [style=dashed, color="#C026D3", arrowhead=none];
+}

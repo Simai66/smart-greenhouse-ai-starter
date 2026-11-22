@@ -622,6 +622,19 @@ git commit -m "feat: permanently delete archived crop batches"
 Plan complete and updated at
 `docs/superpowers/plans/2026-07-22-greenhouse-platform-recovery.md`.
 
+### Follow-up — Remove operational mock data (2026-07-26)
+
+- [x] Start new sessions with empty crop-batch, plant, device, sensor, camera,
+  alert, and AI-evidence collections.
+- [x] Remove legacy seed records from saved browser state by exact seed ID while
+  preserving records created by users.
+- [x] Keep greenhouse/zone structure and editable settings so real data can be
+  configured without recreating the application shell.
+- [x] Return an honest unconfigured/empty sensors API response instead of mock
+  telemetry.
+- [x] Move populated fixtures under `tests/fixtures` so behavioral tests remain
+  meaningful without shipping those records in runtime code.
+
 Two execution options:
 
 1. **Subagent-Driven (recommended)** — dispatch a fresh subagent per task, review between tasks.
