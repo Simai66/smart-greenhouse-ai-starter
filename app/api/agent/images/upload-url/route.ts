@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const registered = await getDb().select({ id: edgeAgents.id }).from(edgeAgents).where(and(eq(edgeAgents.id, authenticated.agentId), eq(edgeAgents.greenhouseId, greenhouseId))).limit(1).get();
     if (!registered) return apiError("AGENT_NOT_REGISTERED", "Agent is not registered for this greenhouse.", 403);
     const result = await createImageUpload(payload, "pi", { kind: "agent", agentId: authenticated.agentId });
-    return "response" in result ? result.response : Response.json(result.data, { status: 201 });
+    return "response" in result ? result.response : Response.json(result.data, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch {
     return apiError("STORAGE_UNAVAILABLE", "Image upload service is temporarily unavailable.", 503);
   }
