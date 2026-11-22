@@ -1,10 +1,17 @@
 import importlib.util
+import io
+import json
 import os
 import pathlib
+import subprocess
+import sqlite3
 import sys
 import tempfile
 import unittest
 from datetime import timedelta
+from unittest.mock import MagicMock, patch
+
+from PIL import Image
 
 
 MODULE_PATH = pathlib.Path(__file__).with_name("greenhouse_agent.py")
@@ -20,6 +27,8 @@ class EdgeAgentTest(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         agent_module.STATE_DIR = pathlib.Path(self.tempdir.name)
         agent_module.GREENHOUSE_ID = "GH-01"
+        agent_module.ACCESS_CLIENT_ID = "pi-token-id"
+        agent_module.ACCESS_CLIENT_SECRET = "access-secret"
         agent_module.AGENT_ID = "PI-GH-01"
         agent_module.AGENT_SECRET = "x" * 40
         self.agent = agent_module.Agent()
@@ -37,6 +46,186 @@ class EdgeAgentTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.agent.store.db.close()
         self.tempdir.cleanup()
+
+    def test_cloud_request_uses_shared_signed_bytes_service_headers_and_fresh_nonce(self):
+        client = agent_module.CloudClient()
+        client.api_url = "https://greenhouse.invalid"
+        client.agent_id = "PI-GH-01"
+        client.agent_secret = "0123456789abcdef0123456789abcdef"
+        client.greenhouse_id = "GH-01"
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b"{}"
+        requests = []
+
+        def open_request(request, timeout):
+            requests.append(request)
+            return response
+
+        with patch.object(agent_module, "iso", return_value="2026-10-28T00:00:00.000Z"), patch.object(agent_module.secrets, "token_hex", return_value="00112233445566778899aabbccddeeff"), patch.object(agent_module.urllib.request, "urlopen", side_effect=open_request):
+            client.signed_request("/api/agent/heartbeat", "POST", {"agentId": "PI-GH-01", "greenhouseId": "GH-01"})
+        request = requests[0]
+        self.assertEqual(request.get_header("X-greenhouse-nonce"), "00112233445566778899aabbccddeeff")
+        self.assertEqual(request.get_header("Cf-access-client-id"), "pi-token-id")
+        self.assertEqual(request.get_header("Cf-access-client-secret"), "access-secret")
+        self.assertEqual(request.get_header("X-greenhouse-signature"), "bd589190aa7b42dfb53dc24fbb20a743508d71272c32bd7dc82259e2294cb54f")
+
+    def test_linked_sensor_config_is_limited_to_its_physical_node(self):
+        self.agent.store.save_sensor_config({
+            "sensorId": "SEN-01",
+            "metric": "temperature",
+            "unit": "celsius",
+            "measurementPointId": "ESP32-02-A",
+            "measurementPointPortKey": "A",
+            "configVersion": 4,
+        })
+
+        self.assertFalse(self.agent.allowed_sensor("ESP32-01", "SEN-01"))
+        self.assertTrue(self.agent.allowed_sensor("ESP32-02", "SEN-01"))
+        self.assertEqual(self.agent.local_config("ESP32-01")["sensors"], [])
+
+    def test_linked_sensor_config_without_matching_point_port_is_rejected(self):
+        self.agent.store.save_sensor_config({
+            "sensorId": "SEN-01",
+            "metric": "temperature",
+            "unit": "celsius",
+            "measurementPointId": "ESP32-01-C",
+            "measurementPointPortKey": "C",
+            "configVersion": 4,
+        })
+
+        self.assertFalse(self.agent.allowed_sensor("ESP32-01", "SEN-01"))
+
+    def test_agent_query_canonicalization_rejects_duplicates_and_encodings(self):
+        self.assertEqual(agent_module.canonical_agent_query("/api/agent/config", "greenhouseId=GH-01&agentId=PI-GH-01", "GET"), "agentId=PI-GH-01&greenhouseId=GH-01")
+        for query in ("agentId=PI-GH-01&agentId=PI-GH-02&greenhouseId=GH-01", "agentId=PI+GH&greenhouseId=GH-01", "agentId=PI%2DGH&greenhouseId=GH-01", "agentId=PI-GH-01&greenhouseId=GH-01&extra=x"):
+            self.assertIsNone(agent_module.canonical_agent_query("/api/agent/config", query, "GET"))
+        self.assertIsNone(agent_module.canonical_agent_query("/api/agent/%63onfig", "", "GET"))
+        self.assertIsNone(agent_module.canonical_agent_query("/api/agent/heartbeat", "x=y", "POST"))
+
+    def test_transport_retries_receive_distinct_nonces(self):
+        client = agent_module.CloudClient()
+        client.api_url = "https://greenhouse.invalid"
+        requests = []
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b"{}"
+
+        def open_request(request, timeout):
+            requests.append(request)
+            return response
+
+        with patch.object(agent_module, "iso", return_value="2026-10-28T00:00:00.000Z"), patch.object(agent_module.secrets, "token_hex", side_effect=["0" * 32, "1" * 32]), patch.object(agent_module.urllib.request, "urlopen", side_effect=open_request):
+            client.signed_request("/api/agent/config?greenhouseId=GH-01&agentId=PI-GH-01")
+            client.signed_request("/api/agent/config?greenhouseId=GH-01&agentId=PI-GH-01")
+        self.assertNotEqual(requests[0].get_header("X-greenhouse-nonce"), requests[1].get_header("X-greenhouse-nonce"))
+        self.assertNotEqual(requests[0].get_header("X-greenhouse-signature"), requests[1].get_header("X-greenhouse-signature"))
+
+    def test_auth_failures_remain_retryable_to_preserve_the_durable_outbox(self):
+        for status in (401, 403, 408, 429, 500):
+            error = agent_module.urllib.error.HTTPError("https://greenhouse.invalid", status, "failure", {}, None)
+            self.addCleanup(error.close)
+            self.assertTrue(agent_module.retryable_http(error), status)
+
+    def test_outbox_retains_auth_failed_telemetry_for_recovery(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        failure = agent_module.urllib.error.HTTPError("https://greenhouse.invalid", 401, "unauthorized", {}, None)
+        self.addCleanup(failure.close)
+        with patch.object(self.agent.cloud, "signed_request", side_effect=failure):
+            self.agent.flush_queue()
+        queued = self.agent.store.queued()
+        self.assertEqual(len(queued), 1)
+        self.assertEqual(queued[0][2], body)
+        self.assertEqual(self.agent.store.db.execute("SELECT state FROM outbound_queue WHERE id = ?", (queued[0][0],)).fetchone(), ("RETRY",))
+
+    def test_outbox_quarantines_permanent_rejections_without_losing_payload(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        failure = agent_module.urllib.error.HTTPError("https://greenhouse.invalid", 400, "invalid payload", {}, None)
+        self.addCleanup(failure.close)
+        with patch.object(self.agent.cloud, "signed_request", side_effect=failure):
+            self.agent.flush_queue()
+        self.assertEqual(self.agent.store.queued(), [])
+        quarantined = self.agent.store.quarantined()
+        self.assertEqual(len(quarantined), 1)
+        self.assertEqual(quarantined[0][1], "/api/agent/telemetry")
+        self.assertEqual(quarantined[0][2], body)
+        self.assertEqual(quarantined[0][3], 400)
+
+    def test_partial_telemetry_response_quarantines_only_rejected_readings(self):
+        accepted = {"readingId": "reading-accepted"}
+        rejected = {"readingId": "reading-rejected"}
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [accepted, rejected]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        response = {"accepted": 1, "duplicates": 0, "rejected": [{"index": 1, "error": "invalid"}]}
+        with patch.object(self.agent.cloud, "signed_request", return_value=response):
+            self.agent.flush_queue()
+        self.assertEqual(self.agent.store.queued(), [])
+        quarantined = self.agent.store.quarantined()
+        self.assertEqual(len(quarantined), 1)
+        self.assertEqual(quarantined[0][2]["readings"], [rejected])
+        self.assertEqual(quarantined[0][2]["rejectionDetails"], response["rejected"])
+        self.assertEqual(quarantined[0][3], 422)
+
+    def test_inconsistent_partial_telemetry_response_keeps_entire_batch_queued(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        response = {"accepted": 1, "duplicates": 0, "rejected": [{"index": 4, "error": "invalid"}]}
+        with patch.object(self.agent.cloud, "signed_request", return_value=response):
+            self.agent.flush_queue()
+        self.assertEqual(self.agent.store.queued()[0][2], body)
+        self.assertEqual(self.agent.store.quarantined(), [])
+
+    def test_malformed_telemetry_success_response_keeps_batch_queued(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        for response in ({"accepted": 1}, ["not-an-object"]):
+            self.agent.store.queue("/api/agent/telemetry", body)
+            with patch.object(self.agent.cloud, "signed_request", return_value=response):
+                self.agent.flush_queue()
+            queued = self.agent.store.queued()
+            self.assertEqual(len(queued), 1)
+            self.assertEqual(queued[0][2], body)
+            self.agent.store.remove_queued(queued[0][0])
+
+    def test_invalid_json_success_response_keeps_telemetry_queued(self):
+        body = {"greenhouseId": "GH-01", "agentId": "PI-GH-01", "readings": [{"readingId": "reading-001"}]}
+        self.agent.store.queue("/api/agent/telemetry", body)
+        with patch.object(self.agent.cloud, "signed_request", side_effect=json.JSONDecodeError("bad JSON", "", 0)):
+            self.agent.flush_queue()
+        self.assertEqual(self.agent.store.queued()[0][2], body)
+
+    def test_submit_telemetry_uses_partial_response_quarantine_path(self):
+        response = {"accepted": 1, "duplicates": 0, "rejected": [{"index": 1, "error": "invalid"}]}
+        with patch.object(self.agent.cloud, "signed_request", return_value=response):
+            self.agent.submit_telemetry([{"readingId": "reading-ok"}, {"readingId": "reading-bad"}])
+        self.assertEqual(self.agent.store.queued(), [])
+        quarantined = self.agent.store.quarantined()
+        self.assertEqual(quarantined[0][2]["readings"], [{"readingId": "reading-bad"}])
+
+    def test_quarantine_and_queue_removal_are_atomic(self):
+        body = {"imageId": "img_123"}
+        self.agent.store.queue(agent_module.IMAGE_QUEUE_PATH, body)
+        queued_id = self.agent.store.queued()[0][0]
+        self.agent.store.db.execute("CREATE TRIGGER fail_quarantine BEFORE INSERT ON outbound_quarantine BEGIN SELECT RAISE(ABORT, 'disk error'); END")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.agent.store.quarantine(queued_id, 400, "invalid image")
+        self.assertEqual(len(self.agent.store.queued()), 1)
+        self.assertEqual(self.agent.store.quarantined(), [])
+
+    def test_cloud_client_requires_both_access_service_token_values(self):
+        client = agent_module.CloudClient()
+        client.access_client_secret = ""
+        with self.assertRaisesRegex(RuntimeError, "GREENHOUSE_ACCESS_CLIENT_ID and GREENHOUSE_ACCESS_CLIENT_SECRET"):
+            client.signed_request("/api/agent/heartbeat", "POST", {})
+
+    def test_cloud_client_rejects_weak_agent_hmac_secret(self):
+        client = agent_module.CloudClient()
+        client.api_url = "https://greenhouse.invalid"
+        client.agent_secret = "x" * 31
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b"{}"
+        with patch.object(agent_module.urllib.request, "urlopen", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "at least 32 characters"):
+                client.signed_request("/api/agent/heartbeat", "POST", {})
 
     def test_fixture_image_queues_offline_and_flushes_after_reconnect(self):
         fixture = pathlib.Path(self.tempdir.name) / "fixture.jpg"
@@ -68,6 +257,100 @@ class EdgeAgentTest(unittest.TestCase):
             agent_module.CAPTURE_FIXTURE = previous_fixture
             agent_module.CAPTURE_COMMAND = previous_command
             agent_module.CAPTURE_INTERVAL_SECONDS = previous_interval
+
+    def test_capture_retains_transient_failures_and_quarantines_invalid_uploads(self):
+        for status in (408, 429, 503, 400):
+            with self.subTest(status=status):
+                image = pathlib.Path(self.tempdir.name) / f"capture-{status}.jpg"
+                image.write_bytes(b"jpeg")
+                failure = agent_module.urllib.error.HTTPError("https://storage.invalid", status, "failure", {}, None)
+                self.addCleanup(failure.close)
+                with patch.object(self.agent.camera, "capture", return_value=(image, "image/jpeg")), patch.object(self.agent.camera, "detections", return_value=[]), patch.object(self.agent.cloud, "upload_image", side_effect=failure):
+                    self.agent.capture_once(force=True)
+                if status == 400:
+                    self.assertTrue(image.exists())
+                    self.assertEqual(self.agent.store.queued(), [])
+                    quarantined = self.agent.store.quarantined()
+                    self.assertEqual(len(quarantined), 1)
+                    self.assertEqual(pathlib.Path(quarantined[0][2]["localPath"]), image)
+                else:
+                    self.assertTrue(image.exists())
+                    self.assertEqual(len(self.agent.store.queued()), 1)
+                    with patch.object(self.agent.cloud, "upload_image", return_value={"status": "ready"}):
+                        self.agent.flush_queue()
+                    self.assertFalse(image.exists())
+                    self.assertEqual(self.agent.store.queued(), [])
+
+    def test_upload_retries_resume_same_image_after_lost_response_and_restart(self):
+        for lost_at in ("reservation", "put", "complete", "detections"):
+            with self.subTest(lost_at=lost_at):
+                image = pathlib.Path(self.tempdir.name) / f"{lost_at}.jpg"
+                image.write_bytes(b"jpeg")
+                metadata = {"greenhouseId": "GH-01", "cameraId": "CAM-A-01", "contentType": "image/jpeg", "byteSize": 4, "capturedAt": "2026-09-25T00:00:00.000Z"}
+                results = [{"plantId": "PLANT-01", "classification": "healthy", "confidence": 98, "severity": "none"}]
+                self.agent.store.queue_image(image, metadata, results)
+                queued_id = self.agent.store.queued()[0][2]["metadata"]["imageId"]
+                server = {"status": "pending", "object": False, "lost": False}
+                reservations, put_calls, detection_calls = [], [], []
+
+                def lose(stage):
+                    if stage == lost_at and not server["lost"]:
+                        server["lost"] = True
+                        raise TimeoutError("response lost after server commit")
+
+                def signed(route, method="GET", body=None):
+                    if route.endswith("/upload-url"):
+                        self.assertEqual(body["imageId"], queued_id)
+                        reservations.append(body["imageId"])
+                        lose("reservation")
+                        return {"imageId": queued_id, "status": server["status"], "uploadUrl": "https://storage.invalid/upload"}
+                    self.assertEqual(body["imageId"], queued_id)
+                    if route.endswith("/complete"):
+                        if not server["object"]:
+                            error = agent_module.urllib.error.HTTPError("https://api.invalid", 409, "missing", {}, io.BytesIO(b'{"error":{"code":"UPLOAD_NOT_FOUND"}}'))
+                            self.addCleanup(error.close)
+                            raise error
+                        server["status"] = "ready"
+                        lose("complete")
+                        return {"imageId": queued_id, "status": "ready"}
+                    self.assertTrue(route.endswith("/detections"))
+                    detection_calls.append(json.dumps(body, sort_keys=True))
+                    lose("detections")
+                    return {"insertedCount": 1}
+
+                def put(request, **kwargs):
+                    put_calls.append(request.full_url)
+                    server["object"] = True
+                    lose("put")
+                    return MagicMock()
+
+                with patch.object(agent_module.CloudClient, "signed_request", side_effect=signed), patch.object(agent_module.urllib.request, "urlopen", side_effect=put):
+                    self.agent.flush_queue()
+                    self.assertTrue(image.exists())
+                    self.assertEqual(len(self.agent.store.queued()), 1)
+                    self.agent.store.db.close()
+                    self.agent = agent_module.Agent()
+                    self.agent.flush_queue()
+                self.assertEqual(self.agent.store.queued(), [])
+                self.assertFalse(image.exists())
+                self.assertEqual(len(reservations), 2)
+                self.assertEqual(len(set(reservations)), 1)
+                self.assertEqual(len(put_calls), 1)
+                self.assertEqual(len(set(detection_calls)), 1)
+                self.assertEqual(len(detection_calls), 2 if lost_at == "detections" else 1)
+
+    def test_legacy_image_queue_persists_id_before_network_request(self):
+        image = pathlib.Path(self.tempdir.name) / "legacy.jpg"
+        image.write_bytes(b"jpeg")
+        self.agent.store.queue(agent_module.IMAGE_QUEUE_PATH, {"localPath": str(image), "metadata": {"capturedAt": agent_module.iso()}, "detections": []})
+        def offline(path, metadata, detections):
+            self.assertEqual(metadata["imageId"], self.agent.store.queued()[0][2]["metadata"]["imageId"])
+            raise TimeoutError("offline")
+        with patch.object(self.agent.cloud, "upload_image", side_effect=offline):
+            self.agent.flush_queue()
+            first_id = self.agent.store.queued()[0][2]["metadata"]["imageId"]
+            self.agent.flush_queue()
+            self.assertEqual(self.agent.store.queued()[0][2]["metadata"]["imageId"], first_id)
 
     def reading(self, **changes):
         value = {
@@ -113,6 +396,80 @@ class EdgeAgentTest(unittest.TestCase):
         self.assertEqual((error, status), (None, 202))
         self.assertEqual(result["accepted"], 0)
         restarted.store.db.close()
+
+    def test_outbox_failure_rolls_back_inbound_dedupe_for_retry(self):
+        payload = {"nodeId": "ESP32-01", "readings": [self.reading()]}
+        self.agent.store.db.execute("CREATE TRIGGER fail_outbox BEFORE INSERT ON outbound_queue BEGIN SELECT RAISE(ABORT, 'disk error'); END")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.agent.validate_local_telemetry("ESP32-01", payload)
+        self.assertEqual(self.agent.store.db.execute("SELECT COUNT(*) FROM inbound_readings").fetchone(), (0,))
+        self.assertEqual(self.agent.store.queued(), [])
+
+        self.agent.store.db.execute("DROP TRIGGER fail_outbox")
+        result, error, status = self.agent.validate_local_telemetry("ESP32-01", payload)
+        self.assertEqual((error, status), (None, 202))
+        self.assertEqual(result["accepted"], 1)
+        self.assertEqual(len(self.agent.store.queued()), 1)
+
+    def test_camera_runs_inference_on_original_then_queues_smaller_same_size_jpeg(self):
+        image_path = pathlib.Path(self.tempdir.name) / "capture.jpg"
+        Image.effect_noise((1600, 1200), 100).convert("RGB").save(image_path, quality=100)
+        original = image_path.read_bytes()
+        original_size = len(original)
+        events = []
+        compress = self.agent.camera.compress_for_upload
+
+        def detect(path):
+            events.append("inference")
+            self.assertEqual(path.read_bytes(), original)
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (1600, 1200))
+            return [{"label": "leaf_spot"}]
+
+        def compress_after_inference(path, content_type):
+            events.append("compression")
+            return compress(path, content_type)
+
+        with patch.object(self.agent.camera, "capture", return_value=(image_path, "image/jpeg")), patch.object(self.agent.camera, "detections", side_effect=detect), patch.object(self.agent.camera, "compress_for_upload", side_effect=compress_after_inference), patch.object(self.agent, "flush_queue"):
+            self.agent.capture_once(force=True)
+
+        queued = self.agent.store.queued()[0][2]
+        self.assertEqual(events, ["inference", "compression"])
+        self.assertLess(image_path.stat().st_size, original_size)
+        self.assertEqual(queued["metadata"]["byteSize"], image_path.stat().st_size)
+        self.assertEqual(queued["detections"], [{"label": "leaf_spot"}])
+        with Image.open(image_path) as image:
+            self.assertEqual(image.size, (1600, 1200))
+        self.assertEqual(queued["metadata"]["contentType"], "image/jpeg")
+
+    def test_camera_preserves_png_content_type_when_jpeg_would_grow_file(self):
+        image_path = pathlib.Path(self.tempdir.name) / "tiny.png"
+        Image.new("RGB", (2, 2), "green").save(image_path)
+        original_size = image_path.stat().st_size
+
+        byte_size, content_type = self.agent.camera.compress_for_upload(image_path, "image/jpeg")
+
+        self.assertEqual(byte_size, original_size)
+        self.assertEqual(content_type, "image/png")
+        self.assertTrue(image_path.read_bytes().startswith(b"\x89PNG"))
+
+    def test_camera_does_not_compress_when_inference_fails(self):
+        image_path = pathlib.Path(self.tempdir.name) / "capture.jpg"
+        image_path.write_bytes(b"original capture")
+        with patch.object(self.agent.camera, "capture", return_value=(image_path, "image/jpeg")), patch.object(self.agent.camera, "detections", side_effect=subprocess.SubprocessError("model failed")), patch.object(self.agent.camera, "compress_for_upload") as compress, patch.object(self.agent, "flush_queue"):
+            self.agent.capture_once(force=True)
+        compress.assert_not_called()
+        self.assertEqual(image_path.read_bytes(), b"original capture")
+        self.assertEqual(self.agent.store.queued(), [])
+
+    def test_compression_failure_keeps_original_file(self):
+        image_path = pathlib.Path(self.tempdir.name) / "corrupt.jpg"
+        image_path.write_bytes(b"not an image")
+        original = image_path.read_bytes()
+        original_size = len(original)
+        self.assertEqual(self.agent.camera.compress_for_upload(image_path, "image/jpeg"), (original_size, "image/jpeg"))
+        self.assertEqual(image_path.read_bytes(), original)
+        self.assertEqual(list(pathlib.Path(self.tempdir.name).glob(".corrupt.jpg.*.tmp")), [])
 
     def test_rejects_stale_and_invalid_quality_value(self):
         stale = agent_module.iso(agent_module.now() - timedelta(hours=25))

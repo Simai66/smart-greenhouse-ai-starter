@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """Fail-closed Raspberry Pi gateway for LAN sensor nodes and cloud telemetry.
 
-Cloud requests use the per-agent HMAC secret. LAN requests use separate
-per-node tokens, so an ESP32 never receives the cloud credential. Relay and
-sensor drivers remain simulators until hardware commissioning supplies a
-reviewed pin map and sensor adapter.
+Cloud requests use Cloudflare Access Service Auth plus the per-agent HMAC
+secret. LAN requests use separate per-node tokens, so an ESP32 never receives
+the cloud credentials. Relay and sensor drivers remain simulators until
+hardware commissioning supplies a reviewed pin map and sensor adapter.
 """
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
 import json
 import math
 import os
 import re
+import secrets
 import shlex
 import sqlite3
 import shutil
@@ -27,15 +27,21 @@ import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+from PIL import Image
+
+UTC = timezone.utc
 
 API_URL = os.environ.get("GREENHOUSE_API_URL", "").rstrip("/")
 AGENT_ID = os.environ.get("GREENHOUSE_AGENT_ID", "")
 AGENT_SECRET = os.environ.get("GREENHOUSE_AGENT_SECRET", "")
 GREENHOUSE_ID = os.environ.get("GREENHOUSE_ID", "")
+ACCESS_CLIENT_ID = os.environ.get("GREENHOUSE_ACCESS_CLIENT_ID", "")
+ACCESS_CLIENT_SECRET = os.environ.get("GREENHOUSE_ACCESS_CLIENT_SECRET", "")
 STATE_DIR = Path(os.environ.get("GREENHOUSE_STATE_DIR", "/var/lib/greenhouse-agent"))
 POLL_SECONDS = max(5, int(os.environ.get("GREENHOUSE_POLL_SECONDS", "15")))
 LOCAL_HOST = os.environ.get("GREENHOUSE_LISTEN_HOST", "0.0.0.0")
@@ -67,6 +73,11 @@ def iso(value: datetime | None = None) -> str:
 def parse_time(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def retryable_http(error: urllib.error.HTTPError) -> bool:
+    # Keep auth failures queued; operators can rotate credentials without losing readings.
+    return error.code in (401, 403, 408, 429) or error.code >= 500
 
 
 def stable_reading_id(*parts: object) -> str:
@@ -201,6 +212,29 @@ class CameraCapture:
             return []
         return value if isinstance(value, list) else []
 
+    def compress_for_upload(self, image_path: Path, original_content_type: str) -> tuple[int, str]:
+        original_size = image_path.stat().st_size
+        temporary = image_path.with_name(f".{image_path.name}.{uuid.uuid4().hex}.tmp")
+        content_type = original_content_type
+        try:
+            with Image.open(image_path) as source:
+                source.load()
+                content_type = Image.MIME.get(source.format or "", original_content_type)
+                orientation = source.getexif().get(274)
+                exif = Image.Exif()
+                if orientation:
+                    exif[274] = orientation
+                source.convert("RGB").save(temporary, format="JPEG", quality=85, optimize=True, exif=exif)
+            compressed_size = temporary.stat().st_size
+            if compressed_size < original_size:
+                os.replace(temporary, image_path)
+                return compressed_size, "image/jpeg"
+        except (OSError, ValueError, Image.DecompressionBombError) as error:
+            print(f"image compression skipped; original retained: {error}")
+        finally:
+            temporary.unlink(missing_ok=True)
+        return original_size, content_type
+
 
 @dataclass(frozen=True)
 class Command:
@@ -219,6 +253,10 @@ class Store:
         self.lock = threading.RLock()
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("CREATE TABLE IF NOT EXISTS outbound_queue (id INTEGER PRIMARY KEY, path TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS outbound_quarantine (id INTEGER PRIMARY KEY, path TEXT NOT NULL, body TEXT NOT NULL, status_code INTEGER NOT NULL, status_text TEXT NOT NULL, rejected_at TEXT NOT NULL)")
+        queue_columns = {row[1] for row in self.db.execute("PRAGMA table_info(outbound_queue)")}
+        if "state" not in queue_columns:
+            self.db.execute("ALTER TABLE outbound_queue ADD COLUMN state TEXT NOT NULL DEFAULT 'PENDING' CHECK(state IN ('PENDING', 'RETRY'))")
         self.db.execute("CREATE TABLE IF NOT EXISTS processed_commands (idempotency_key TEXT PRIMARY KEY, completed_at TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS policies (device_id TEXT PRIMARY KEY, version INTEGER NOT NULL, policy TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS runtime (device_id TEXT PRIMARY KEY, last_on_at TEXT, last_off_at TEXT)")
@@ -232,16 +270,50 @@ class Store:
             self.db.commit()
 
     def queue_image(self, image_path: Path, metadata: dict[str, Any], detections: list[dict[str, Any]]) -> None:
-        self.queue(IMAGE_QUEUE_PATH, {"localPath": str(image_path), "metadata": metadata, "detections": detections})
+        self.queue(IMAGE_QUEUE_PATH, {"localPath": str(image_path), "metadata": {**metadata, "imageId": f"img_{uuid.uuid4()}"}, "detections": detections})
 
     def queued(self) -> list[tuple[int, str, dict[str, Any]]]:
         with self.lock:
             return [(row[0], row[1], json.loads(row[2])) for row in self.db.execute("SELECT id, path, body FROM outbound_queue ORDER BY id LIMIT 100")]
 
+    def update_queued(self, queue_id: int, body: dict[str, Any]) -> None:
+        with self.lock:
+            self.db.execute("UPDATE outbound_queue SET body = ? WHERE id = ?", (json.dumps(body, separators=(",", ":")), queue_id))
+            self.db.commit()
+
+    def mark_retry(self, queue_id: int) -> None:
+        with self.lock:
+            self.db.execute("UPDATE outbound_queue SET state = 'RETRY' WHERE id = ?", (queue_id,))
+            self.db.commit()
+
     def remove_queued(self, queue_id: int) -> None:
         with self.lock:
             self.db.execute("DELETE FROM outbound_queue WHERE id = ?", (queue_id,))
             self.db.commit()
+
+    def quarantine(self, queue_id: int, status_code: int, status_text: str, body: dict[str, Any] | None = None) -> None:
+        with self.lock:
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                row = self.db.execute("SELECT path, body FROM outbound_queue WHERE id = ?", (queue_id,)).fetchone()
+                if row:
+                    self.db.execute(
+                        "INSERT INTO outbound_quarantine(path, body, status_code, status_text, rejected_at) VALUES (?, ?, ?, ?, ?)",
+                        (row[0], json.dumps(body, separators=(",", ":")) if body is not None else row[1], status_code, status_text[:128], iso()),
+                    )
+                    self.db.execute("DELETE FROM outbound_queue WHERE id = ?", (queue_id,))
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
+
+    def quarantined(self, limit: int = 100) -> list[tuple[int, str, dict[str, Any], int, str, str]]:
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id, path, body, status_code, status_text, rejected_at FROM outbound_quarantine ORDER BY id LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [(row[0], row[1], json.loads(row[2]), row[3], row[4], row[5]) for row in rows]
 
     def seen(self, key: str) -> bool:
         with self.lock:
@@ -298,11 +370,29 @@ class Store:
             row = self.db.execute("SELECT config FROM sensor_configs WHERE sensor_id = ?", (sensor_id,)).fetchone()
         return json.loads(row[0]) if row else None
 
-    def save_inbound(self, reading_id: str, node_id: str, body: dict[str, Any]) -> bool:
+    def queue_inbound(self, node_id: str, readings: list[dict[str, Any]], queue_body: dict[str, Any]) -> list[dict[str, Any]]:
+        fresh: list[dict[str, Any]] = []
         with self.lock:
-            cursor = self.db.execute("INSERT OR IGNORE INTO inbound_readings(reading_id, node_id, body, received_at) VALUES (?, ?, ?, ?)", (reading_id, node_id, json.dumps(body, separators=(",", ":")), iso()))
-            self.db.commit()
-            return cursor.rowcount == 1
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                for reading in readings:
+                    cursor = self.db.execute(
+                        "INSERT OR IGNORE INTO inbound_readings(reading_id, node_id, body, received_at) VALUES (?, ?, ?, ?)",
+                        (reading["readingId"], node_id, json.dumps(reading, separators=(",", ":")), iso()),
+                    )
+                    if cursor.rowcount == 1:
+                        fresh.append(reading)
+                if fresh:
+                    body = {**queue_body, "readings": fresh}
+                    self.db.execute(
+                        "INSERT INTO outbound_queue(path, body, created_at) VALUES (?, ?, ?)",
+                        ("/api/agent/telemetry", json.dumps(body, separators=(",", ":")), iso()),
+                    )
+                self.db.commit()
+                return fresh
+            except Exception:
+                self.db.rollback()
+                raise
 
 
 def command_expired(command: Command) -> bool:
@@ -312,39 +402,93 @@ def command_expired(command: Command) -> bool:
         return True
 
 
+def canonical_agent_query(path: str, raw_query: str, method: str) -> str | None:
+    query_routes = {"/api/agent/config", "/api/agent/commands"}
+    static_routes = {
+        ("POST", "/api/agent/heartbeat"),
+        ("POST", "/api/agent/telemetry"),
+        ("POST", "/api/agent/detections"),
+        ("POST", "/api/agent/images/upload-url"),
+        ("POST", "/api/agent/images/complete"),
+        ("GET", "/api/agent/config"),
+        ("GET", "/api/agent/commands"),
+    }
+    if (method, path) not in static_routes and not (method == "POST" and re.fullmatch(r"/api/agent/commands/[A-Za-z0-9_-]{3,128}/ack", path)):
+        return None
+    if path not in query_routes:
+        return "" if not raw_query else None
+    if not raw_query or "%" in raw_query or "+" in raw_query:
+        return None
+    pairs = []
+    for part in raw_query.split("&"):
+        key, separator, value = part.partition("=")
+        if not separator or key not in {"agentId", "greenhouseId"} or not re.fullmatch(r"[A-Za-z0-9._~-]{1,64}", value):
+            return None
+        pairs.append((key, value))
+    if len(pairs) != 2 or {key for key, _ in pairs} != {"agentId", "greenhouseId"}:
+        return None
+    return "&".join(f"{key}={value}" for key, value in sorted(pairs))
+
+
 class CloudClient:
     def __init__(self) -> None:
         self.api_url = API_URL
         self.agent_id = AGENT_ID
         self.agent_secret = AGENT_SECRET
         self.greenhouse_id = GREENHOUSE_ID
+        self.access_client_id = ACCESS_CLIENT_ID
+        self.access_client_secret = ACCESS_CLIENT_SECRET
 
     def signed_request(self, path: str, method: str = "GET", body: dict[str, Any] | None = None) -> dict[str, Any]:
-        if not self.api_url or not self.agent_id or not self.agent_secret or not self.greenhouse_id:
-            raise RuntimeError("GREENHOUSE_API_URL, GREENHOUSE_AGENT_ID, GREENHOUSE_AGENT_SECRET and GREENHOUSE_ID are required")
+        if not self.api_url or not self.agent_id or not self.agent_secret or not self.greenhouse_id or not self.access_client_id or not self.access_client_secret:
+            raise RuntimeError("GREENHOUSE_API_URL, GREENHOUSE_AGENT_ID, GREENHOUSE_AGENT_SECRET, GREENHOUSE_ID, GREENHOUSE_ACCESS_CLIENT_ID and GREENHOUSE_ACCESS_CLIENT_SECRET are required")
+        if len(self.agent_secret) < 32:
+            raise RuntimeError("GREENHOUSE_AGENT_SECRET must contain at least 32 characters")
         raw = json.dumps(body, separators=(",", ":"), ensure_ascii=False) if body is not None else ""
         timestamp = iso()
-        signature = base64.b64encode(hmac.new(self.agent_secret.encode(), f"{timestamp}.{raw}".encode(), hashlib.sha256).digest()).decode()
-        request = urllib.request.Request(f"{self.api_url}{path}", data=raw.encode() if method != "GET" else None, method=method, headers={"Content-Type": "application/json", "User-Agent": "smart-greenhouse-edge-agent/1.0", "X-Greenhouse-Agent": self.agent_id, "X-Greenhouse-Timestamp": timestamp, "X-Greenhouse-Signature": signature})
+        request_url = urllib.parse.urlsplit(f"{self.api_url}{path}")
+        query = canonical_agent_query(request_url.path, request_url.query, method)
+        if query is None:
+            raise ValueError("Agent request route or query is not allow-listed")
+        nonce = secrets.token_hex(16)
+        raw_bytes = raw.encode("utf-8")
+        canonical = b"\n".join((method.encode("ascii"), request_url.path.encode("ascii"), query.encode("ascii"), timestamp.encode("ascii"), nonce.encode("ascii"))) + b"\n" + raw_bytes
+        signature = hmac.new(self.agent_secret.encode(), canonical, hashlib.sha256).hexdigest()
+        request = urllib.request.Request(f"{self.api_url}{path}", data=raw_bytes if method != "GET" else None, method=method, headers={"Content-Type": "application/json", "User-Agent": "smart-greenhouse-edge-agent/1.0", "CF-Access-Client-Id": self.access_client_id, "CF-Access-Client-Secret": self.access_client_secret, "X-Greenhouse-Agent": self.agent_id, "X-Greenhouse-Timestamp": timestamp, "X-Greenhouse-Nonce": nonce, "X-Greenhouse-Signature": signature})
         with urllib.request.urlopen(request, timeout=10) as response:
             return json.loads(response.read() or b"{}")
 
+
     def upload_image(self, image_path: Path, metadata: dict[str, Any], detections: list[dict[str, Any]]) -> dict[str, Any]:
         upload = self.signed_request("/api/agent/images/upload-url", "POST", metadata)
-        upload_url = upload.get("uploadUrl")
         image_id = upload.get("imageId")
-        if not isinstance(upload_url, str) or not isinstance(image_id, str):
-            raise RuntimeError("Image upload URL response is invalid.")
-        content_type = metadata.get("contentType")
-        if not isinstance(content_type, str):
-            raise RuntimeError("Image content type is missing.")
-        data = image_path.read_bytes()
-        request = urllib.request.Request(upload_url, data=data, method="PUT", headers={"Content-Type": content_type, "Content-Length": str(len(data)), "User-Agent": "smart-greenhouse-edge-agent/1.0"})
-        with urllib.request.urlopen(request, timeout=60):
-            pass
-        complete = self.signed_request("/api/agent/images/complete", "POST", {"imageId": image_id})
+        if not isinstance(image_id, str) or image_id != metadata.get("imageId"):
+            raise RuntimeError("Image upload API must preserve the queued imageId.")
+        complete = upload
+        if upload.get("status") not in ("ready", "expired"):
+            upload_url = upload.get("uploadUrl")
+            content_type = metadata.get("contentType")
+            if not isinstance(upload_url, str) or not isinstance(content_type, str):
+                raise RuntimeError("Image upload URL response is invalid.")
+            # A previous PUT may have succeeded even when its response was lost.
+            try:
+                complete = self.signed_request("/api/agent/images/complete", "POST", {"imageId": image_id})
+            except urllib.error.HTTPError as error:
+                if error.code != 409:
+                    raise
+                try:
+                    missing = json.load(error).get("error", {}).get("code") == "UPLOAD_NOT_FOUND"
+                except (ValueError, AttributeError):
+                    missing = False
+                if not missing:
+                    raise
+                data = image_path.read_bytes()
+                request = urllib.request.Request(upload_url, data=data, method="PUT", headers={"Content-Type": content_type, "Content-Length": str(len(data)), "User-Agent": "smart-greenhouse-edge-agent/1.0"})
+                with urllib.request.urlopen(request, timeout=60):
+                    pass
+                complete = self.signed_request("/api/agent/images/complete", "POST", {"imageId": image_id})
         if detections:
-            self.signed_request("/api/agent/detections", "POST", {"greenhouseId": self.greenhouse_id, "imageId": image_id, "modelVersion": "configured-agent", "detectedAt": metadata.get("capturedAt", iso()), "results": detections})
+            self.signed_request("/api/agent/detections", "POST", {"greenhouseId": self.greenhouse_id, "imageId": image_id, "modelVersion": "configured-agent", "detectedAt": metadata["capturedAt"], "results": detections})
         return complete
 
 
@@ -365,9 +509,17 @@ class Agent:
         return bool(NODE_ID_PATTERN.fullmatch(node_id) and expected and hmac.compare_digest(expected, token))
 
     def allowed_sensor(self, node_id: str, sensor_id: str) -> bool:
+        config = self.store.sensor_config(sensor_id)
+        if not config:
+            return False
+        point_id = config.get("measurementPointId")
+        if point_id:
+            port_key = config.get("measurementPointPortKey")
+            if port_key not in {"A", "B"} or point_id != f"{node_id}-{port_key}":
+                return False
         if node_id in self.node_sensors:
             return sensor_id in self.node_sensors[node_id]
-        return sensor_id in {config.get("sensorId") for config in self.store.sensor_configs()}
+        return True
 
     def validate_local_telemetry(self, node_id: str, payload: object) -> tuple[dict[str, Any] | None, str | None, int]:
         if not NODE_ID_PATTERN.fullmatch(node_id):
@@ -401,15 +553,9 @@ class Agent:
             if not isinstance(config_version, int) or isinstance(config_version, bool) or config_version < 1:
                 return None, "configVersion must be a positive integer.", 400
             normalized.append({"readingId": reading_id, "sensorId": sensor_id, "metric": metric, "value": float(value), "unit": unit, "sampledAt": iso(sampled_at), "quality": quality, "configVersion": config_version})
-        fresh: list[dict[str, Any]] = []
-        duplicates = 0
-        for reading in normalized:
-            if self.store.save_inbound(reading["readingId"], node_id, reading):
-                fresh.append(reading)
-            else:
-                duplicates += 1
-        if fresh:
-            self.store.queue("/api/agent/telemetry", {"greenhouseId": GREENHOUSE_ID, "agentId": AGENT_ID, "readings": fresh})
+        base = {"greenhouseId": GREENHOUSE_ID, "agentId": AGENT_ID}
+        fresh = self.store.queue_inbound(node_id, normalized, base)
+        duplicates = len(normalized) - len(fresh)
         return {"accepted": len(fresh), "duplicates": duplicates, "configVersion": max((item["configVersion"] for item in normalized), default=1), "receivedAt": iso()}, None, 202
 
     def local_config(self, node_id: str) -> dict[str, Any]:
@@ -426,7 +572,7 @@ class Agent:
         try:
             self.cloud.signed_request(path, "POST", body)
         except urllib.error.HTTPError as error:
-            if error.code >= 500:
+            if retryable_http(error):
                 self.store.queue(path, body)
         except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
             self.store.queue(path, body)
@@ -435,19 +581,49 @@ class Agent:
         for queue_id, path, body in self.store.queued():
             try:
                 if path == IMAGE_QUEUE_PATH:
+                    if not body["metadata"].get("imageId"):
+                        body["metadata"]["imageId"] = f"img_{uuid.uuid4()}"
+                        self.store.update_queued(queue_id, body)
                     image_path = Path(str(body["localPath"]))
                     self.cloud.upload_image(image_path, body["metadata"], body.get("detections", []))
                     image_path.unlink(missing_ok=True)
                 else:
-                    self.cloud.signed_request(path, "POST", body)
+                    response = self.cloud.signed_request(path, "POST", body)
+                    if path == "/api/agent/telemetry":
+                        if not isinstance(response, dict):
+                            self.store.mark_retry(queue_id)
+                            return
+                        # Older all-or-nothing API versions omit rejected; counts must still cover every reading.
+                        rejected = response.get("rejected", [])
+                        readings = body.get("readings")
+                        if not isinstance(rejected, list) or not isinstance(readings, list):
+                            self.store.mark_retry(queue_id)
+                            return
+                        indexes = [item.get("index") for item in rejected if isinstance(item, dict)]
+                        accepted = response.get("accepted")
+                        duplicates = response.get("duplicates")
+                        if (
+                            len(indexes) != len(rejected)
+                            or any(not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= len(readings) for index in indexes)
+                            or len(set(indexes)) != len(indexes)
+                            or not isinstance(accepted, int) or isinstance(accepted, bool) or accepted < 0
+                            or not isinstance(duplicates, int) or isinstance(duplicates, bool) or duplicates < 0
+                            or accepted + duplicates + len(indexes) != len(readings)
+                        ):
+                            self.store.mark_retry(queue_id)
+                            return
+                        if indexes:
+                            rejected_body = {**body, "readings": [readings[index] for index in indexes], "rejectionDetails": rejected}
+                            self.store.quarantine(queue_id, 422, "Partial telemetry rejection", rejected_body)
+                            continue
                 self.store.remove_queued(queue_id)
             except urllib.error.HTTPError as error:
-                if error.code < 500:
-                    if path == IMAGE_QUEUE_PATH:
-                        Path(str(body.get("localPath", ""))).unlink(missing_ok=True)
-                    self.store.remove_queued(queue_id)
-                return
-            except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
+                if retryable_http(error):
+                    self.store.mark_retry(queue_id)
+                    return
+                self.store.quarantine(queue_id, error.code, str(error.reason))
+            except (urllib.error.URLError, TimeoutError, OSError, RuntimeError, json.JSONDecodeError):
+                self.store.mark_retry(queue_id)
                 return
 
     def capture_once(self, force: bool = False) -> None:
@@ -460,18 +636,11 @@ class Agent:
             if not captured:
                 return
             image_path, content_type = captured
-            metadata: dict[str, Any] = {"greenhouseId": GREENHOUSE_ID, "cameraId": CAMERA_ID, "plantId": CAMERA_PLANT_ID or None, "capturedAt": iso(captured_at), "contentType": content_type, "byteSize": image_path.stat().st_size}
             detections = self.camera.detections(image_path)
-            try:
-                self.cloud.upload_image(image_path, metadata, detections)
-                image_path.unlink(missing_ok=True)
-            except urllib.error.HTTPError as error:
-                if error.code >= 500:
-                    self.store.queue_image(image_path, metadata, detections)
-                else:
-                    image_path.unlink(missing_ok=True)
-            except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
-                self.store.queue_image(image_path, metadata, detections)
+            byte_size, content_type = self.camera.compress_for_upload(image_path, content_type)
+            metadata: dict[str, Any] = {"greenhouseId": GREENHOUSE_ID, "cameraId": CAMERA_ID, "plantId": CAMERA_PLANT_ID or None, "capturedAt": iso(captured_at), "contentType": content_type, "byteSize": byte_size}
+            self.store.queue_image(image_path, metadata, detections)
+            self.flush_queue()
         except (FileNotFoundError, OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as error:
             print(f"camera capture unavailable: {error}")
 
@@ -538,23 +707,14 @@ class Agent:
                 self.store.set_runtime(device_id, "off")
 
     def submit_telemetry(self, readings: list[dict[str, Any]]) -> None:
-        fresh: list[dict[str, Any]] = []
+        normalized_readings: list[dict[str, Any]] = []
         for reading in readings:
             sensor_id = reading.get("sensorId")
             reading_id = reading.get("readingId") or stable_reading_id(AGENT_ID, sensor_id, reading.get("metric"), reading.get("sampledAt"), reading.get("value"))
-            normalized = {**reading, "readingId": reading_id}
-            if self.store.save_inbound(reading_id, "agent", normalized):
-                fresh.append(normalized)
-        if not fresh:
-            return
-        body = {"greenhouseId": GREENHOUSE_ID, "agentId": AGENT_ID, "readings": fresh}
-        try:
-            self.cloud.signed_request("/api/agent/telemetry", "POST", body)
-        except urllib.error.HTTPError as error:
-            if error.code >= 500:
-                self.store.queue("/api/agent/telemetry", body)
-        except (urllib.error.URLError, TimeoutError, OSError, RuntimeError):
-            self.store.queue("/api/agent/telemetry", body)
+            normalized_readings.append({**reading, "readingId": reading_id})
+        base = {"greenhouseId": GREENHOUSE_ID, "agentId": AGENT_ID}
+        if self.store.queue_inbound("agent", normalized_readings, base):
+            self.flush_queue()
 
     def sync_config(self) -> None:
         payload = self.cloud.signed_request(f"/api/agent/config?greenhouseId={urllib.parse.quote(GREENHOUSE_ID)}&agentId={urllib.parse.quote(AGENT_ID)}")

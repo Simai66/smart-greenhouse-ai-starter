@@ -41,6 +41,8 @@ constexpr uint32_t WIFI_RETRY_MS = 10UL * 1000UL;
 
 struct SensorConfig {
   String sensorId;
+  String measurementPointId;
+  String portKey;
   String metric;
   String unit;
   uint32_t intervalSeconds = DEFAULT_INTERVAL_SECONDS;
@@ -75,6 +77,8 @@ class Sht30SensorAdapter final : public SensorAdapter {
 
   SensorQuality readRaw(const SensorConfig& config, float& value) override {
     if (!sht30Ready) return SensorQuality::kInvalid;
+    // The confirmed P0 bus has one SHT30 endpoint. Never reuse it for point B.
+    if (!config.portKey.isEmpty() && config.portKey != "A") return SensorQuality::kInvalid;
     if (config.metric == "temperature") value = sht30.readTemperature();
     else if (config.metric == "humidity") value = sht30.readHumidity();
     else return SensorQuality::kInvalid;
@@ -114,6 +118,8 @@ void saveConfig() {
   for (const SensorConfig& config : sensorConfigs) {
     JsonObject item = sensors.add<JsonObject>();
     item["sensorId"] = config.sensorId;
+    item["measurementPointId"] = config.measurementPointId;
+    item["measurementPointPortKey"] = config.portKey;
     item["metric"] = config.metric;
     item["unit"] = config.unit;
     item["samplingIntervalSeconds"] = config.intervalSeconds;
@@ -145,6 +151,8 @@ void loadConfig() {
   for (JsonObject item : sensors) {
     SensorConfig config;
     config.sensorId = item["sensorId"] | "";
+    config.measurementPointId = item["measurementPointId"] | "";
+    config.portKey = item["measurementPointPortKey"] | "";
     config.metric = item["metric"] | "";
     config.unit = item["unit"] | "";
     config.intervalSeconds = item["samplingIntervalSeconds"] | DEFAULT_INTERVAL_SECONDS;
@@ -205,6 +213,8 @@ bool getConfigFromPi() {
   for (JsonObject item : sensors) {
     SensorConfig config;
     config.sensorId = item["sensorId"] | "";
+    config.measurementPointId = item["measurementPointId"] | "";
+    config.portKey = item["measurementPointPortKey"] | "";
     config.metric = item["metric"] | "";
     config.unit = item["unit"] | "";
     config.intervalSeconds = item["samplingIntervalSeconds"] | DEFAULT_INTERVAL_SECONDS;
@@ -212,6 +222,9 @@ bool getConfigFromPi() {
     config.enabled = item["enabled"] | true;
     config.scale = item["calibration"]["scale"] | 1.0f;
     config.offset = item["calibration"]["offset"] | 0.0f;
+    if (config.portKey.length() && config.portKey != "A" && config.portKey != "B") continue;
+    if (!config.measurementPointId.isEmpty() && config.portKey.isEmpty()) continue;
+    if (!config.measurementPointId.isEmpty() && config.measurementPointId != String(NODE_ID) + "-" + config.portKey) continue;
     if (!config.sensorId.isEmpty() && config.metric.length() > 0 && config.intervalSeconds > 0) next.push_back(config);
   }
   sensorConfigs = next;
