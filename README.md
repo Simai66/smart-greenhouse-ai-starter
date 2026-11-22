@@ -19,12 +19,12 @@ Starter project สำหรับระบบโรงเรือนอัจ�
 ## ฟีเจอร์
 
 - **Dashboard:** Temperature, Humidity, Soil Moisture, Light Intensity, กราฟแนวโน้ม, Plant Health และ Alerts
-- **Plant Monitoring:** การ์ดพืช 4 ต้น, ตัวกรองสถานะ และค้นหาพืช
-- **AI Detection:** กล้องจำลอง, Bounding box, Confidence, Severity, Recommendation และสถานะ Processing
+- **Plant Monitoring:** รายการพืชที่ลงทะเบียน ตัวกรองสถานะ และค้นหาพืช
+- **AI Detection:** หลักฐานจากกล้อง, Bounding box, Confidence, Severity, Recommendation และสถานะ Processing
 - **Device Control:** Auto/Manual mode, Pending → Acknowledged, Schedule, Toast และ Emergency Stop confirmation
 - **Analytics, Alerts และ Settings** สำหรับใช้เป็นฐานพัฒนาต่อ
-- **Responsive shell:** Sidebar บน Desktop, Drawer/Bottom navigation บน Mobile
-- **Mock API adapter** และตัวอย่าง API route ที่เปลี่ยนเป็น Cloudflare D1, MQTT หรือ Raspberry Pi gateway ได้
+- **Responsive shell:** Sidebar บน Desktop และ Mobile Command Center บนมือถือ
+- **Demo state:** เริ่มด้วยรายการอุปกรณ์ พืช และเซ็นเซอร์ว่างจนกว่าจะมีการลงทะเบียน
 
 ## เริ่มต้นใช้งาน
 
@@ -57,7 +57,6 @@ GitHub Actions (`.github/workflows/ci.yml`) จะรัน lint, unit test, bui
 - `components/greenhouse/charts/` contains accessible Recharts views.
 - `components/ui/` contains CLI-managed shadcn primitives.
 - `lib/greenhouse-demo-store.ts` remains the browser demo source of truth.
-- `lib/mock-data.ts` remains because the protected sensors API consumes it.
 - `edge-agent/` คือ reference agent สำหรับ Raspberry Pi (Docker)
 - `firmware/esp32/` คือ firmware ของ ESP32 (PlatformIO)
 - `drizzle/` คือ D1 migration และ `docs/` คือเอกสาร API contract
