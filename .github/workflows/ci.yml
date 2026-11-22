@@ -48,4 +48,5 @@ jobs:
       - run: >-
           docker run --rm --entrypoint python
           --volume "$PWD/edge-agent:/tests:ro"
+          --volume "$PWD/drizzle:/drizzle:ro"
           greenhouse-edge-test -m unittest discover -s /tests -p 'test_*.py'
