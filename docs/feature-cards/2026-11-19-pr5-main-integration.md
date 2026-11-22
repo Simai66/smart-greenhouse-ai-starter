@@ -10,4 +10,4 @@
 ## Verification and open questions
 
 - Lint and TypeScript passed. The domain suite passed 32 tests. The full test command passed on rerun after the first rendered-page check returned HTTP 500. The standalone rendered HTML rerun also passed.
-- The Google button on the existing `/login` screen has no action. Confirm how this screen should hand off to Cloudflare Access before treating it as a working login flow.
+- Staging answered unauthenticated requests to `/` and `/login` with redirects to Cloudflare Access. The Google control uses a full navigation to the same host's root. Access owns sign-in and resumes an existing session when available. A local or preview host without an Access policy will only navigate to its dashboard.

@@ -57,3 +57,15 @@ test("renders the shadcn greenhouse application shell", async () => {
   assert.match(html, /กำลังโหลดข้อมูลโรงเรือน/);
   assert.doesNotMatch(html, /astryx-/i);
 });
+
+test("renders Google sign-in as a navigation to the application", async () => {
+  const response = await request("/login", {
+    headers: { accept: "text/html" },
+  });
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  const loginForm = html.match(/<form\b(?=[^>]*\baction="\/")(?=[^>]*\bmethod="get")[^>]*>([\s\S]*?)<\/form>/i);
+  assert.ok(loginForm, "Expected a GET form for the application root");
+  assert.match(loginForm[1], /<button\b[^>]*\btype="submit"[^>]*>[\s\S]*?ดำเนินการต่อด้วย Google\s*<\/button>/u);
+});

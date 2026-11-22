@@ -96,15 +96,17 @@ export function LoginPage() {
               เข้าสู่ระบบเพื่อดูแลโรงเรือนของคุณ
             </p>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-12 h-auto min-h-16 w-full border-border bg-card px-5 text-base font-semibold shadow-none hover:bg-accent"
-              aria-label="ดำเนินการต่อด้วย Google"
-            >
-              <GoogleMark />
-              ดำเนินการต่อด้วย Google
-            </Button>
+            {/* Cloudflare Access handles the full document request to the application. */}
+            <form action="/" method="get">
+              <Button
+                type="submit"
+                variant="outline"
+                className="mt-12 h-auto min-h-16 w-full border-border bg-card px-5 text-base font-semibold shadow-none hover:bg-accent"
+              >
+                <GoogleMark />
+                ดำเนินการต่อด้วย Google
+              </Button>
+            </form>
 
             <p className="mt-10 flex items-center justify-center gap-2 text-base text-muted-foreground">
               <IconLock className="size-5 text-primary" stroke={1.8} aria-hidden="true" />
