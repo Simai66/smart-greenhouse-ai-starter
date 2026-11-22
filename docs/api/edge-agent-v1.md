@@ -1,28 +1,54 @@
 # Greenhouse edge-agent API v1
 
 All payload timestamps are ISO-8601 UTC. Browser endpoints are protected by
-Cloudflare Access and the application role mapping. Edge endpoints use a
-per-agent HMAC-SHA-256 signature and are not browser endpoints.
+Cloudflare Access and the application role mapping. Edge endpoints require a
+Cloudflare Access Service Auth assertion plus a per-agent HMAC-SHA-256
+signature; they are not browser endpoints.
 
 ## Agent authentication
 
 For every `/api/agent/*` request, the Pi sends:
 
 ```text
+CF-Access-Client-Id: <GH-01 service token ID>
+CF-Access-Client-Secret: <GH-01 service token secret>
 X-Greenhouse-Agent: PI-GH-01
-X-Greenhouse-Timestamp: 2026-07-18T03:00:00.000Z
-X-Greenhouse-Signature: base64(HMAC-SHA-256(secret, timestamp + "." + raw-body))
+X-Greenhouse-Timestamp: 2026-10-28T00:00:00.000Z
+X-Greenhouse-Nonce: <32 lowercase hex characters, fresh per HTTP attempt>
+X-Greenhouse-Signature: lowercase-hex(HMAC-SHA-256(secret, canonical request bytes))
 ```
 
-The timestamp must be within five minutes of the Worker clock. The Worker
+The Worker verifies the signed Access JWT issuer, service application AUD,
+expiry, `type=app`, empty `sub`, and `common_name` against
+`CLOUDFLARE_ACCESS_SERVICE_TOKEN_ID_<NORMALIZED_AGENT_ID>`. `CLOUDFLARE_ACCESS_SERVICE_AUD`
+is separate from the browser app's `CLOUDFLARE_ACCESS_AUD`. The Worker also
 looks up `GREENHOUSE_AGENT_SECRET_<agentId>` with non-alphanumeric characters
 normalised to `_`; for example, `PI-GH-01` uses
 `GREENHOUSE_AGENT_SECRET_PI_GH_01`. Agent IDs are restricted to uppercase
-letters, digits, `_`, and `-`. `GET` signatures use an empty body. The agent
-must never send this secret as a request field.
+letters, digits, `_`, and `-`. `GET` signatures use an empty body. Neither
+secret belongs in request bodies, firmware, or logs.
 
-Errors use `{ "error": "..." }`. Authentication errors are `401`, invalid
-or unauthorised input is `400`/`403`, unavailable storage is `503`.
+Canonical bytes are UTF-8/ASCII method, exact route path, sorted canonical
+query, timestamp, and nonce separated by one LF byte, then one LF and exact raw
+body bytes. Query is empty on routes without query parameters. `/api/agent/config`
+and `/api/agent/commands` accept exactly one each of `agentId` and
+`greenhouseId`; percent escapes, `+`, duplicates, unknown keys, and encoded
+paths are rejected. HMAC uses lowercase hexadecimal SHA-256. Timestamp must be
+canonical ISO-8601 UTC within five minutes. Nonce is unique per agent and held
+for 24 hours; duplicate requests return `401`, D1 errors return `503`. A retry
+must use a new nonce; stable reading/image/command IDs preserve business
+idempotency.
+
+Bodies are counted from the request stream before buffering: heartbeat and
+image-upload metadata 16 KiB, telemetry and detections 128 KiB, command
+acknowledgement and image completion 8 KiB. Other methods/routes are rejected.
+Access policy must protect only `/api/agent/*` with Service Auth for the
+registered token; no Bypass policy is allowed. The direct `workers.dev` origin
+still requires the signed assertion and HMAC.
+
+Errors use `{ "error": "..." }`. Authentication/replay errors are `401`,
+invalid or unauthorised input is `400`/`403`, unavailable configuration or
+storage is `503`, and oversized bodies are `413`.
 
 Image capture and AI result routes are documented in
 [Image and AI evidence API v1](images-v1.md). They reuse the same HMAC headers;
@@ -73,6 +99,14 @@ Quality is `valid`, `suspect`, or `invalid`; invalid samples are retained for
 diagnostics but do not imply healthy telemetry. A request accepts at most 100
 readings and sample time must be no older than 24 hours or more than five
 minutes in the future.
+
+The route validates readings independently. It stores valid readings and their
+threshold-alert effects in one D1 batch, then returns HTTP 202 with `accepted`,
+`duplicates`, `rejected` (each item has a zero-based `index` and `error`), and
+`receivedAt`. Invalid envelope, authentication, and storage failures still fail
+the whole request; edge clients should retain the batch on non-202 responses.
+The Pi agent removes processed readings from its outbox and atomically moves
+rejected readings, with their rejection details, to its quarantine.
 
 `POST /api/agent/heartbeat`
 
@@ -144,6 +178,61 @@ Supported metric/unit pairs are `temperature/celsius`, `humidity/percent`,
 `soil_moisture/percent`, and `light/lux`. Thresholds create or resolve a
 warning alert when valid telemetry crosses the configured range. Threshold
 evaluation never queues a device command.
+
+### Dual measurement points and plant assignment
+
+Board IDs use `ESP32-01` format (uppercase letters, digits, `_` or `-`, 3–61
+characters). Stable point IDs are `{deviceId}-A` and `{deviceId}-B`.
+Suggested sensor channel IDs are `SEN-{deviceId}-{A|B}-{TEMP|HUM|SOIL|LIGHT}`.
+Existing sensor IDs remain valid and do not change when a plant is reassigned.
+Plant IDs use uppercase letters, digits, `_` or `-`, 3–64 characters.
+Each point can have one active plant; one plant may have multiple points.
+Once a channel is linked to a physical point, that link is immutable. Register
+a new channel identity when hardware moves to another point so old samples keep
+their physical attribution.
+
+`POST /api/devices/:deviceId/points` (admin) registers the board under a
+greenhouse and Pi agent and idempotently creates points A and B:
+
+```json
+{ "greenhouseId": "GH-01", "agentId": "PI-GH-01" }
+```
+
+`GET /api/devices/:deviceId/points?greenhouseId=GH-01` returns both points,
+their current plant assignment, linked sensor channels, and board-level
+`assignmentVersion`. `POST /api/plants` (admin) registers a plant with
+`greenhouseId`, `plantId`, and `displayName`; `GET /api/plants?greenhouseId=GH-01`
+lists active plants for selection.
+
+`PUT /api/devices/:deviceId/assignments` (admin) saves both A/B choices as one
+version-checked operation. A `plantId` may be `null` to unassign. A change is
+effective at server receipt time unless a known physical move time is provided
+as UTC `effectiveAt`; backdated changes require `reason`.
+
+```json
+{
+  "greenhouseId": "GH-01",
+  "expectedVersion": 4,
+  "assignments": [
+    { "pointId": "ESP32-01-A", "plantId": "PLANT-03" },
+    { "pointId": "ESP32-01-B", "plantId": "PLANT-02" }
+  ],
+  "reason": "Move point A to Plant-03"
+}
+```
+
+The endpoint returns `409 VERSION_CONFLICT` when another update won the race.
+Assignment history uses half-open intervals `[assignedAt, unassignedAt)`.
+`GET /api/devices/:deviceId/assignments?greenhouseId=GH-01&sampledAt=...`
+resolves a reading against its `sampledAt`, not current assignment. Readings
+before first known assignment or inside an unknown move interval remain
+unattributed. Existing sensor configs get a nullable point link; old sensor IDs
+and historical readings are not rewritten.
+
+Agent config includes `measurementPointId` and `measurementPointPortKey` for
+linked channels. ESP32 telemetry envelope is unchanged: it still sends stable
+`sensorId`, metric, reading ID, quality, and timestamps. Plant IDs never go in
+firmware or telemetry.
 
 ## LAN ESP32 endpoints
 

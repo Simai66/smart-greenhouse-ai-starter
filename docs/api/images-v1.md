@@ -10,6 +10,11 @@ All new errors use:
 
 ## Browser image flow
 
+Browser and Pi image operations are limited to the `GH-01` pilot. Other
+greenhouse IDs receive HTTP 403 `GREENHOUSE_FORBIDDEN`. Image completion uses
+the reserved image's greenhouse and rejects off-pilot records before Storage
+access.
+
 `POST /api/images/upload-url` requires `operator` or `admin`. Request:
 
 ```json
@@ -24,12 +29,14 @@ All new errors use:
 ```
 
 Response contains `imageId`, `objectPath`, `uploadUrl`,
-`uploadExpiresAt`, `publicUrl`, and `status: "pending"`. Browser/Pi sends a
+`uploadExpiresAt`, and `status: "pending"`. Responses containing signed URLs
+use `Cache-Control: no-store`. Browser/Pi sends a
 `PUT` with the original `Content-Type` to `uploadUrl`, then calls
 `POST /api/images/complete` with `{ "imageId": "img_..." }`.
 
 `GET /api/images?greenhouseId=GH-01&cameraId=CAM-A-01&limit=100` requires
-`viewer` and returns image metadata, `publicUrl` (or `null` after expiry),
+`viewer` and returns image metadata, `readUrl` (short-lived signed URL, or
+`null` after expiry),
 `status`, `detectionCount`, and detection summaries.
 
 ## Pi image flow
@@ -38,6 +45,22 @@ Response contains `imageId`, `objectPath`, `uploadUrl`,
 `POST /api/agent/images/complete` use the existing HMAC headers documented in
 `edge-agent-v1.md`. Request fields match the browser flow; source is forced to
 `pi` and the created record is tied to the authenticated agent identity.
+
+Pi clients may supply `imageId` (`img_<UUID>`) generated and saved before the
+first request. Reusing that ID with the same agent and metadata returns the
+same record and object path, including after a lost response or restart.
+Keep `capturedAt` identical on retries; if omitted, the first reservation's
+timestamp is reused. Conflicting ownership or metadata returns
+`409 IMAGE_ID_CONFLICT`; malformed IDs return `400 INVALID_IMAGE_ID`.
+
+A `pending` reservation returns a fresh signed upload URL. A `ready` reservation
+returns a short-lived `readUrl`; expired reservations return no read URL. Before uploading,
+retry completion: only `409 UPLOAD_NOT_FOUND` requires a PUT, then completion.
+A `ready` reservation returns existing metadata without an upload URL; proceed
+directly to posting detections. `expired` returns metadata without read or
+upload URLs. `failed` returns
+`409 IMAGE_UPLOAD_FAILED`. Preserve queued work on HTTP 408/429, server errors,
+and network failures. Clients omitting `imageId` still receive a new ID.
 
 ## Batch detections
 
@@ -64,6 +87,11 @@ duplicate rows. Deleting an image object never deletes its D1 detections.
 ```text
 {greenhouseId}/{source}/{cameraId-or-dashboard}/{yyyy}/{mm}/{uuid}.{extension}
 ```
+
+All browser-facing greenhouse endpoints and signed agent endpoints are scoped
+to `GH-01` during this pilot. Foreign greenhouse requests return HTTP 403
+`GREENHOUSE_FORBIDDEN`; sensor configuration addressed by opaque sensor ID
+returns 404 when no GH-01 sensor matches.
 
 ## Retention
 

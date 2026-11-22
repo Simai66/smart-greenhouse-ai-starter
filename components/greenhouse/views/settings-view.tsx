@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ResourceEditorDialog, type ResourceEditorValue, type ResourceKind } from "@/components/greenhouse/settings/resource-editor-dialog";
 import { ResourceList, type ResourceListItem } from "@/components/greenhouse/settings/resource-list";
 import { LiveSensorSection } from "@/components/greenhouse/settings/live-sensor-section";
+import { MeasurementPointSection } from "@/components/greenhouse/settings/measurement-point-section";
 import { FarmStructureSection, type GreenhouseDraft } from "@/components/greenhouse/settings/farm-structure-section";
 import { validateDemoSettings } from "@/lib/dashboard-interactions";
 import type { DemoCamera, DemoCropBatch, DemoDevice, DemoGreenhouse, DemoPlant, DemoSensor, DemoSettings } from "@/lib/greenhouse-demo-store";
@@ -160,6 +161,7 @@ export function SettingsView({ settings, greenhouses, cropBatches, plants, activ
     <CropBatchesSection greenhouses={greenhouses} cropBatches={cropBatches} plants={plants} activeGreenhouseId={activeGreenhouseId} onSaveBatch={onSaveBatch} onArchiveBatch={onArchiveBatch} onRestoreBatch={onRestoreBatch} onPermanentlyDeleteBatch={onPermanentlyDeleteBatch} />
     <ResourceBindingsSection greenhouses={greenhouses} activeGreenhouseId={activeGreenhouseId} devices={devices} cameras={settings.cameras} sensors={sensors} onCreateResource={onCreateResource} onMoveResource={onMoveResource} onRenameResource={onRenameResource} onUpdateResourceStatus={onUpdateResourceStatus} onDeleteResource={onDeleteResource} />
     <LiveSensorSection key={activeGreenhouseId} greenhouseId={activeGreenhouseId} sensors={liveSensors} loading={liveSensorsLoading} error={liveSensorsError} fetchedAt={liveSensorsFetchedAt} onRefresh={onRefreshLiveSensors} />
+    <MeasurementPointSection key={`measurement-points-${activeGreenhouseId}`} greenhouseId={activeGreenhouseId} />
     <SettingSection icon={<Settings2 className="size-5" aria-hidden="true" />} title="ค่าเป้าหมายสภาพแวดล้อม" description="ใช้กับการควบคุมอัตโนมัติและคำเตือนในเดโม">
       <div className="grid gap-4 md:grid-cols-2"><NumberField id="minTemperature" label="อุณหภูมิต่ำสุด" unit="°C" value={draft.minTemperature} onChange={(value) => update("minTemperature", value)} /><NumberField id="maxTemperature" label="อุณหภูมิสูงสุด" unit="°C" value={draft.maxTemperature} onChange={(value) => update("maxTemperature", value)} /><NumberField id="minHumidity" label="ความชื้นอากาศต่ำสุด" unit="%" value={draft.minHumidity} onChange={(value) => update("minHumidity", value)} /><NumberField id="minSoilMoisture" label="ความชื้นดินต่ำสุด" unit="%" value={draft.minSoilMoisture} onChange={(value) => update("minSoilMoisture", value)} /></div>
     </SettingSection>
