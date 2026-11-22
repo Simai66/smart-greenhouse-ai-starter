@@ -38,3 +38,15 @@ jobs:
           python-version: "3.12"
       - run: python3 -m pip install -r edge-agent/requirements.txt
       - run: python3 -m unittest discover -s edge-agent -p 'test_*.py'
+
+  edge-agent-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build --tag greenhouse-edge-test ./edge-agent
+      - run: >-
+          docker run --rm --entrypoint python
+          --volume "$PWD/edge-agent:/tests:ro"
+          --volume "$PWD/drizzle:/drizzle:ro"
+          greenhouse-edge-test -m unittest discover -s /tests -p 'test_*.py'
